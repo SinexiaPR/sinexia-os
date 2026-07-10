@@ -16,13 +16,27 @@ export async function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    redirectResponse.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate",
+    );
+    return redirectResponse;
   }
 
   if (isAuthRoute && user) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = "/dashboard";
     return NextResponse.redirect(dashboardUrl);
+  }
+
+  // Avoid bfcache restoring an authenticated dashboard after sign-out.
+  if (isProtectedRoute) {
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, private",
+    );
+    response.headers.set("Pragma", "no-cache");
   }
 
   return response;
