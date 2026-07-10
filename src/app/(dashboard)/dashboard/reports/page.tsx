@@ -4,12 +4,12 @@ import { AdminReportForm } from "@/components/reports/admin-report-form";
 import { AdminReportsList } from "@/components/reports/admin-reports-list";
 import { ClientReportCard } from "@/components/reports/client-report-card";
 import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
-import { MarkReportsSeen } from "@/components/notifications/mark-reports-seen";
 import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireAuth } from "@/lib/auth/session";
 import { getCompanies } from "@/services/documents";
 import { getProcessingByReportIds, getProfilesByReportIds } from "@/services/intelligence";
+import { getViewedReportIds } from "@/services/notifications";
 import { getAllReports, getReportsForCompany } from "@/services/reports";
 
 export const metadata: Metadata = {
@@ -77,18 +77,15 @@ export default async function ReportsPage() {
   }
 
   const reports = await getReportsForCompany(profile.company_id);
-  const [processingMap, profilesMap] = await Promise.all([
+  const [processingMap, profilesMap, viewedReportIds] = await Promise.all([
     getProcessingByReportIds(reports.map((r) => r.id)),
     getProfilesByReportIds(reports.map((r) => r.id)),
+    getViewedReportIds(profile.id),
   ]);
-  const reportCreatedAts = reports.map((report) => report.created_at);
+  const viewedSet = new Set(viewedReportIds);
 
   return (
     <div className="space-y-8 pb-6 sm:space-y-10">
-      <MarkReportsSeen
-        profileId={profile.id}
-        reportCreatedAts={reportCreatedAts}
-      />
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Reportes
@@ -118,6 +115,8 @@ export default async function ReportsPage() {
               report={report}
               processing={processingMap.get(report.id) ?? null}
               profile={profilesMap.get(report.id) ?? null}
+              profileId={profile.id}
+              isUnread={!viewedSet.has(report.id)}
             />
           ))}
         </div>

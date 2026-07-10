@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { SignOutControl } from "@/components/auth/sign-out-control";
 import { ClientHeader } from "@/components/layout/client/client-header";
 import { ClientNav } from "@/components/layout/client/client-nav";
 import { WhatsAppSupportButton } from "@/components/support/whatsapp-support-button";
@@ -12,6 +13,7 @@ type ClientWorkspaceShellProps = {
   profile: Profile;
   companyName?: string | null;
   inboxCount: number;
+  notificationUnreadCount: number;
   reportNotifications: ClientReportNotifications;
 };
 
@@ -20,6 +22,7 @@ export function ClientWorkspaceShell({
   profile,
   companyName,
   inboxCount,
+  notificationUnreadCount,
   reportNotifications,
 }: ClientWorkspaceShellProps) {
   return (
@@ -28,13 +31,14 @@ export function ClientWorkspaceShell({
         profile={profile}
         companyName={companyName}
         inboxCount={inboxCount}
+        notificationUnreadCount={notificationUnreadCount}
         reportNotifications={reportNotifications}
       />
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:py-14">
         <aside className="hidden w-48 shrink-0 md:block">
-          <div className="sticky top-24">
-            <p className="mb-8 px-3 text-lg font-semibold tracking-tight">
+          <div className="sticky top-24 flex flex-col gap-6">
+            <p className="px-3 text-lg font-semibold tracking-tight">
               {siteConfig.name}
             </p>
             <ClientNav
@@ -42,6 +46,7 @@ export function ClientWorkspaceShell({
               inboxCount={inboxCount}
               reportNotifications={reportNotifications}
             />
+            <SignOutControl variant="nav" />
           </div>
         </aside>
 

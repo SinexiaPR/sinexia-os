@@ -1,30 +1,25 @@
+"use client";
+
 import Link from "next/link";
 import {
   BarChart3,
   CheckCircle2,
   FileText,
   Sparkles,
+  Upload,
 } from "lucide-react";
 
+import { formatRelativeDateSpanish } from "@/lib/date/format-relative";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import type { ClientActivityItem } from "@/services/client-dashboard";
 
 const activityIcons = {
-  document_received: FileText,
+  document_received: Upload,
   document_reviewing: FileText,
   document_processed: CheckCircle2,
   report_published: BarChart3,
   document_analyzed: Sparkles,
 } as const;
-
-function formatTimestamp(timestamp: string) {
-  return new Intl.DateTimeFormat("es", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
-}
 
 type ClientRecentActivityProps = {
   items: ClientActivityItem[];
@@ -64,7 +59,7 @@ export function ClientRecentActivity({ items }: ClientRecentActivityProps) {
                         {item.title}
                       </p>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {formatTimestamp(item.timestamp)}
+                        {formatRelativeDateSpanish(item.timestamp)}
                       </span>
                     </div>
                     <p className="truncate text-xs text-muted-foreground">

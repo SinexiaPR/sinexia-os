@@ -1,5 +1,9 @@
 import Link from "next/link";
 
+import {
+  ClientReportActions,
+  ReportNewBadge,
+} from "@/components/reports/client-report-actions";
 import { ReportCategoryDisplay } from "@/components/reports/report-category-display";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { STATUS_LABELS } from "@/lib/intelligence/constants";
@@ -25,6 +29,8 @@ type ClientReportCardProps = {
   report: ReportWithCompany;
   processing?: ClientProcessingInfo | null;
   profile?: DocumentProfileRow | null;
+  profileId: string;
+  isUnread?: boolean;
 };
 
 function formatDate(date: string) {
@@ -39,10 +45,19 @@ function arSuggestions(reportId: string): Array<{ label: string; href: string }>
   const q = (text: string) =>
     `/dashboard/sia?reportId=${reportId}&q=${encodeURIComponent(text)}`;
   return [
-    { label: "What is my total receivable?", href: q("What is my total receivable?") },
-    { label: "Who owes the most?", href: q("Who owes the most?") },
-    { label: "How many invoices exist?", href: q("How many invoices exist?") },
-    { label: "Compare with previous report.", href: q("Compare with previous report.") },
+    {
+      label: "¿Cuál es mi total por cobrar?",
+      href: q("¿Cuál es mi total por cobrar?"),
+    },
+    { label: "¿Quién debe más?", href: q("¿Quién debe más?") },
+    {
+      label: "¿Cuántas facturas hay?",
+      href: q("¿Cuántas facturas hay?"),
+    },
+    {
+      label: "Comparar con el reporte anterior",
+      href: q("Comparar con el reporte anterior"),
+    },
   ];
 }
 
@@ -50,6 +65,8 @@ export async function ClientReportCard({
   report,
   processing,
   profile,
+  profileId,
+  isUnread = false,
 }: ClientReportCardProps) {
   const signedUrl = await getSignedReportFileUrl(report.file_url);
   const status = processing?.status;
@@ -66,10 +83,14 @@ export async function ClientReportCard({
     status === "completed" && isAR ? arSuggestions(report.id) : [];
 
   return (
-    <SurfaceCard padding="lg">
+    <div id={`report-${report.id}`}>
+      <SurfaceCard padding="lg">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
-          <ReportCategoryDisplay category={report.category} variant="client" />
+          <div className="flex flex-wrap items-center gap-2">
+            <ReportCategoryDisplay category={report.category} variant="client" />
+            <ReportNewBadge show={isUnread} />
+          </div>
           <h2 className="text-lg font-semibold tracking-tight text-foreground">
             {report.title}
           </h2>
@@ -109,7 +130,7 @@ export async function ClientReportCard({
           {brief ? (
             <div className="space-y-1 pt-1">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Summary
+                Resumen
               </p>
               <p className="text-sm leading-relaxed text-foreground/90">
                 {brief}
@@ -120,7 +141,7 @@ export async function ClientReportCard({
           {suggestions.length ? (
             <div className="space-y-2 pt-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Suggested questions
+                Preguntas sugeridas
               </p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((s) => (
@@ -137,40 +158,14 @@ export async function ClientReportCard({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 flex-col gap-2 sm:items-stretch">
-          {signedUrl ? (
-            <>
-              <Link
-                href={signedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-border px-5 text-sm font-medium text-primary sm:min-w-[140px]"
-              >
-                Original Report
-              </Link>
-              <Link
-                href={signedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground sm:min-w-[140px]"
-              >
-                Descargar
-              </Link>
-            </>
-          ) : (
-            <span className="inline-flex h-11 w-full items-center justify-center text-sm text-muted-foreground sm:w-auto">
-              No disponible
-            </span>
-          )}
-          <Link
-            href={`/dashboard/sia?reportId=${report.id}`}
-            className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]"
-          >
-            Ask SinexIA
-          </Link>
-        </div>
+        <ClientReportActions
+          reportId={report.id}
+          profileId={profileId}
+          signedUrl={signedUrl}
+          isUnread={isUnread}
+        />
       </div>
-    </SurfaceCard>
+      </SurfaceCard>
+    </div>
   );
 }

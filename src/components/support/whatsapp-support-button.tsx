@@ -34,7 +34,7 @@ export function WhatsAppSupportButton() {
           aria-label={sinexiaContact.whatsappTooltip}
           className={cn(
             "fixed z-40 flex items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95",
-            "bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-4 size-14",
+            "bottom-[calc(6.5rem+env(safe-area-inset-bottom,0px))] right-4 size-14",
             "sm:bottom-6 sm:right-6 sm:size-12",
             "bg-[#25D366] hover:bg-[#20bd5a]",
             "ring-4 ring-[#25D366]/20",

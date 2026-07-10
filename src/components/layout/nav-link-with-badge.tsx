@@ -86,7 +86,8 @@ export function ClientNavLinks({
   const pathname = usePathname();
   const unreadReportsCount = useUnreadReportsCount(
     reportNotifications.profileId,
-    reportNotifications.reportCreatedAts,
+    reportNotifications.reportIds,
+    reportNotifications.viewedReportIds,
   );
 
   return (

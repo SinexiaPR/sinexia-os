@@ -152,7 +152,7 @@ function documentActivityItem(doc: {
   return {
     id: `doc-received-${doc.id}`,
     kind: "document_received",
-    title: "Documento recibido",
+    title: "Documento subido",
     description: `${doc.supplier} · ${doc.document_type}`,
     timestamp: doc.created_at,
     href: "/dashboard/inbox",

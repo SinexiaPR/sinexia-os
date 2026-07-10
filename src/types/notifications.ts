@@ -4,5 +4,10 @@ export type NavBadgeCounts = {
 
 export type ClientReportNotifications = {
   profileId: string;
-  reportCreatedAts: string[];
+  reportIds: string[];
+  viewedReportIds: string[];
+};
+
+export type WorkspaceNotifications = {
+  unreadCount: number;
 };

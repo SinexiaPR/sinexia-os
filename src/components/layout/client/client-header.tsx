@@ -1,12 +1,13 @@
 "use client";
 
-import { MenuIcon } from "lucide-react";
 import Link from "next/link";
+import { MenuIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import { SignOutControl } from "@/components/auth/sign-out-control";
 import { ClientNav } from "@/components/layout/client/client-nav";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,7 @@ type ClientHeaderProps = {
   profile: Profile;
   companyName?: string | null;
   inboxCount: number;
+  notificationUnreadCount: number;
   reportNotifications: ClientReportNotifications;
   className?: string;
 };
@@ -52,6 +54,7 @@ export function ClientHeader({
   profile,
   companyName,
   inboxCount,
+  notificationUnreadCount,
   reportNotifications,
   className,
 }: ClientHeaderProps) {
@@ -69,15 +72,15 @@ export function ClientHeader({
         className,
       )}
     >
-      <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-3 sm:px-6">
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="md:hidden">
               <MenuIcon className="size-4" />
-              <span className="sr-only">Open navigation</span>
+              <span className="sr-only">Abrir navegación</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-6">
+          <SheetContent side="left" className="flex w-72 flex-col p-6">
             <SheetHeader className="mb-6 px-0">
               <SheetTitle className="text-left text-base font-semibold">
                 {siteConfig.name}
@@ -88,6 +91,11 @@ export function ClientHeader({
               inboxCount={inboxCount}
               reportNotifications={reportNotifications}
               onNavigate={() => setMobileNavOpen(false)}
+              className="flex-1"
+            />
+            <SignOutControl
+              variant="nav"
+              onSignedOut={() => setMobileNavOpen(false)}
             />
           </SheetContent>
         </Sheet>
@@ -102,9 +110,11 @@ export function ClientHeader({
           </p>
         </div>
 
+        <NotificationBell initialUnreadCount={notificationUnreadCount} />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative size-9 rounded-full p-0">
+            <Button variant="ghost" className="relative size-10 rounded-full p-0">
               <Avatar className="size-9">
                 <AvatarFallback className="bg-muted text-xs font-medium text-foreground">
                   {getInitials(profile)}
@@ -125,10 +135,12 @@ export function ClientHeader({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile">Profile</Link>
+              <Link href="/dashboard/profile">Perfil</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <SignOutButton />
+            <div className="px-2 py-1">
+              <SignOutControl variant="menu" />
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
