@@ -27,10 +27,25 @@ export async function signIn(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function signOut() {
+export async function signOutSession(): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    return { error: "No se pudo cerrar sesión. Intente de nuevo." };
+  }
+
   revalidatePath("/", "layout");
+  return { error: null };
+}
+
+export async function signOut() {
+  const result = await signOutSession();
+
+  if (result.error) {
+    return { error: result.error };
+  }
+
   redirect("/login");
 }
 

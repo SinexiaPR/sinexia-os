@@ -1,7 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { signOutSession } from "@/actions/auth";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +19,7 @@ export function SignOutControl({
   className,
   onSignedOut,
 }: SignOutControlProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -27,15 +31,17 @@ export function SignOutControl({
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "global" });
 
-      if (error) {
+      const result = await signOutSession();
+      if (result.error) {
         setStatus("error");
-        setErrorMessage("No se pudo cerrar sesión. Intente de nuevo.");
+        setErrorMessage(result.error);
         return;
       }
 
       onSignedOut?.();
+      router.refresh();
       window.location.replace("/login");
     } catch {
       setStatus("error");
@@ -51,7 +57,7 @@ export function SignOutControl({
       <div className={cn("space-y-1", className)}>
         <button
           type="button"
-          onClick={handleSignOut}
+          onClick={() => void handleSignOut()}
           disabled={status === "loading"}
           className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
         >
@@ -69,7 +75,7 @@ export function SignOutControl({
       <div className={cn("space-y-2", className)}>
         <button
           type="button"
-          onClick={handleSignOut}
+          onClick={() => void handleSignOut()}
           disabled={status === "loading"}
           className="inline-flex h-11 items-center justify-center rounded-xl border border-border px-5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
         >
@@ -83,18 +89,22 @@ export function SignOutControl({
   }
 
   return (
-    <div className={cn("w-full", className)}>
-      <button
-        type="button"
-        onClick={handleSignOut}
+    <>
+      <DropdownMenuItem
+        variant="destructive"
         disabled={status === "loading"}
-        className="w-full cursor-default text-left text-sm text-destructive disabled:opacity-60"
+        onSelect={(event) => {
+          event.preventDefault();
+          void handleSignOut();
+        }}
       >
         {label}
-      </button>
+      </DropdownMenuItem>
       {errorMessage ? (
-        <p className="mt-1 text-xs text-destructive">{errorMessage}</p>
+        <p className={cn("px-2 py-1 text-xs text-destructive", className)}>
+          {errorMessage}
+        </p>
       ) : null}
-    </div>
+    </>
   );
 }

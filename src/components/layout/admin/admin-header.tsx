@@ -122,9 +122,7 @@ export function AdminHeader({
             <Link href="/dashboard/profile">Perfil</Link>
           </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <div className="px-2 py-1">
-              <SignOutControl variant="menu" />
-            </div>
+            <SignOutControl variant="menu" />
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
