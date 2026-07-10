@@ -1,5 +1,3 @@
-import { PDFParse } from "pdf-parse";
-
 import { INTELLIGENCE_LIMITS } from "@/lib/intelligence/constants";
 import type { ExtractedChunk, ExtractionResult } from "@/lib/intelligence/types";
 
@@ -9,6 +7,11 @@ function truncate(text: string, max: number): string {
 }
 
 export async function extractPdf(buffer: Buffer): Promise<ExtractionResult> {
+  // pdfjs-dist expects browser globals (DOMMatrix, etc.). @napi-rs/canvas
+  // must load before pdf-parse so Node/serverless runtimes polyfill correctly.
+  await import("@napi-rs/canvas");
+  const { PDFParse } = await import("pdf-parse");
+
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
 
   try {

@@ -1,7 +1,6 @@
 import { ANALYZABLE_EXTENSIONS } from "@/lib/intelligence/constants";
 import { extractCsv } from "@/lib/intelligence/extraction/csv";
 import { extractExcel } from "@/lib/intelligence/extraction/excel";
-import { extractPdf } from "@/lib/intelligence/extraction/pdf";
 import type { ExtractionResult } from "@/lib/intelligence/types";
 
 export function getFileExtension(filename: string): string {
@@ -20,6 +19,7 @@ export async function extractDocument(
   const ext = getFileExtension(filename);
 
   if (ext === "pdf") {
+    const { extractPdf } = await import("@/lib/intelligence/extraction/pdf");
     return extractPdf(buffer);
   }
   if (ext === "xlsx" || ext === "xls") {
