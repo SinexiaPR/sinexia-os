@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { BrandLogo } from "@/components/brand/brand-logo";
+import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 
 type PortalHeaderProps = {
@@ -9,14 +9,17 @@ type PortalHeaderProps = {
 
 export function PortalHeader({ className }: PortalHeaderProps) {
   return (
-    <header
-      className={cn("w-full border-b border-border/60 bg-card/80", className)}
-    >
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-5 sm:h-[4.5rem] sm:px-8">
-        <BrandLogo href="/" showSubtitle size="sm" />
+    <header className={cn("w-full", className)}>
+      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+        <Link
+          href="/"
+          className="text-[13px] font-semibold tracking-[0.18em] text-foreground uppercase"
+        >
+          {siteConfig.name}
+        </Link>
         <Link
           href="/login"
-          className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-primary transition-colors hover:bg-navy-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
         >
           Iniciar sesión
         </Link>

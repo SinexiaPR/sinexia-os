@@ -58,14 +58,14 @@ export class SampleAssistantProvider implements AssistantProvider {
 
   private buildUploadsAnswer(context: AssistantContext): string {
     if (context.totalDocuments === 0) {
-      return `Aún no consta ningún documento en Documentos para ${context.companyName}. Puede cargar archivos desde Documentos y el equipo de Sinexia los revisará.`;
+      return `Aún no consta ningún documento en su Inbox para ${context.companyName}. Puede cargar archivos desde la sección Inbox y el equipo de Sinexia los revisará.`;
     }
 
     if (context.totalDocuments === 1) {
-      return `Según su portal, tiene 1 documento cargado en Documentos de ${context.companyName}. Sinexia lo revisará y le informará cuando esté procesado.`;
+      return `Según su portal, tiene 1 documento cargado en la Inbox de ${context.companyName}. Sinexia lo revisará y le informará cuando esté procesado.`;
     }
 
-    return `Según su portal, tiene ${context.totalDocuments} documentos cargados en Documentos de ${context.companyName}. Sinexia los revisa en orden de recepción.`;
+    return `Según su portal, tiene ${context.totalDocuments} documentos cargados en la Inbox de ${context.companyName}. Sinexia los revisa en orden de recepción.`;
   }
 
   private buildPendingAnswer(context: AssistantContext): string {
@@ -77,7 +77,7 @@ export class SampleAssistantProvider implements AssistantProvider {
       return `Tiene 1 documento pendiente de revisión por Sinexia para ${context.companyName}. Le notificaremos cuando el estado cambie.`;
     }
 
-    return `Tiene ${context.pendingDocuments} documentos pendientes de revisión por Sinexia para ${context.companyName}. Puede ver el detalle en Documentos.`;
+    return `Tiene ${context.pendingDocuments} documentos pendientes de revisión por Sinexia para ${context.companyName}. Puede ver el detalle en su Inbox.`;
   }
 
   private buildReportsAnswer(context: AssistantContext): string {
@@ -93,6 +93,6 @@ export class SampleAssistantProvider implements AssistantProvider {
   }
 
   private buildSummaryAnswer(context: AssistantContext): string {
-    return `Resumen para ${context.companyName}: ${context.totalDocuments} documento(s) en Documentos, ${context.pendingDocuments} pendiente(s) de revisión por Sinexia, y ${context.availableReports} reporte(s) disponible(s). Si necesita ayuda específica, puede contactar a Sinexia desde Ayuda o Mi cuenta.`;
+    return `Resumen para ${context.companyName}: ${context.totalDocuments} documento(s) en su Inbox, ${context.pendingDocuments} pendiente(s) de revisión por Sinexia, y ${context.availableReports} reporte(s) disponible(s). Si necesita ayuda específica, puede contactar a Sinexia desde su perfil.`;
   }
 }

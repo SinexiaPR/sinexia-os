@@ -15,16 +15,6 @@ const nextConfig: NextConfig = {
         destination: "/dashboard/inbox",
         permanent: true,
       },
-      {
-        source: "/dashboard/help",
-        destination: "/dashboard/ayuda",
-        permanent: false,
-      },
-      {
-        source: "/dashboard/companies",
-        destination: "/dashboard/empresas",
-        permanent: false,
-      },
     ];
   },
   images: {

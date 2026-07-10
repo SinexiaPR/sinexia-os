@@ -5,7 +5,7 @@ import { ClientDashboard } from "@/components/dashboard/client-dashboard";
 import { requireAuth } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Inicio",
+  title: "Dashboard",
 };
 
 export default async function DashboardPage() {

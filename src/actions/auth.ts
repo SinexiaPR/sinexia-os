@@ -10,7 +10,7 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) {
-    return { error: "El correo y la contraseña son obligatorios." };
+    return { error: "Email and password are required." };
   }
 
   const supabase = await createClient();
@@ -21,7 +21,7 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
-    return { error: "Correo o contraseña incorrectos." };
+    return { error: "Invalid email or password." };
   }
 
   redirect("/dashboard");

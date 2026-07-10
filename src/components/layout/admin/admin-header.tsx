@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { BrandLogo } from "@/components/brand/brand-logo";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -46,11 +45,7 @@ function getInitials(profile: Profile) {
     .join("");
 }
 
-export function AdminHeader({
-  profile,
-  badgeCounts,
-  className,
-}: AdminHeaderProps) {
+export function AdminHeader({ profile, badgeCounts, className }: AdminHeaderProps) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = useMemo(
@@ -61,24 +56,20 @@ export function AdminHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/80 bg-card/95 px-4 backdrop-blur-md sm:h-16 sm:px-6",
+        "sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/80 bg-background/90 px-4 backdrop-blur-md sm:px-6",
         className,
       )}
     >
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-11 md:hidden"
-            aria-label="Abrir menú"
-          >
-            <MenuIcon className="size-5" />
+          <Button variant="outline" size="icon" className="md:hidden">
+            <MenuIcon className="size-4" />
+            <span className="sr-only">Open navigation</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-[min(100%,20rem)] p-0">
+        <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="sr-only">
-            <SheetTitle>Navegación</SheetTitle>
+            <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
           <AdminSidebar
             badgeCounts={badgeCounts}
@@ -87,26 +78,13 @@ export function AdminHeader({
         </SheetContent>
       </Sheet>
 
-      <div className="min-w-0 flex-1">
-        <h1 className="truncate text-[15px] font-semibold tracking-tight">
-          {title}
-        </h1>
-        <p className="hidden text-xs text-muted-foreground sm:block md:hidden">
-          Administración
-        </p>
-      </div>
-
-      <div className="hidden sm:block md:hidden">
-        <BrandLogo href="/dashboard" markOnly size="sm" />
-      </div>
+      <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight">
+        {title}
+      </h1>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="relative size-11 rounded-full p-0"
-            aria-label="Menú de cuenta"
-          >
+          <Button variant="ghost" className="relative size-9 rounded-full p-0">
             <Avatar className="size-9">
               <AvatarFallback className="bg-primary text-xs text-primary-foreground">
                 {getInitials(profile)}
@@ -120,12 +98,12 @@ export function AdminHeader({
               <p className="text-sm font-medium">
                 {profile.full_name ?? profile.email}
               </p>
-              <p className="text-xs text-muted-foreground">Administrador</p>
+              <p className="text-xs text-muted-foreground">Administrator</p>
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link href="/dashboard/profile">Mi cuenta</Link>
+            <Link href="/dashboard/profile">Profile</Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <SignOutButton />

@@ -8,7 +8,7 @@ type ErrorRecord = {
 
 export function extractErrorMessage(error: unknown): string {
   if (!error) {
-    return "Error desconocido.";
+    return "Unknown error.";
   }
 
   if (typeof error === "string") {
@@ -16,7 +16,7 @@ export function extractErrorMessage(error: unknown): string {
   }
 
   if (error instanceof Error) {
-    return error.message || error.name || "Error desconocido.";
+    return error.message || error.name || "Unknown error.";
   }
 
   if (typeof error === "object") {
