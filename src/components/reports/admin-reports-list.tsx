@@ -1,6 +1,10 @@
 import Link from "next/link";
 
 import { DeleteReportButton } from "@/components/reports/delete-report-button";
+import {
+  AdminReportIntelligence,
+  type AdminProcessingInfo,
+} from "@/components/reports/admin-report-intelligence";
 import { ReportCategoryDisplay } from "@/components/reports/report-category-display";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { getSignedReportFileUrl } from "@/services/reports";
@@ -8,6 +12,7 @@ import type { ReportWithCompany } from "@/types";
 
 type AdminReportsListProps = {
   reports: ReportWithCompany[];
+  processingByReportId: Map<string, AdminProcessingInfo>;
 };
 
 function formatDate(date: string) {
@@ -18,7 +23,13 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-async function AdminReportRow({ report }: { report: ReportWithCompany }) {
+async function AdminReportRow({
+  report,
+  processing,
+}: {
+  report: ReportWithCompany;
+  processing: AdminProcessingInfo | null;
+}) {
   const signedUrl = await getSignedReportFileUrl(report.file_url);
 
   return (
@@ -45,6 +56,10 @@ async function AdminReportRow({ report }: { report: ReportWithCompany }) {
               {report.notes}
             </p>
           ) : null}
+          <AdminReportIntelligence
+            reportId={report.id}
+            processing={processing}
+          />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -67,7 +82,10 @@ async function AdminReportRow({ report }: { report: ReportWithCompany }) {
   );
 }
 
-export async function AdminReportsList({ reports }: AdminReportsListProps) {
+export async function AdminReportsList({
+  reports,
+  processingByReportId,
+}: AdminReportsListProps) {
   if (reports.length === 0) {
     return (
       <SurfaceCard padding="lg">
@@ -81,7 +99,11 @@ export async function AdminReportsList({ reports }: AdminReportsListProps) {
   return (
     <div className="space-y-3">
       {reports.map((report) => (
-        <AdminReportRow key={report.id} report={report} />
+        <AdminReportRow
+          key={report.id}
+          report={report}
+          processing={processingByReportId.get(report.id) ?? null}
+        />
       ))}
     </div>
   );

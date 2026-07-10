@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireAuth } from "@/lib/auth/session";
 import { getCompanies } from "@/services/documents";
+import { getProcessingByReportIds } from "@/services/intelligence";
 import { getAllReports, getReportsForCompany } from "@/services/reports";
 
 export const metadata: Metadata = {
@@ -23,6 +24,9 @@ export default async function ReportsPage() {
       getCompanies(),
       getAllReports(),
     ]);
+    const processingMap = await getProcessingByReportIds(
+      reports.map((r) => r.id),
+    );
 
     return (
       <div className="space-y-10">
@@ -37,7 +41,9 @@ export default async function ReportsPage() {
             Publish report
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Select a company, add details, and upload the report file.
+            Select a company, add details, and upload the finished PDF, Excel,
+            or CSV. SinexIA processes the file automatically — no manual
+            accounting fields required.
           </p>
           <div className="mt-6">
             <AdminReportForm companies={companies} />
@@ -48,7 +54,10 @@ export default async function ReportsPage() {
           <h2 className="text-base font-semibold tracking-tight">
             All reports
           </h2>
-          <AdminReportsList reports={reports} />
+          <AdminReportsList
+            reports={reports}
+            processingByReportId={processingMap}
+          />
         </div>
       </div>
     );
@@ -66,6 +75,9 @@ export default async function ReportsPage() {
   }
 
   const reports = await getReportsForCompany(profile.company_id);
+  const processingMap = await getProcessingByReportIds(
+    reports.map((r) => r.id),
+  );
   const reportCreatedAts = reports.map((report) => report.created_at);
 
   return (
@@ -79,8 +91,8 @@ export default async function ReportsPage() {
           Reportes
         </h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-          Reportes publicados por Sinexia para su empresa. Consulte y descargue
-          cuando estén disponibles.
+          Reportes publicados por Sinexia para su empresa. Consulte, descargue
+          y pregunte a SinexIA cuando el análisis esté listo.
         </p>
       </header>
 
@@ -98,7 +110,11 @@ export default async function ReportsPage() {
       ) : (
         <div className="space-y-4">
           {reports.map((report) => (
-            <ClientReportCard key={report.id} report={report} />
+            <ClientReportCard
+              key={report.id}
+              report={report}
+              processing={processingMap.get(report.id) ?? null}
+            />
           ))}
         </div>
       )}

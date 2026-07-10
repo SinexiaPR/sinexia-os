@@ -1,12 +1,13 @@
 export const assistantConfig = {
-  name: "SIA",
-  fullName: "Sinexia Intelligent Assistant",
+  name: "SinexIA",
+  fullName: "SinexIA Document Intelligence",
   disclaimer:
-    "Esta respuesta es orientativa y debe ser confirmada por Sinexia.",
+    "SinexIA responde solo con base en los documentos de su empresa. Esta información es operativa y no constituye asesoría fiscal, legal ni financiera. Confirme con Sinexia cuando sea necesario.",
   suggestedPrompts: [
-    "¿Cuántos documentos he subido?",
-    "¿Cuántos documentos están pendientes?",
-    "¿Qué reportes tengo disponibles?",
+    "¿Qué documentos nuevos publicó Sinexia?",
+    "Resumime este reporte.",
+    "¿Cuál es el total pendiente por cobrar?",
+    "¿Cuál es el total de la nómina de esta semana?",
   ] as const,
 } as const;
 

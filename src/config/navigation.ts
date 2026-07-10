@@ -30,7 +30,7 @@ export const clientNavItems: NavItem[] = [
     icon: BarChart3,
     badgeKey: "reports",
   },
-  { title: "SIA", href: "/dashboard/sia", icon: Sparkles },
+  { title: "SinexIA", href: "/dashboard/sia", icon: Sparkles },
   { title: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
