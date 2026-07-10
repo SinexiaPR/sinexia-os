@@ -124,6 +124,14 @@ export async function getCompletedProcessingForCompany(companyId: string) {
 }
 
 export async function getProfilesForCompanySuggestions(companyId: string) {
+  const { getCompletedProcessingIds } = await import(
+    "@/lib/intelligence/profiles/store"
+  );
+  const processingIds = await getCompletedProcessingIds(companyId);
+  if (!processingIds.length) {
+    return [];
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("document_profiles")
@@ -131,6 +139,7 @@ export async function getProfilesForCompanySuggestions(companyId: string) {
       "document_type, period, summary, structured_data, extraction_confidence, report_id, reports(title, category)",
     )
     .eq("company_id", companyId)
+    .in("document_processing_id", processingIds)
     .order("upload_date", { ascending: false })
     .limit(12);
 

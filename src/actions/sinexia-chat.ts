@@ -82,6 +82,10 @@ export async function askSinexIA(params: {
         period: params.period,
         userId: profile.id,
       },
+      diagnostics: {
+        userId: profile.id,
+        log: true,
+      },
     });
 
     await supabase.from("sinexia_messages").insert({

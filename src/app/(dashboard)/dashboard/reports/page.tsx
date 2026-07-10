@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AdminIntegrityCheck } from "@/components/reports/admin-integrity-check";
 import { AdminReportForm } from "@/components/reports/admin-report-form";
 import { AdminReportsList } from "@/components/reports/admin-reports-list";
 import { ClientReportCard } from "@/components/reports/client-report-card";
@@ -49,6 +50,10 @@ export default async function ReportsPage() {
           <div className="mt-6">
             <AdminReportForm companies={companies} />
           </div>
+        </SurfaceCard>
+
+        <SurfaceCard padding="lg">
+          <AdminIntegrityCheck />
         </SurfaceCard>
 
         <div className="space-y-4">

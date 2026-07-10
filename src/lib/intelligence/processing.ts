@@ -24,6 +24,7 @@ import { REPORTS_BUCKET } from "@/lib/constants/reports";
 import { logServerError } from "@/lib/errors/action-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
+import { after } from "next/server";
 
 const DOCUMENTS_BUCKET = "documents";
 
@@ -259,7 +260,7 @@ async function runPipeline(params: {
             briefSummary: "Requiere OCR",
             confidence: 0,
           },
-          processing_error: "Requiere OCR",
+          processing_error: "Este documento requiere OCR para ser analizado por SinexIA.",
           processed_at: new Date().toISOString(),
           prompt_version: INTELLIGENCE_PROMPT_VERSION,
         })
@@ -618,8 +619,18 @@ export function scheduleReportProcessing(
   reportId: string,
   force = false,
 ): void {
-  void processReportDocument({ reportId, force }).catch((error) => {
-    logServerError("scheduleReportProcessing", error, { reportId });
+  after(async () => {
+    try {
+      const result = await processReportDocument({ reportId, force });
+      logProcessing("scheduled_report_finished", {
+        reportId,
+        ok: result.ok,
+        status: result.status,
+        error: result.error ?? null,
+      });
+    } catch (error) {
+      logServerError("scheduleReportProcessing", error, { reportId });
+    }
   });
 }
 
@@ -627,9 +638,19 @@ export function scheduleInboxDocumentProcessing(
   documentId: string,
   force = false,
 ): void {
-  void processInboxDocument({ documentId, force }).catch((error) => {
-    logServerError("scheduleInboxDocumentProcessing", error, {
-      documentId,
-    });
+  after(async () => {
+    try {
+      const result = await processInboxDocument({ documentId, force });
+      logProcessing("scheduled_inbox_finished", {
+        documentId,
+        ok: result.ok,
+        status: result.status,
+        error: result.error ?? null,
+      });
+    } catch (error) {
+      logServerError("scheduleInboxDocumentProcessing", error, {
+        documentId,
+      });
+    }
   });
 }

@@ -122,8 +122,7 @@ export async function ClientReportCard({
 
           {status === "requires_ocr" ? (
             <p className="text-sm text-amber-800">
-              Requiere OCR — este PDF no tiene texto extraíble. El archivo
-              original sigue disponible para descarga.
+              Este documento requiere OCR para ser analizado por SinexIA.
             </p>
           ) : null}
 

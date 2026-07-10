@@ -27,6 +27,11 @@ import { getAvailableTrendSummaries } from "@/lib/intelligence/trends";
 import type { SourceReference } from "@/lib/intelligence/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getCompanySinexiaState,
+  logSinexiaRetrievalDiagnostics,
+} from "@/lib/intelligence/company-documents";
+import { getCompletedProcessingIds } from "@/lib/intelligence/profiles/store";
 import { buildAssistantContext } from "@/services/assistant-context";
 
 export type RetrievalFilters = {
@@ -63,14 +68,42 @@ type AnswerTier =
   | "pending"
   | "portal_metadata";
 
+type ProcessingScope = {
+  processingId: string | null;
+  allowed: string[] | null;
+  scopedReportReady: boolean;
+};
+
 async function resolveAllowedProcessingIds(
   filters: RetrievalFilters,
-): Promise<{ processingId: string | null; allowed: string[] | null }> {
+): Promise<ProcessingScope> {
   const supabase = await createClient();
   let processingId = filters.processingId ?? null;
 
   if (!filters.reportId && !filters.category && !filters.period) {
-    return { processingId, allowed: null };
+    return { processingId, allowed: null, scopedReportReady: true };
+  }
+
+  if (filters.reportId && !filters.category && !filters.period) {
+    const completedForReport = await getCompletedProcessingIds(
+      filters.companyId,
+      { reportId: filters.reportId },
+    );
+
+    if (completedForReport.length) {
+      processingId = completedForReport[0] ?? processingId;
+      return {
+        processingId,
+        allowed: completedForReport,
+        scopedReportReady: true,
+      };
+    }
+
+    return {
+      processingId: null,
+      allowed: null,
+      scopedReportReady: false,
+    };
   }
 
   let query = supabase
@@ -108,7 +141,19 @@ async function resolveAllowedProcessingIds(
     processingId = filtered[0].id;
   }
 
-  return { processingId, allowed: allowed.length ? allowed : [] };
+  if (allowed.length) {
+    return { processingId, allowed, scopedReportReady: true };
+  }
+
+  if (filters.reportId) {
+    return {
+      processingId: null,
+      allowed: null,
+      scopedReportReady: false,
+    };
+  }
+
+  return { processingId, allowed: [], scopedReportReady: true };
 }
 
 export async function retrieveRelevantChunks(
@@ -276,13 +321,26 @@ async function retrieveFromSummaries(
   filters: RetrievalFilters,
 ): Promise<RetrievedChunk[]> {
   const supabase = await createClient();
+  const completedIds = await getCompletedProcessingIds(filters.companyId, {
+    reportId: filters.reportId,
+  });
+
+  const processingIds =
+    completedIds.length > 0
+      ? completedIds
+      : await getCompletedProcessingIds(filters.companyId);
+
+  if (!processingIds.length) {
+    return [];
+  }
+
   const { data: profiles } = await supabase
     .from("document_profiles")
     .select(
-      "id, document_processing_id, report_id, document_id, period, summary, structured_data, document_processing!inner(id, detected_period, report_date, status, reports(id, title, category, period), documents(id, supplier, invoice_number, document_type))",
+      "id, document_processing_id, report_id, document_id, period, summary, structured_data, document_processing(id, detected_period, report_date, status, reports(id, title, category, period), documents(id, supplier, invoice_number, document_type))",
     )
     .eq("company_id", filters.companyId)
-    .eq("document_processing.status", "completed")
+    .in("document_processing_id", processingIds)
     .order("upload_date", { ascending: false })
     .limit(15);
 
@@ -428,6 +486,111 @@ async function retrieveFromSummaries(
   });
 }
 
+async function getScopedReportNotice(
+  filters: RetrievalFilters,
+): Promise<{ message: string; sources: SourceReference[] } | null> {
+  if (!filters.reportId) return null;
+
+  const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("document_processing")
+    .select(
+      "id, status, report_id, processing_error, original_filename, reports(title, category)",
+    )
+    .eq("company_id", filters.companyId)
+    .eq("report_id", filters.reportId)
+    .maybeSingle();
+
+  if (!row || row.status === "completed") return null;
+
+  const report = row.reports as unknown as { title?: string } | null;
+  const title = report?.title ?? row.original_filename ?? "Documento seleccionado";
+
+  if (row.status === "requires_ocr") {
+    return {
+      message:
+        "Este documento requiere OCR para ser analizado por SinexIA.",
+      sources: [
+        {
+          reportId: filters.reportId,
+          title,
+          period: null,
+          viewPath: `/dashboard/reports?highlight=${filters.reportId}`,
+          downloadPath: `/api/reports/${filters.reportId}/download`,
+        },
+      ],
+    };
+  }
+
+  const statusLabel =
+    row.status === "failed"
+      ? "falló el procesamiento"
+      : row.status === "processing"
+        ? "está en análisis"
+        : "está pendiente de procesamiento";
+
+  return {
+    message: `El reporte «${title}» ${statusLabel}. Puede consultar otros documentos ya analizados de su empresa.`,
+    sources: [
+      {
+        reportId: filters.reportId,
+        title,
+        period: null,
+        viewPath: `/dashboard/reports?highlight=${filters.reportId}`,
+      },
+    ],
+  };
+}
+
+async function resolveEmptyDocumentMessage(
+  companyId: string,
+  filters: RetrievalFilters,
+): Promise<{ message: string; sources: SourceReference[]; tier: AnswerTier }> {
+  const state = await getCompanySinexiaState(companyId, filters.reportId);
+
+  if (state.completedCount > 0) {
+    return {
+      message: "No encuentro esa información en los documentos disponibles.",
+      sources: [],
+      tier: "chunks",
+    };
+  }
+
+  if (state.requiresOcrCount > 0) {
+    return {
+      message:
+        "Los documentos disponibles todavía requieren OCR antes de poder ser analizados.",
+      sources: [],
+      tier: "pending",
+    };
+  }
+
+  const pending = await getPendingNotice(companyId);
+  if (pending) {
+    return {
+      message: pending.message,
+      sources: pending.sources,
+      tier: "pending",
+    };
+  }
+
+  if (state.failedCount > 0) {
+    return {
+      message:
+        "No encuentro documentos procesados disponibles para esta empresa. Hay reportes con errores de procesamiento; un administrador puede usar «Procesar nuevamente».",
+      sources: [],
+      tier: "portal_metadata",
+    };
+  }
+
+  return {
+    message:
+      "No encuentro documentos procesados disponibles para esta empresa.",
+    sources: [],
+    tier: "portal_metadata",
+  };
+}
+
 async function getPendingNotice(
   companyId: string,
 ): Promise<{ message: string; sources: SourceReference[] } | null> {
@@ -461,7 +624,9 @@ async function getPendingNotice(
         ? "requiere OCR"
         : row.status === "processing"
           ? "en análisis"
-          : "pendiente";
+          : row.status === "failed"
+            ? "falló"
+            : "pendiente";
     return `• ${title} (${status})`;
   });
 
@@ -607,6 +772,10 @@ async function storeGptCache(params: {
 export async function answerWithRetrieval(params: {
   question: string;
   filters: RetrievalFilters;
+  diagnostics?: {
+    userId: string;
+    log?: boolean;
+  };
 }): Promise<{
   message: string;
   sources: SourceReference[];
@@ -614,6 +783,10 @@ export async function answerWithRetrieval(params: {
   tier: AnswerTier;
 }> {
   const intent = detectQueryIntent(params.question);
+  const companyState = await getCompanySinexiaState(
+    params.filters.companyId,
+    params.filters.reportId,
+  );
 
   const structured = await answerFromStructuredQuery({
     question: params.question,
@@ -623,6 +796,16 @@ export async function answerWithRetrieval(params: {
   });
 
   if (structured.answered) {
+    if (params.diagnostics?.log) {
+      logSinexiaRetrievalDiagnostics({
+        userId: params.diagnostics.userId,
+        companyId: params.filters.companyId,
+        reportId: params.filters.reportId,
+        state: companyState,
+        profileCount: companyState.profileCount,
+      });
+    }
+
     return {
       message:
         structured.message + formatSourcesAppendix(structured.sources),
@@ -632,7 +815,8 @@ export async function answerWithRetrieval(params: {
     };
   }
 
-  const { processingId } = await resolveAllowedProcessingIds(params.filters);
+  const scope = await resolveAllowedProcessingIds(params.filters);
+  const { processingId } = scope;
 
   if (
     isOpenAIConfigured() &&
@@ -665,51 +849,63 @@ export async function answerWithRetrieval(params: {
     if (chunks.length) tier = "summaries";
   }
 
+  if (params.diagnostics?.log) {
+    logSinexiaRetrievalDiagnostics({
+      userId: params.diagnostics.userId,
+      companyId: params.filters.companyId,
+      reportId: params.filters.reportId,
+      state: companyState,
+      profileCount: companyState.profileCount,
+      chunkCount: chunks.length,
+    });
+  }
+
   if (!chunks.length) {
-    const pending = await getPendingNotice(params.filters.companyId);
-    if (pending) {
+    const scopedNotice = !scope.scopedReportReady
+      ? await getScopedReportNotice(params.filters)
+      : null;
+
+    if (scopedNotice && companyState.completedCount === 0) {
       return {
-        message: pending.message + formatSourcesAppendix(pending.sources),
-        sources: pending.sources,
+        message:
+          scopedNotice.message + formatSourcesAppendix(scopedNotice.sources),
+        sources: scopedNotice.sources,
         model: null,
         tier: "pending",
       };
     }
-  }
 
-  if (!chunks.length) {
-    const supabase = await createClient();
-    const { count } = await supabase
-      .from("document_processing")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", params.filters.companyId)
-      .eq("status", "completed");
+    const empty = await resolveEmptyDocumentMessage(
+      params.filters.companyId,
+      params.filters,
+    );
 
-    if ((count ?? 0) > 0) {
-      return {
-        message:
-          "No encuentro esa información en los documentos disponibles.",
-        sources: [],
-        model: null,
-        tier: "chunks",
-      };
+    if (companyState.completedCount === 0) {
+      const context = await buildAssistantContext({
+        id: params.filters.userId ?? "",
+        email: "",
+        full_name: null,
+        role: "client",
+        company_id: params.filters.companyId,
+        created_at: "",
+        updated_at: "",
+      });
+
+      if (empty.tier === "portal_metadata" && empty.message.includes("No encuentro documentos procesados")) {
+        return {
+          message: `${empty.message}\n\nEstado del portal: ${context.availableReports} reportes publicados, ${context.pendingDocuments} documentos pendientes en Inbox.`,
+          sources: [],
+          model: null,
+          tier: empty.tier,
+        };
+      }
     }
 
-    const context = await buildAssistantContext({
-      id: params.filters.userId ?? "",
-      email: "",
-      full_name: null,
-      role: "client",
-      company_id: params.filters.companyId,
-      created_at: "",
-      updated_at: "",
-    });
-
     return {
-      message: `Aún no hay documentos analizados por SinexIA para ${context.companyName}. Cuando se publiquen o suban reportes PDF/Excel/CSV, podrá preguntar sobre saldos, nómina y aging con fuentes.\n\nEstado del portal (solo mientras no hay documentos analizados): ${context.availableReports} reportes publicados, ${context.pendingDocuments} documentos pendientes en Inbox.`,
-      sources: [],
+      message: empty.message + formatSourcesAppendix(empty.sources),
+      sources: empty.sources,
       model: null,
-      tier: "portal_metadata",
+      tier: empty.tier,
     };
   }
 

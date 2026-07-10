@@ -251,7 +251,9 @@ export async function answerFromStructuredQuery(params: {
         reportId: params.reportId,
         period: params.period,
       });
-      const latest = profiles[0];
+      const preferred =
+        profiles.find((p) => p.document_type === "payroll") ?? profiles[0];
+      const latest = preferred;
       if (
         latest?.summary &&
         (latest.extraction_confidence ?? 0) >= 0.35
@@ -389,15 +391,24 @@ export async function answerFromStructuredQuery(params: {
     return { answered: false, message: "", sources: [], intent };
   }
 
-  // Prefer AR profile for receivable intents
-  const preferred =
-    [
-      "receivable_total",
-      "customer_count",
-      "invoice_count_receivable",
-      "top_debtors",
-      "aging_buckets",
-    ].includes(intent)
+  // Prefer specialized profiles for domain-specific intents
+  const payrollIntents = new Set([
+    "payroll_total",
+    "employee_count",
+    "overtime_hours",
+    "total_tips",
+  ]);
+  const receivableIntents = new Set([
+    "receivable_total",
+    "customer_count",
+    "invoice_count_receivable",
+    "top_debtors",
+    "aging_buckets",
+  ]);
+
+  const preferred = payrollIntents.has(intent)
+    ? profiles.find((p) => p.document_type === "payroll") ?? profiles[0]
+    : receivableIntents.has(intent)
       ? profiles.find((p) => p.document_type === "accounts_receivable") ??
         profiles[0]
       : profiles[0];
