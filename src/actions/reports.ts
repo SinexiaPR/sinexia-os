@@ -18,6 +18,7 @@ import {
   reportSuccess,
   validationError,
 } from "@/lib/reports/report-action-helpers";
+import { scheduleReportProcessing } from "@/lib/intelligence/processing";
 import { createClient } from "@/lib/supabase/server";
 import type { ReportActionState } from "@/types/reports";
 
@@ -65,7 +66,7 @@ export async function createReport(
 
     if (!isAllowedUploadFile(file)) {
       return validationError(
-        "Unsupported file type. Use PDF, Excel, Word, or image.",
+        "Unsupported file type. Use PDF, Excel, CSV, Word, or image.",
       );
     }
 
@@ -123,6 +124,9 @@ export async function createReport(
         category,
       });
     }
+
+    // Async SinexIA processing — do not block the upload response
+    scheduleReportProcessing(reportId);
 
     revalidatePath("/dashboard/reports");
     revalidatePath("/dashboard");

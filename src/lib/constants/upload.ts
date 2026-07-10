@@ -2,7 +2,7 @@ export const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
 /** Full picker: camera (via separate input), gallery, PDF, Office docs */
 export const UPLOAD_ACCEPT =
-  "image/*,application/pdf,.doc,.docx,.xls,.xlsx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
+  "image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
 
 /** Mobile camera capture */
 export const CAMERA_ACCEPT = "image/*";
@@ -13,6 +13,7 @@ export const ALLOWED_EXTENSIONS = [
   ".docx",
   ".xls",
   ".xlsx",
+  ".csv",
   ".jpg",
   ".jpeg",
   ".png",
@@ -28,6 +29,8 @@ export const ALLOWED_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-excel",
+  "text/csv",
+  "application/csv",
   "image/jpeg",
   "image/png",
   "image/webp",
@@ -44,6 +47,7 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   ".xls": "application/vnd.ms-excel",
   ".xlsx":
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".csv": "text/csv",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
