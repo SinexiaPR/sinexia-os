@@ -160,3 +160,20 @@ export async function countPendingDocumentsForCompany(
 
   return count ?? 0;
 }
+
+export async function countDocumentsReceivedToday(): Promise<number> {
+  const supabase = await createClient();
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+
+  const { count, error } = await supabase
+    .from("documents")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", start.toISOString());
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+}

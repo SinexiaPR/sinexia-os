@@ -11,7 +11,7 @@ type AdminReportsListProps = {
 };
 
 function formatDate(date: string) {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("es", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -38,7 +38,7 @@ async function AdminReportRow({ report }: { report: ReportWithCompany }) {
             <span>{report.period}</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            Published {formatDate(report.created_at)}
+            Publicado el {formatDate(report.created_at)}
           </p>
           {report.notes ? (
             <p className="pt-2 text-sm leading-relaxed text-muted-foreground">
@@ -53,12 +53,12 @@ async function AdminReportRow({ report }: { report: ReportWithCompany }) {
               href={signedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-9 items-center rounded-lg border border-border px-3 text-sm font-medium text-primary hover:bg-muted/50"
+              className="inline-flex h-11 items-center rounded-xl border border-border px-3 text-sm font-medium text-primary hover:bg-muted/50"
             >
-              Download
+              Descargar
             </Link>
           ) : (
-            <span className="text-sm text-muted-foreground">Unavailable</span>
+            <span className="text-sm text-muted-foreground">No disponible</span>
           )}
           <DeleteReportButton reportId={report.id} />
         </div>
@@ -72,7 +72,7 @@ export async function AdminReportsList({ reports }: AdminReportsListProps) {
     return (
       <SurfaceCard padding="lg">
         <p className="py-8 text-center text-sm text-muted-foreground">
-          No reports published yet.
+          Aún no hay reportes publicados.
         </p>
       </SurfaceCard>
     );

@@ -19,13 +19,13 @@ export type AdminActivityItem = {
 function documentActivity(
   doc: Awaited<ReturnType<typeof getRecentDocuments>>[number],
 ): AdminActivityItem {
-  const companyName = doc.company?.name ?? "Unknown company";
+  const companyName = doc.company?.name ?? "Empresa desconocida";
 
   if (doc.status === "processed") {
     return {
       id: `doc-processed-${doc.id}`,
       kind: "document_processed",
-      title: "Document processed",
+      title: "Documento procesado",
       description: `${doc.supplier} · ${companyName}`,
       timestamp: doc.created_at,
       href: "/dashboard/inbox",
@@ -35,7 +35,7 @@ function documentActivity(
   return {
     id: `doc-received-${doc.id}`,
     kind: "document_received",
-    title: "New document received",
+    title: "Nuevo documento recibido",
     description: `${doc.supplier} · ${companyName} · ${DOCUMENT_STATUS_LABELS[doc.status]}`,
     timestamp: doc.created_at,
     href: "/dashboard/inbox",
@@ -55,8 +55,8 @@ export async function getAdminRecentActivity(
   const reportItems: AdminActivityItem[] = recentReports.map((report) => ({
     id: `report-${report.id}`,
     kind: "report_published",
-    title: "Report published",
-    description: `${report.title} · ${report.company?.name ?? "Unknown company"}`,
+    title: "Reporte publicado",
+    description: `${report.title} · ${report.company?.name ?? "Empresa desconocida"}`,
     timestamp: report.created_at,
     href: "/dashboard/reports",
   }));

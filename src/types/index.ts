@@ -52,12 +52,13 @@ export type CompanyWithStats = Company & {
 export const PENDING_STATUSES: DocumentStatus[] = ["received", "reviewing"];
 
 export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
-  received: "Received",
-  reviewing: "Reviewing",
-  processed: "Processed",
-  rejected: "Rejected",
+  received: "Recibido",
+  reviewing: "En revisión",
+  processed: "Procesado",
+  rejected: "Rechazado",
 };
 
+/** Stored values — keep stable for existing records */
 export const DOCUMENT_TYPE_OPTIONS = [
   "Invoice",
   "Receipt",
@@ -67,6 +68,14 @@ export const DOCUMENT_TYPE_OPTIONS = [
 ] as const;
 
 export type DocumentType = (typeof DOCUMENT_TYPE_OPTIONS)[number];
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  Invoice: "Factura",
+  Receipt: "Recibo",
+  "Credit Note": "Nota de crédito",
+  Statement: "Estado de cuenta",
+  Other: "Otro",
+};
 
 export type { ReportCategory } from "@/lib/constants/reports";
 

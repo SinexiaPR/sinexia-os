@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { ArrowUpRight, FileText, Upload } from "lucide-react";
+import { ArrowRight, BarChart3, FileText, Upload } from "lucide-react";
 
 import { ClientNotificationAlerts } from "@/components/dashboard/client-notification-alerts";
+import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { NotificationDot } from "@/components/ui/nav-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import {
@@ -10,10 +12,15 @@ import {
   getDocumentsForCompany,
   getSignedFileUrl,
 } from "@/services/documents";
-import { getLatestReportForCompany, getReportCreatedDatesForCompany } from "@/services/reports";
+import {
+  getLatestReportForCompany,
+  getReportCreatedDatesForCompany,
+} from "@/services/reports";
 import {
   DOCUMENT_STATUS_LABELS,
+  DOCUMENT_TYPE_LABELS,
   PENDING_STATUSES,
+  type DocumentType,
   type DocumentWithCompany,
   type Profile,
   type Report,
@@ -38,6 +45,10 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
+function documentTypeLabel(type: string) {
+  return DOCUMENT_TYPE_LABELS[type as DocumentType] ?? type;
+}
+
 async function LastUploadCard({ document }: { document: DocumentWithCompany }) {
   const signedUrl = await getSignedFileUrl(document.file_url);
 
@@ -52,18 +63,18 @@ async function LastUploadCard({ document }: { document: DocumentWithCompany }) {
             {document.supplier}
           </p>
         </div>
-        <div className="flex size-10 items-center justify-center rounded-xl bg-muted">
-          <FileText className="size-4 text-muted-foreground" />
+        <div className="flex size-10 items-center justify-center rounded-xl bg-navy-soft text-primary">
+          <FileText className="size-4" />
         </div>
       </div>
 
       <div className="mt-auto space-y-4 pt-8">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant={document.status}>
             {DOCUMENT_STATUS_LABELS[document.status]}
           </Badge>
           <span className="text-sm text-muted-foreground">
-            {document.document_type}
+            {documentTypeLabel(document.document_type)}
           </span>
         </div>
         <div className="flex items-end justify-between gap-4">
@@ -80,10 +91,10 @@ async function LastUploadCard({ document }: { document: DocumentWithCompany }) {
               href={signedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              Ver
-              <ArrowUpRight className="size-3.5" />
+              Ver archivo
+              <ArrowRight className="size-3.5" />
             </Link>
           ) : null}
         </div>
@@ -99,8 +110,8 @@ function EmptyLastUploadCard() {
         Último envío
       </p>
       <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
-          <FileText className="size-5 text-muted-foreground" />
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-navy-soft text-primary">
+          <FileText className="size-5" />
         </div>
         <p className="mt-4 text-sm font-medium text-foreground">
           Sin envíos aún
@@ -148,73 +159,56 @@ function LatestReportCard({ report }: { report: Report | null }) {
   );
 }
 
-function QuickUploadCard() {
-  return (
-    <Link href="/dashboard/inbox#upload" className="group block h-full">
-      <SurfaceCard
-        padding="lg"
-        className="flex h-full flex-col border-primary/20 bg-primary/[0.03] transition-colors hover:border-primary/30 hover:bg-primary/[0.05]"
-      >
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-transform group-hover:scale-105">
-          <Upload className="size-5" />
-        </div>
-        <div className="mt-6">
-          <p className="text-lg font-semibold tracking-tight text-foreground">
-            Subir documento
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Envíe un archivo a su Inbox. Sinexia lo revisará — sin carpetas ni
-            clasificaciones.
-          </p>
-        </div>
-        <p className="mt-auto pt-8 text-sm font-medium text-primary">
-          Subir ahora →
-        </p>
-      </SurfaceCard>
-    </Link>
-  );
-}
-
 export async function ClientDashboard({ profile }: ClientDashboardProps) {
   if (!profile.company_id) {
     return (
       <div className="space-y-2 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
+          Inicio
+        </h1>
         <p className="text-muted-foreground">
           Su cuenta no está vinculada a una empresa. Contacte a Sinexia.
         </p>
+        <div className="pt-6">
+          <ContactSinexiaCard />
+        </div>
       </div>
     );
   }
 
-  const [company, documents, latestReport, reportCreatedAts] = await Promise.all([
-    getCompanyById(profile.company_id),
-    getDocumentsForCompany(profile.company_id),
-    getLatestReportForCompany(profile.company_id),
-    getReportCreatedDatesForCompany(profile.company_id),
-  ]);
+  const [company, documents, latestReport, reportCreatedAts] =
+    await Promise.all([
+      getCompanyById(profile.company_id),
+      getDocumentsForCompany(profile.company_id),
+      getLatestReportForCompany(profile.company_id),
+      getReportCreatedDatesForCompany(profile.company_id),
+    ]);
 
   const pendingCount = documents.filter((doc) =>
     PENDING_STATUSES.includes(doc.status),
   ).length;
-  const receivedCount = documents.filter((doc) => doc.status === "received").length;
-  const reviewingCount = documents.filter((doc) => doc.status === "reviewing").length;
+  const receivedCount = documents.filter(
+    (doc) => doc.status === "received",
+  ).length;
+  const reviewingCount = documents.filter(
+    (doc) => doc.status === "reviewing",
+  ).length;
+  const reportsAvailable = reportCreatedAts.length;
 
   const lastUpload = documents[0] ?? null;
   const firstName = profile.full_name?.split(" ")[0] ?? "cliente";
+  const companyName = company?.name ?? "su empresa";
 
   return (
-    <div className="space-y-10">
-      <header className="space-y-2">
-        <p className="text-sm text-muted-foreground">
-          {company?.name ?? "Su empresa"}
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          Hola, {firstName}
+    <div className="space-y-8 sm:space-y-10">
+      <header className="space-y-3">
+        <p className="text-sm font-medium text-primary">{companyName}</p>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          Bienvenido, {firstName}
         </h1>
-        <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
-          Suba documentos a su Inbox, consulte reportes de Sinexia o pregunte a
-          SIA sobre el estado de su cuenta.
+        <p className="max-w-lg text-[15px] leading-relaxed text-muted-foreground sm:text-base">
+          Envíe documentos, consulte reportes y manténgase al día con el estado
+          de {companyName}.
         </p>
       </header>
 
@@ -225,34 +219,74 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
         reportCreatedAts={reportCreatedAts}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SurfaceCard padding="lg" className="relative">
-          {pendingCount > 0 ? (
-            <span className="absolute top-6 right-6">
-              <NotificationDot />
-            </span>
-          ) : null}
-          <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-            Pendientes
+      <div className="grid gap-3 sm:grid-cols-3">
+        <SurfaceCard padding="md" className="relative">
+          <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
+            Documentos enviados
           </p>
-          <p className="mt-6 text-5xl font-semibold tracking-tight tabular-nums">
-            {pendingCount}
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            En revisión por Sinexia
+          <p className="mt-4 text-4xl font-semibold tracking-tight tabular-nums">
+            {documents.length}
           </p>
         </SurfaceCard>
 
-        <QuickUploadCard />
+        <SurfaceCard padding="md" className="relative">
+          {pendingCount > 0 ? (
+            <span className="absolute top-5 right-5">
+              <NotificationDot />
+            </span>
+          ) : null}
+          <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
+            Pendientes de revisión
+          </p>
+          <p className="mt-4 text-4xl font-semibold tracking-tight tabular-nums">
+            {pendingCount}
+          </p>
+        </SurfaceCard>
 
+        <SurfaceCard padding="md" className="relative">
+          <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
+            Reportes disponibles
+          </p>
+          <p className="mt-4 text-4xl font-semibold tracking-tight tabular-nums">
+            {reportsAvailable}
+          </p>
+        </SurfaceCard>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button
+          asChild
+          size="lg"
+          className="h-12 rounded-xl text-[15px] font-semibold sm:min-w-[200px]"
+        >
+          <Link href="/dashboard/inbox#upload" className="gap-2">
+            <Upload className="size-4" />
+            Enviar documento
+          </Link>
+        </Button>
+        <Button
+          asChild
+          variant="outline"
+          size="lg"
+          className="h-12 rounded-xl bg-card text-[15px] font-medium sm:min-w-[160px]"
+        >
+          <Link href="/dashboard/reports" className="gap-2">
+            <BarChart3 className="size-4" />
+            Ver reportes
+          </Link>
+        </Button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
         {lastUpload ? (
           <LastUploadCard document={lastUpload} />
         ) : (
           <EmptyLastUploadCard />
         )}
-
         <LatestReportCard report={latestReport} />
       </div>
+
+      <ContactSinexiaCard />
     </div>
   );
 }

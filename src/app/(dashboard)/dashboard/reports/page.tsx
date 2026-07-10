@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { AdminReportForm } from "@/components/reports/admin-report-form";
 import { AdminReportsList } from "@/components/reports/admin-reports-list";
-import { ClientReportCard } from "@/components/reports/client-report-card";
+import { ClientReportCard } from "@/components/reports/client-report-card-server";
 import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
 import { MarkReportsSeen } from "@/components/notifications/mark-reports-seen";
 import { PageHeader } from "@/components/layout/page-header";
@@ -12,7 +12,7 @@ import { getCompanies } from "@/services/documents";
 import { getAllReports, getReportsForCompany } from "@/services/reports";
 
 export const metadata: Metadata = {
-  title: "Reports",
+  title: "Reportes",
 };
 
 export default async function ReportsPage() {
@@ -27,17 +27,17 @@ export default async function ReportsPage() {
     return (
       <div className="space-y-10">
         <PageHeader
-          eyebrow="Admin workspace"
-          title="Reports"
-          description="Publish report files to client companies."
+          eyebrow="Administración"
+          title="Reportes"
+          description="Publique archivos de reportes para las empresas clientes."
         />
 
         <SurfaceCard padding="lg">
           <h2 className="text-base font-semibold tracking-tight">
-            Publish report
+            Publicar reporte
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Select a company, add details, and upload the report file.
+            Seleccione una empresa, complete los datos y suba el archivo.
           </p>
           <div className="mt-6">
             <AdminReportForm companies={companies} />
@@ -46,7 +46,7 @@ export default async function ReportsPage() {
 
         <div className="space-y-4">
           <h2 className="text-base font-semibold tracking-tight">
-            All reports
+            Todos los reportes
           </h2>
           <AdminReportsList reports={reports} />
         </div>
@@ -57,7 +57,9 @@ export default async function ReportsPage() {
   if (!profile.company_id) {
     return (
       <div className="space-y-2 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight">Reportes</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
+          Reportes
+        </h1>
         <p className="text-muted-foreground">
           Su cuenta no está vinculada a una empresa.
         </p>
@@ -69,13 +71,13 @@ export default async function ReportsPage() {
   const reportCreatedAts = reports.map((report) => report.created_at);
 
   return (
-    <div className="space-y-8 pb-6 sm:space-y-10">
+    <div className="space-y-8 pb-2 sm:space-y-10">
       <MarkReportsSeen
         profileId={profile.id}
         reportCreatedAts={reportCreatedAts}
       />
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
           Reportes
         </h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-base">
@@ -98,7 +100,11 @@ export default async function ReportsPage() {
       ) : (
         <div className="space-y-4">
           {reports.map((report) => (
-            <ClientReportCard key={report.id} report={report} />
+            <ClientReportCard
+              key={report.id}
+              report={report}
+              profileId={profile.id}
+            />
           ))}
         </div>
       )}
