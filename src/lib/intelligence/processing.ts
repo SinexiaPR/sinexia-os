@@ -22,13 +22,248 @@ import type { DetectedDocumentType } from "@/lib/intelligence/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REPORTS_BUCKET } from "@/lib/constants/reports";
 import { logServerError } from "@/lib/errors/action-error";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
+import { after } from "next/server";
 
 const DOCUMENTS_BUCKET = "documents";
 
+export type ReportProcessingSource = {
+  id: string;
+  company_id: string;
+  title: string;
+  period: string;
+  file_url: string;
+  category: string;
+};
+
 function logProcessing(event: string, meta: Record<string, unknown>) {
   console.info(`[sinexia-intelligence] ${event}`, meta);
+}
+
+function postgresErrorMeta(error: PostgrestError | null | undefined) {
+  const message = error?.message ?? null;
+  const details = error?.details ?? null;
+  const constraintMatch = `${message ?? ""} ${details ?? ""}`.match(
+    /constraint "([^"]+)"/i,
+  );
+
+  return {
+    postgresCode: error?.code ?? null,
+    postgresMessage: message,
+    constraintName: constraintMatch?.[1] ?? null,
+  };
+}
+
+function formatProcessingInsertError(error: PostgrestError | null | undefined) {
+  const meta = postgresErrorMeta(error);
+  if (!meta.postgresMessage) {
+    return "Failed to create processing record";
+  }
+
+  return `Failed to create processing record (${meta.postgresCode ?? "unknown"}: ${meta.postgresMessage})`;
+}
+
+async function fetchProcessingBySource(params: {
+  admin: SupabaseClient;
+  reportId?: string | null;
+  documentId?: string | null;
+}): Promise<{ id: string; status: string } | null> {
+  const { admin, reportId, documentId } = params;
+
+  if (!reportId && !documentId) {
+    return null;
+  }
+
+  let query = admin.from("document_processing").select("id, status");
+
+  if (reportId) {
+    query = query.eq("report_id", reportId);
+  } else if (documentId) {
+    query = query.eq("document_id", documentId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error && error.code !== "PGRST116") {
+    logProcessing("processing_insert_failed", {
+      reportId: reportId ?? null,
+      companyId: null,
+      client: "service_role",
+      lookup: "existing_row",
+      ...postgresErrorMeta(error),
+    });
+    return null;
+  }
+
+  return data ?? null;
+}
+
+async function ensureProcessingRow(params: {
+  admin: SupabaseClient;
+  companyId: string;
+  reportId?: string | null;
+  documentId?: string | null;
+  filename: string;
+  force: boolean;
+}): Promise<
+  | { ok: true; processingId: string; skip?: string }
+  | { ok: false; error: string }
+> {
+  const { admin, companyId, reportId, documentId, filename, force } = params;
+  const fileFormat = getFileExtension(filename) || null;
+  const analyzable = isAnalyzableFilename(filename);
+
+  if (!reportId && !documentId) {
+    return { ok: false, error: "Missing report or document id" };
+  }
+
+  logProcessing("processing_insert_start", {
+    reportId: reportId ?? null,
+    companyId,
+    documentId: documentId ?? null,
+    fileExtension: fileFormat,
+    client: "service_role",
+    force,
+  });
+
+  const pendingPatch = {
+    company_id: companyId,
+    status: "pending" as const,
+    file_format: fileFormat,
+    is_analyzable: analyzable,
+    original_filename: filename,
+    prompt_version: INTELLIGENCE_PROMPT_VERSION,
+    processing_error: null,
+    processed_at: null,
+  };
+
+  const existing = await fetchProcessingBySource({
+    admin,
+    reportId,
+    documentId,
+  });
+
+  if (
+    existing &&
+    !force &&
+    (existing.status === "completed" ||
+      existing.status === "processing" ||
+      existing.status === "requires_ocr")
+  ) {
+    logProcessing("processing_insert_success", {
+      reportId: reportId ?? null,
+      companyId,
+      processingId: existing.id,
+      client: "service_role",
+      action: "reuse_existing",
+      status: existing.status,
+    });
+    return { ok: true, processingId: existing.id, skip: existing.status };
+  }
+
+  if (existing?.id) {
+    const { error: updateError } = await admin
+      .from("document_processing")
+      .update(pendingPatch)
+      .eq("id", existing.id);
+
+    if (updateError) {
+      logProcessing("processing_insert_failed", {
+        reportId: reportId ?? null,
+        companyId,
+        processingId: existing.id,
+        client: "service_role",
+        action: "update_existing",
+        ...postgresErrorMeta(updateError),
+      });
+      return { ok: false, error: formatProcessingInsertError(updateError) };
+    }
+
+    logProcessing("processing_insert_success", {
+      reportId: reportId ?? null,
+      companyId,
+      processingId: existing.id,
+      client: "service_role",
+      action: "update_existing",
+      status: "pending",
+    });
+    return { ok: true, processingId: existing.id };
+  }
+
+  const { data: inserted, error: insertError } = await admin
+    .from("document_processing")
+    .insert({
+      report_id: reportId ?? null,
+      document_id: documentId ?? null,
+      ...pendingPatch,
+    })
+    .select("id")
+    .single();
+
+  if (!insertError && inserted) {
+    logProcessing("processing_insert_success", {
+      reportId: reportId ?? null,
+      companyId,
+      processingId: inserted.id,
+      client: "service_role",
+      action: "insert",
+      status: "pending",
+    });
+    return { ok: true, processingId: inserted.id };
+  }
+
+  if (insertError?.code === "23505") {
+    const duplicate = await fetchProcessingBySource({
+      admin,
+      reportId,
+      documentId,
+    });
+
+    if (duplicate?.id) {
+      const { error: updateError } = await admin
+        .from("document_processing")
+        .update(pendingPatch)
+        .eq("id", duplicate.id);
+
+      if (updateError) {
+        logProcessing("processing_insert_failed", {
+          reportId: reportId ?? null,
+          companyId,
+          processingId: duplicate.id,
+          client: "service_role",
+          action: "duplicate_update",
+          ...postgresErrorMeta(updateError),
+        });
+        return { ok: false, error: formatProcessingInsertError(updateError) };
+      }
+
+      logProcessing("processing_insert_success", {
+        reportId: reportId ?? null,
+        companyId,
+        processingId: duplicate.id,
+        client: "service_role",
+        action: "duplicate_resolved",
+        status: "pending",
+      });
+      return { ok: true, processingId: duplicate.id };
+    }
+  }
+
+  logProcessing("processing_insert_failed", {
+    reportId: reportId ?? null,
+    companyId,
+    client: "service_role",
+    action: "insert",
+    ...postgresErrorMeta(insertError),
+  });
+  logServerError("Create document_processing", insertError, {
+    reportId,
+    documentId,
+    companyId,
+  });
+
+  return { ok: false, error: formatProcessingInsertError(insertError) };
 }
 
 function hashBuffer(buffer: Buffer): string {
@@ -52,8 +287,26 @@ const STRUCTURED_TYPES = new Set<DetectedDocumentType>([
 function shouldSkipEmbeddings(
   documentType: DetectedDocumentType,
   profileConfidence: number,
+  reportCategory?: string | null,
 ): boolean {
+  if (
+    reportCategory &&
+    REPORT_CATEGORY_TO_TYPE[reportCategory] === documentType &&
+    STRUCTURED_TYPES.has(documentType)
+  ) {
+    return true;
+  }
+
   return profileConfidence >= 0.35 && STRUCTURED_TYPES.has(documentType);
+}
+
+function logSpreadsheetStep(
+  step: string,
+  meta: Record<string, unknown>,
+  fileFormat: string | null,
+): void {
+  if (fileFormat !== "xlsx" && fileFormat !== "xls") return;
+  logProcessing(step, meta);
 }
 
 function parseReportDate(value: string | null | undefined): string | null {
@@ -245,6 +498,52 @@ async function runPipeline(params: {
 
     const extraction = await extractDocument(buffer, filename);
 
+    logSpreadsheetStep(
+      "xlsx_extract_complete",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        chunkCount: extraction.chunks.length,
+        sheetCount:
+          typeof extraction.meta?.sheetCount === "number"
+            ? extraction.meta.sheetCount
+            : null,
+        sheetsWithData:
+          typeof extraction.meta?.sheetsWithData === "number"
+            ? extraction.meta.sheetsWithData
+            : null,
+        rowCount:
+          typeof extraction.meta?.rowCount === "number"
+            ? extraction.meta.rowCount
+            : null,
+      },
+      fileFormat,
+    );
+
+    if (
+      (fileFormat === "xlsx" || fileFormat === "xls") &&
+      extraction.text.length === 0
+    ) {
+      logSpreadsheetStep(
+        "xlsx_extract_empty",
+        {
+          reportId: sourceMeta.reportId ?? null,
+          processingId,
+          companyId,
+          fileExtension: fileFormat,
+          reason: "no_non_empty_sheet_rows",
+          sheetCount:
+            typeof extraction.meta?.sheetCount === "number"
+              ? extraction.meta.sheetCount
+              : 0,
+        },
+        fileFormat,
+      );
+    }
+
     if (extraction.requiresOcr) {
       await admin
         .from("document_processing")
@@ -259,7 +558,7 @@ async function runPipeline(params: {
             briefSummary: "Requiere OCR",
             confidence: 0,
           },
-          processing_error: "Requiere OCR",
+          processing_error: "Este documento requiere OCR para ser analizado por SinexIA.",
           processed_at: new Date().toISOString(),
           prompt_version: INTELLIGENCE_PROMPT_VERSION,
         })
@@ -290,6 +589,36 @@ async function runPipeline(params: {
       buffer,
     });
 
+    const structuredProfileGenerated =
+      profile.confidence > 0 &&
+      (profile.summary.length > 0 ||
+        Object.values(profile.structuredData).some(
+          (value) => value != null && value !== "",
+        ));
+
+    logSpreadsheetStep(
+      "xlsx_profile_extracted",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        structuredProfileGenerated,
+        documentType: profile.documentType,
+        confidence: profile.confidence,
+        employeeCount:
+          typeof profile.structuredData.employee_count === "number"
+            ? profile.structuredData.employee_count
+            : null,
+        totalPayroll:
+          typeof profile.structuredData.total_payroll === "number"
+            ? profile.structuredData.total_payroll
+            : null,
+      },
+      fileFormat,
+    );
+
     const skipGptClassification =
       Boolean(reportCategory) || profile.confidence >= 0.35;
 
@@ -316,6 +645,7 @@ async function runPipeline(params: {
     const skipEmbeddings = shouldSkipEmbeddings(
       profile.documentType,
       profile.confidence,
+      reportCategory,
     );
 
     let embedTokens = 0;
@@ -353,21 +683,41 @@ async function runPipeline(params: {
       }
     }
 
-    await upsertDocumentProfile({
-      admin,
-      processingId,
-      companyId,
-      reportId: sourceMeta.reportId ?? null,
-      documentId: sourceMeta.documentId ?? null,
-      profile: {
-        ...profile,
-        period: detectedPeriod,
-        structuredData: {
-          ...profile.structuredData,
+    let profileInsertResult = "ok";
+    try {
+      await upsertDocumentProfile({
+        admin,
+        processingId,
+        companyId,
+        reportId: sourceMeta.reportId ?? null,
+        documentId: sourceMeta.documentId ?? null,
+        profile: {
+          ...profile,
           period: detectedPeriod,
+          structuredData: {
+            ...profile.structuredData,
+            period: detectedPeriod,
+          },
         },
+      });
+    } catch (error) {
+      profileInsertResult =
+        error instanceof Error ? error.message : "document_profiles upsert failed";
+      throw error;
+    }
+
+    logSpreadsheetStep(
+      "xlsx_profile_insert",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        structuredProfileGenerated,
+        documentProfilesInsertResult: profileInsertResult,
       },
-    });
+      fileFormat,
+    );
 
     const totalTokens =
       (classification.tokenUsage ?? 0) + (embedTokens ?? 0);
@@ -416,6 +766,21 @@ async function runPipeline(params: {
       type: classification.summary.documentType,
     });
 
+    logSpreadsheetStep(
+      "xlsx_pipeline_finished",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        structuredProfileGenerated,
+        documentProfilesInsertResult: profileInsertResult,
+        finalStatus: "completed",
+      },
+      fileFormat,
+    );
+
     return { ok: true, status: "completed" };
   } catch (error) {
     const message =
@@ -430,83 +795,237 @@ async function runPipeline(params: {
       })
       .eq("id", processingId);
 
+    logSpreadsheetStep(
+      "xlsx_pipeline_failed",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        finalStatus: "failed",
+        error: message,
+      },
+      fileFormat,
+    );
+
     logServerError("runPipeline", error, { ...sourceMeta, processingId });
     return { ok: false, status: "failed", error: message };
   }
 }
 
-async function ensureProcessingRow(params: {
-  admin: SupabaseClient;
-  companyId: string;
-  reportId?: string | null;
-  documentId?: string | null;
-  filename: string;
-  force: boolean;
-}): Promise<
-  | { ok: true; processingId: string; skip?: string }
-  | { ok: false; error: string }
+export async function resolveReportForProcessing(
+  reportId: string,
+  source?: ReportProcessingSource | null,
+  companyId?: string | null,
+): Promise<
+  | { ok: true; report: ReportProcessingSource; lookup: string }
+  | { ok: false; error: string; lookup: string }
 > {
-  const { admin, companyId, reportId, documentId, filename, force } = params;
-  const fileFormat = getFileExtension(filename) || null;
-  const analyzable = isAnalyzableFilename(filename);
-
-  let existingQuery = admin
-    .from("document_processing")
-    .select("id, status");
-
-  if (reportId) {
-    existingQuery = existingQuery.eq("report_id", reportId);
-  } else if (documentId) {
-    existingQuery = existingQuery.eq("document_id", documentId);
+  const normalizedReportId = reportId.trim();
+  if (!normalizedReportId) {
+    return { ok: false, error: "Report not found", lookup: "empty_report_id" };
   }
-
-  const { data: existing } = await existingQuery.maybeSingle();
 
   if (
-    existing &&
-    !force &&
-    (existing.status === "completed" ||
-      existing.status === "processing" ||
-      existing.status === "requires_ocr")
+    source?.id === normalizedReportId &&
+    source.file_url &&
+    (!companyId || source.company_id === companyId)
   ) {
-    return { ok: true, processingId: existing.id, skip: existing.status };
+    return { ok: true, report: source, lookup: "snapshot" };
   }
 
-  if (existing?.id) {
-    return { ok: true, processingId: existing.id };
+  let adminLookupError: string | null = null;
+
+  try {
+    const admin = createAdminClient();
+    let query = admin
+      .from("reports")
+      .select("id, company_id, title, period, file_url, category")
+      .eq("id", normalizedReportId);
+
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (data) {
+      return {
+        ok: true,
+        report: data as ReportProcessingSource,
+        lookup: "service_role",
+      };
+    }
+
+    adminLookupError = error?.message ?? "No row returned";
+  } catch (error) {
+    adminLookupError =
+      error instanceof Error ? error.message : "Admin client unavailable";
   }
 
-  const { data: inserted, error: insertError } = await admin
-    .from("document_processing")
-    .insert({
-      report_id: reportId ?? null,
-      document_id: documentId ?? null,
-      company_id: companyId,
-      status: "pending",
-      file_format: fileFormat,
-      is_analyzable: analyzable,
-      original_filename: filename,
-      prompt_version: INTELLIGENCE_PROMPT_VERSION,
-    })
-    .select("id")
-    .single();
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    let query = supabase
+      .from("reports")
+      .select("id, company_id, title, period, file_url, category")
+      .eq("id", normalizedReportId);
 
-  if (insertError || !inserted) {
-    logServerError("Create document_processing", insertError, {
-      reportId,
-      documentId,
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (data) {
+      return {
+        ok: true,
+        report: data as ReportProcessingSource,
+        lookup: "authenticated_admin",
+      };
+    }
+
+    if (error) {
+      logServerError("resolveReportForProcessing", error, {
+        reportId: normalizedReportId,
+        companyId,
+        adminLookupError,
+      });
+    }
+  } catch (error) {
+    logServerError("resolveReportForProcessing authed", error, {
+      reportId: normalizedReportId,
+      companyId,
     });
-    return { ok: false, error: "Failed to create processing record" };
   }
 
-  return { ok: true, processingId: inserted.id };
+  logProcessing("report_lookup_failed", {
+    reportId: normalizedReportId,
+    companyId: companyId ?? null,
+    adminLookupError,
+  });
+
+  return {
+    ok: false,
+    error: "Report not found",
+    lookup: adminLookupError ?? "not_found",
+  };
+}
+
+export async function bootstrapReportProcessing(
+  source: ReportProcessingSource,
+  force = false,
+): Promise<{ ok: boolean; processingId?: string; error?: string }> {
+  const filename = source.file_url.split("/").pop() ?? "file";
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (error) {
+    logProcessing("processing_insert_failed", {
+      reportId: source.id,
+      companyId: source.company_id,
+      client: "service_role",
+      action: "bootstrap",
+      postgresMessage:
+        error instanceof Error
+          ? error.message
+          : "Service role not configured",
+    });
+    return { ok: false, error: "Service role not configured" };
+  }
+
+  const ensured = await ensureProcessingRow({
+    admin,
+    companyId: source.company_id,
+    reportId: source.id,
+    filename,
+    force,
+  });
+
+  if (ensured.ok) {
+    return { ok: true, processingId: ensured.processingId };
+  }
+
+  return { ok: false, error: ensured.error };
+}
+
+async function markProcessingFailure(
+  admin: SupabaseClient,
+  params: {
+    reportId?: string;
+    processingId?: string;
+    error: string;
+  },
+): Promise<void> {
+  let query = admin.from("document_processing").update({
+    status: "failed",
+    processing_error: params.error,
+    processed_at: new Date().toISOString(),
+  });
+
+  if (params.processingId) {
+    query = query.eq("id", params.processingId);
+  } else if (params.reportId) {
+    query = query.eq("report_id", params.reportId);
+  } else {
+    return;
+  }
+
+  await query;
+}
+
+export async function queueReportProcessing(
+  source: ReportProcessingSource,
+  force = false,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const fileExtension = getFileExtension(source.file_url.split("/").pop() ?? "");
+  const bootstrap = await bootstrapReportProcessing(source, force);
+
+  logProcessing("queue_report_processing", {
+    reportId: source.id,
+    companyId: source.company_id,
+    processingId: bootstrap.processingId ?? null,
+    fileExtension,
+    lookupResult: bootstrap.ok ? "bootstrap_ok" : bootstrap.error ?? "bootstrap_failed",
+  });
+
+  if (!bootstrap.ok) {
+    return { ok: false, error: bootstrap.error ?? "Failed to create processing record" };
+  }
+
+  const result = await processReportDocument({
+    reportId: source.id,
+    force,
+    source,
+    processingId: bootstrap.processingId,
+  });
+
+  logProcessing("queue_report_finished", {
+    reportId: source.id,
+    companyId: source.company_id,
+    processingId: bootstrap.processingId ?? null,
+    fileExtension,
+    lookupResult: "snapshot",
+    finalStatus: result.status ?? null,
+    ok: result.ok,
+    error: result.error ?? null,
+  });
+
+  return result;
 }
 
 export async function processReportDocument(options: {
   reportId: string;
   force?: boolean;
+  source?: ReportProcessingSource;
+  processingId?: string;
 }): Promise<{ ok: boolean; status?: string; error?: string }> {
-  const { reportId, force = false } = options;
+  const { reportId, force = false, source, processingId: knownProcessingId } =
+    options;
+  const fileExtension = getFileExtension(
+    source?.file_url.split("/").pop() ?? "",
+  );
   let admin;
 
   try {
@@ -516,32 +1035,69 @@ export async function processReportDocument(options: {
     return { ok: false, error: "Service role not configured" };
   }
 
-  const { data: report, error: reportError } = await admin
-    .from("reports")
-    .select("id, company_id, title, period, file_url, category")
-    .eq("id", reportId)
-    .maybeSingle();
+  const resolved = await resolveReportForProcessing(
+    reportId,
+    source,
+    source?.company_id,
+  );
 
-  if (reportError || !report) {
-    return { ok: false, error: "Report not found" };
+  logProcessing("process_report_lookup", {
+    reportId,
+    companyId:
+      source?.company_id ??
+      (resolved.ok ? resolved.report.company_id : null),
+    processingId: knownProcessingId ?? null,
+    fileExtension,
+    lookupResult: resolved.lookup,
+    found: resolved.ok,
+  });
+
+  if (!resolved.ok) {
+    await markProcessingFailure(admin, {
+      reportId,
+      processingId: knownProcessingId,
+      error: resolved.error,
+    });
+    return { ok: false, error: resolved.error };
   }
 
+  const report = resolved.report;
   const filename = report.file_url.split("/").pop() ?? "file";
   const ensured = await ensureProcessingRow({
     admin,
     companyId: report.company_id,
-    reportId,
+    reportId: report.id,
     filename,
     force,
   });
 
-  if (!ensured.ok) return ensured;
+  if (!ensured.ok) {
+    await markProcessingFailure(admin, {
+      reportId: report.id,
+      processingId: knownProcessingId,
+      error: ensured.error,
+    });
+    return ensured;
+  }
+
   if (ensured.skip) {
-    logProcessing("skip_existing", { reportId, status: ensured.skip });
+    logProcessing("skip_existing", {
+      reportId: report.id,
+      processingId: ensured.processingId,
+      status: ensured.skip,
+    });
     return { ok: true, status: ensured.skip };
   }
 
-  return runPipeline({
+  logProcessing("process_report_start", {
+    reportId: report.id,
+    companyId: report.company_id,
+    processingId: ensured.processingId,
+    fileExtension: getFileExtension(filename),
+    lookupResult: resolved.lookup,
+  });
+
+  const pipelineResult = await runPipeline({
     admin,
     companyId: report.company_id,
     processingId: ensured.processingId,
@@ -552,8 +1108,20 @@ export async function processReportDocument(options: {
     fallbackPeriod: report.period,
     reportCategory: report.category,
     force,
-    sourceMeta: { reportId },
+    sourceMeta: { reportId: report.id },
   });
+
+  logProcessing("process_report_finished", {
+    reportId: report.id,
+    companyId: report.company_id,
+    processingId: ensured.processingId,
+    fileExtension: getFileExtension(filename),
+    finalStatus: pipelineResult.status ?? null,
+    ok: pipelineResult.ok,
+    error: pipelineResult.error ?? null,
+  });
+
+  return pipelineResult;
 }
 
 export async function processInboxDocument(options: {
@@ -617,9 +1185,21 @@ export async function processInboxDocument(options: {
 export function scheduleReportProcessing(
   reportId: string,
   force = false,
+  source?: ReportProcessingSource,
 ): void {
-  void processReportDocument({ reportId, force }).catch((error) => {
-    logServerError("scheduleReportProcessing", error, { reportId });
+  after(async () => {
+    try {
+      const result = await processReportDocument({ reportId, force, source });
+      logProcessing("scheduled_report_finished", {
+        reportId,
+        ok: result.ok,
+        status: result.status,
+        error: result.error ?? null,
+        usedSource: Boolean(source),
+      });
+    } catch (error) {
+      logServerError("scheduleReportProcessing", error, { reportId });
+    }
   });
 }
 
@@ -627,9 +1207,19 @@ export function scheduleInboxDocumentProcessing(
   documentId: string,
   force = false,
 ): void {
-  void processInboxDocument({ documentId, force }).catch((error) => {
-    logServerError("scheduleInboxDocumentProcessing", error, {
-      documentId,
-    });
+  after(async () => {
+    try {
+      const result = await processInboxDocument({ documentId, force });
+      logProcessing("scheduled_inbox_finished", {
+        documentId,
+        ok: result.ok,
+        status: result.status,
+        error: result.error ?? null,
+      });
+    } catch (error) {
+      logServerError("scheduleInboxDocumentProcessing", error, {
+        documentId,
+      });
+    }
   });
 }

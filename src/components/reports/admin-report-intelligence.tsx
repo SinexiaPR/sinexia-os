@@ -68,8 +68,8 @@ export function AdminReportIntelligence({
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const status = processing?.status ?? "pending";
-  const statusLabel = STATUS_LABELS[status] ?? status;
+  const status = processing?.status ?? null;
+  const statusLabel = status ? (STATUS_LABELS[status] ?? status) : "Sin iniciar";
   const summaryText =
     profile?.summary ?? processing?.structured_summary?.briefSummary ?? null;
   const confidence =
@@ -115,6 +115,12 @@ export function AdminReportIntelligence({
         <p className="text-xs text-red-700">{processing.processing_error}</p>
       ) : null}
 
+      {status === "requires_ocr" ? (
+        <p className="text-xs text-amber-800">
+          Este documento requiere OCR para ser analizado por SinexIA.
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -133,7 +139,7 @@ export function AdminReportIntelligence({
             });
           }}
         >
-          Reprocess
+          Procesar nuevamente
         </Button>
         <Button
           type="button"

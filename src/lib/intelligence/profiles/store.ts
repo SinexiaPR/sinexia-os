@@ -3,6 +3,41 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExtractionProfileResult } from "@/lib/intelligence/profiles/types";
 import type { DetectedDocumentType } from "@/lib/intelligence/types";
 
+const PROFILE_SELECT =
+  "*, document_processing(id, status, report_id, document_id, processed_at, reports(id, title, category, period), documents(id, supplier, document_type))";
+
+export async function getCompletedProcessingIds(
+  companyId: string,
+  filters?: {
+    reportId?: string | null;
+    processingId?: string | null;
+  },
+): Promise<string[]> {
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("document_processing")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("status", "completed");
+
+  if (filters?.processingId) {
+    query = query.eq("id", filters.processingId);
+  }
+  if (filters?.reportId) {
+    query = query.eq("report_id", filters.reportId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[document_processing] completed ids", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row) => row.id);
+}
+
 export async function upsertDocumentProfile(params: {
   admin: SupabaseClient;
   processingId: string;
@@ -56,21 +91,26 @@ export async function getProfilesForCompany(
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
 
+  let processingIds = await getCompletedProcessingIds(companyId, {
+    reportId: filters?.reportId,
+    processingId: filters?.processingId,
+  });
+
+  if (filters?.reportId && !processingIds.length) {
+    processingIds = await getCompletedProcessingIds(companyId);
+  }
+
+  if (!processingIds.length) {
+    return [];
+  }
+
   let query = supabase
     .from("document_profiles")
-    .select(
-      "*, document_processing!inner(id, status, report_id, document_id, processed_at, reports(id, title, category, period), documents(id, supplier, document_type))",
-    )
+    .select(PROFILE_SELECT)
     .eq("company_id", companyId)
-    .eq("document_processing.status", "completed")
+    .in("document_processing_id", processingIds)
     .order("upload_date", { ascending: false });
 
-  if (filters?.processingId) {
-    query = query.eq("document_processing_id", filters.processingId);
-  }
-  if (filters?.reportId) {
-    query = query.eq("report_id", filters.reportId);
-  }
   if (filters?.documentType) {
     query = query.eq("document_type", filters.documentType);
   }
@@ -98,14 +138,20 @@ export async function getProfileByProcessingId(processingId: string) {
 }
 
 export async function getDocumentHistory(companyId: string, limit = 12) {
+  const processingIds = await getCompletedProcessingIds(companyId);
+  if (!processingIds.length) {
+    return [];
+  }
+
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
   const { data } = await supabase
     .from("document_profiles")
     .select(
-      "id, document_type, period, summary, extraction_confidence, upload_date, report_id, document_id, structured_data, document_processing!inner(processed_at, reports(title, category), documents(supplier, document_type))",
+      "id, document_type, period, summary, extraction_confidence, upload_date, report_id, document_id, structured_data, document_processing(processed_at, reports(title, category), documents(supplier, document_type))",
     )
     .eq("company_id", companyId)
+    .in("document_processing_id", processingIds)
     .order("upload_date", { ascending: false })
     .limit(limit);
   return data ?? [];

@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import { INTELLIGENCE_LIMITS } from "@/lib/intelligence/constants";
 import type { ExtractedChunk, ExtractionResult } from "@/lib/intelligence/types";
 
@@ -28,29 +27,41 @@ export function extractExcel(
   buffer: Buffer,
   format: "xlsx" | "xls",
 ): ExtractionResult {
+  // Dynamic require matches the working QuickBooks Excel path on serverless.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const XLSX = require("xlsx");
+
   const workbook = XLSX.read(buffer, {
     type: "buffer",
     cellDates: true,
-    sheetStubs: false,
+    raw: true,
   });
 
   const chunks: ExtractedChunk[] = [];
   const textParts: string[] = [];
   let totalRows = 0;
+  let sheetsWithData = 0;
   const sheetNames = workbook.SheetNames.slice(0, INTELLIGENCE_LIMITS.maxSheets);
 
   for (const sheetName of sheetNames) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
 
-    const matrix = XLSX.utils.sheet_to_json<(string | number | boolean | Date | null)[]>(
-      sheet,
-      { header: 1, defval: null, raw: false },
-    ) as unknown[][];
+    const matrix = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: "",
+      raw: true,
+    }) as unknown[][];
 
-    if (!matrix.length) continue;
+    const nonEmptyRows = matrix.filter((row) =>
+      (row ?? []).some((cell) => cellToString(cell).length > 0),
+    );
 
-    const limited = matrix.slice(0, INTELLIGENCE_LIMITS.maxRowsPerSheet + 1);
+    if (!nonEmptyRows.length) continue;
+
+    sheetsWithData += 1;
+
+    const limited = nonEmptyRows.slice(0, INTELLIGENCE_LIMITS.maxRowsPerSheet + 1);
     const headerRow = (limited[0] ?? []).map(cellToString);
     const dataRows = limited.slice(1).map((row) =>
       (row as unknown[]).map(cellToString),
@@ -88,14 +99,14 @@ export function extractExcel(
   }
 
   const text = textParts.join("\n").trim();
-  const requiresOcr = text.length < INTELLIGENCE_LIMITS.minUsableTextChars;
 
   return {
     text: text.slice(0, INTELLIGENCE_LIMITS.maxExtractedTextChars),
     chunks: chunks.slice(0, INTELLIGENCE_LIMITS.maxChunksPerDocument),
-    requiresOcr,
+    requiresOcr: false,
     meta: {
       sheetCount: sheetNames.length,
+      sheetsWithData,
       rowCount: totalRows,
       format,
     },
