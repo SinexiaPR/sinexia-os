@@ -93,10 +93,7 @@ export function ClientHeader({
               onNavigate={() => setMobileNavOpen(false)}
               className="flex-1"
             />
-            <SignOutControl
-              variant="nav"
-              onSignedOut={() => setMobileNavOpen(false)}
-            />
+            <SignOutControl variant="nav" />
           </SheetContent>
         </Sheet>
 

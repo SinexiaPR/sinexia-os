@@ -84,10 +84,7 @@ export function AdminHeader({
             className="flex-1"
           />
           <div className="border-t border-sidebar-border p-3">
-            <SignOutControl
-              variant="nav"
-              onSignedOut={() => setMobileNavOpen(false)}
-            />
+            <SignOutControl variant="nav" />
           </div>
         </SheetContent>
       </Sheet>
