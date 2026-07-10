@@ -18,7 +18,10 @@ import {
   reportSuccess,
   validationError,
 } from "@/lib/reports/report-action-helpers";
-import { scheduleReportProcessing } from "@/lib/intelligence/processing";
+import {
+  queueReportProcessing,
+  type ReportProcessingSource,
+} from "@/lib/intelligence/processing";
 import { createClient } from "@/lib/supabase/server";
 import type { ReportActionState } from "@/types/reports";
 
@@ -125,8 +128,16 @@ export async function createReport(
       });
     }
 
-    // Async SinexIA processing — do not block the upload response
-    scheduleReportProcessing(reportId);
+    const reportSource: ReportProcessingSource = {
+      id: reportId,
+      company_id: companyId,
+      title,
+      period,
+      category,
+      file_url: storagePath,
+    };
+
+    await queueReportProcessing(reportSource, supabase);
 
     revalidatePath("/dashboard/reports");
     revalidatePath("/dashboard");

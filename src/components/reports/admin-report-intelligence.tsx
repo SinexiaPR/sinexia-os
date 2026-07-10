@@ -68,8 +68,8 @@ export function AdminReportIntelligence({
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const status = processing?.status ?? "pending";
-  const statusLabel = STATUS_LABELS[status] ?? status;
+  const status = processing?.status ?? null;
+  const statusLabel = status ? (STATUS_LABELS[status] ?? status) : "Sin iniciar";
   const summaryText =
     profile?.summary ?? processing?.structured_summary?.briefSummary ?? null;
   const confidence =

@@ -88,12 +88,11 @@ export function extractExcel(
   }
 
   const text = textParts.join("\n").trim();
-  const requiresOcr = text.length < INTELLIGENCE_LIMITS.minUsableTextChars;
 
   return {
     text: text.slice(0, INTELLIGENCE_LIMITS.maxExtractedTextChars),
     chunks: chunks.slice(0, INTELLIGENCE_LIMITS.maxChunksPerDocument),
-    requiresOcr,
+    requiresOcr: false,
     meta: {
       sheetCount: sheetNames.length,
       rowCount: totalRows,

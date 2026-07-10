@@ -28,6 +28,15 @@ import { after } from "next/server";
 
 const DOCUMENTS_BUCKET = "documents";
 
+export type ReportProcessingSource = {
+  id: string;
+  company_id: string;
+  title: string;
+  period: string;
+  file_url: string;
+  category: string;
+};
+
 function logProcessing(event: string, meta: Record<string, unknown>) {
   console.info(`[sinexia-intelligence] ${event}`, meta);
 }
@@ -459,6 +468,8 @@ async function ensureProcessingRow(params: {
     existingQuery = existingQuery.eq("report_id", reportId);
   } else if (documentId) {
     existingQuery = existingQuery.eq("document_id", documentId);
+  } else {
+    return { ok: false, error: "Missing report or document id" };
   }
 
   const { data: existing } = await existingQuery.maybeSingle();
@@ -503,11 +514,245 @@ async function ensureProcessingRow(params: {
   return { ok: true, processingId: inserted.id };
 }
 
+export async function resolveReportForProcessing(
+  reportId: string,
+  source?: ReportProcessingSource | null,
+  companyId?: string | null,
+): Promise<
+  | { ok: true; report: ReportProcessingSource; lookup: string }
+  | { ok: false; error: string; lookup: string }
+> {
+  const normalizedReportId = reportId.trim();
+  if (!normalizedReportId) {
+    return { ok: false, error: "Report not found", lookup: "empty_report_id" };
+  }
+
+  if (
+    source?.id === normalizedReportId &&
+    source.file_url &&
+    (!companyId || source.company_id === companyId)
+  ) {
+    return { ok: true, report: source, lookup: "snapshot" };
+  }
+
+  let adminLookupError: string | null = null;
+
+  try {
+    const admin = createAdminClient();
+    let query = admin
+      .from("reports")
+      .select("id, company_id, title, period, file_url, category")
+      .eq("id", normalizedReportId);
+
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (data) {
+      return {
+        ok: true,
+        report: data as ReportProcessingSource,
+        lookup: "service_role",
+      };
+    }
+
+    adminLookupError = error?.message ?? "No row returned";
+  } catch (error) {
+    adminLookupError =
+      error instanceof Error ? error.message : "Admin client unavailable";
+  }
+
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    let query = supabase
+      .from("reports")
+      .select("id, company_id, title, period, file_url, category")
+      .eq("id", normalizedReportId);
+
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (data) {
+      return {
+        ok: true,
+        report: data as ReportProcessingSource,
+        lookup: "authenticated_admin",
+      };
+    }
+
+    if (error) {
+      logServerError("resolveReportForProcessing", error, {
+        reportId: normalizedReportId,
+        companyId,
+        adminLookupError,
+      });
+    }
+  } catch (error) {
+    logServerError("resolveReportForProcessing authed", error, {
+      reportId: normalizedReportId,
+      companyId,
+    });
+  }
+
+  logProcessing("report_lookup_failed", {
+    reportId: normalizedReportId,
+    companyId: companyId ?? null,
+    adminLookupError,
+  });
+
+  return {
+    ok: false,
+    error: "Report not found",
+    lookup: adminLookupError ?? "not_found",
+  };
+}
+
+export async function bootstrapReportProcessing(
+  source: ReportProcessingSource,
+  supabase?: SupabaseClient,
+): Promise<{ ok: boolean; processingId?: string; error?: string }> {
+  const filename = source.file_url.split("/").pop() ?? "file";
+
+  try {
+    const admin = createAdminClient();
+    const ensured = await ensureProcessingRow({
+      admin,
+      companyId: source.company_id,
+      reportId: source.id,
+      filename,
+      force: false,
+    });
+
+    if (ensured.ok) {
+      return { ok: true, processingId: ensured.processingId };
+    }
+
+    return { ok: false, error: ensured.error };
+  } catch (error) {
+    if (!supabase) {
+      logServerError("bootstrapReportProcessing", error, {
+        reportId: source.id,
+      });
+      return { ok: false, error: "Could not create processing record" };
+    }
+  }
+
+  const fileFormat = getFileExtension(filename) || null;
+  const analyzable = isAnalyzableFilename(filename);
+
+  const { data: existing } = await supabase
+    .from("document_processing")
+    .select("id")
+    .eq("report_id", source.id)
+    .maybeSingle();
+
+  if (existing?.id) {
+    return { ok: true, processingId: existing.id };
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("document_processing")
+    .insert({
+      report_id: source.id,
+      company_id: source.company_id,
+      status: "pending",
+      file_format: fileFormat,
+      is_analyzable: analyzable,
+      original_filename: filename,
+      prompt_version: INTELLIGENCE_PROMPT_VERSION,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !inserted) {
+    logServerError("bootstrapReportProcessing authed", insertError, {
+      reportId: source.id,
+    });
+    return { ok: false, error: "Could not create processing record" };
+  }
+
+  return { ok: true, processingId: inserted.id };
+}
+
+async function markProcessingFailure(
+  admin: SupabaseClient,
+  params: {
+    reportId?: string;
+    processingId?: string;
+    error: string;
+  },
+): Promise<void> {
+  let query = admin.from("document_processing").update({
+    status: "failed",
+    processing_error: params.error,
+    processed_at: new Date().toISOString(),
+  });
+
+  if (params.processingId) {
+    query = query.eq("id", params.processingId);
+  } else if (params.reportId) {
+    query = query.eq("report_id", params.reportId);
+  } else {
+    return;
+  }
+
+  await query;
+}
+
+export async function queueReportProcessing(
+  source: ReportProcessingSource,
+  supabase: SupabaseClient,
+  force = false,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const fileExtension = getFileExtension(source.file_url.split("/").pop() ?? "");
+  const bootstrap = await bootstrapReportProcessing(source, supabase);
+
+  logProcessing("queue_report_processing", {
+    reportId: source.id,
+    companyId: source.company_id,
+    processingId: bootstrap.processingId ?? null,
+    fileExtension,
+    lookupResult: bootstrap.ok ? "bootstrap_ok" : bootstrap.error ?? "bootstrap_failed",
+  });
+
+  const result = await processReportDocument({
+    reportId: source.id,
+    force,
+    source,
+    processingId: bootstrap.processingId,
+  });
+
+  logProcessing("queue_report_finished", {
+    reportId: source.id,
+    companyId: source.company_id,
+    processingId: bootstrap.processingId ?? null,
+    fileExtension,
+    lookupResult: "snapshot",
+    finalStatus: result.status ?? null,
+    ok: result.ok,
+    error: result.error ?? null,
+  });
+
+  return result;
+}
+
 export async function processReportDocument(options: {
   reportId: string;
   force?: boolean;
+  source?: ReportProcessingSource;
+  processingId?: string;
 }): Promise<{ ok: boolean; status?: string; error?: string }> {
-  const { reportId, force = false } = options;
+  const { reportId, force = false, source, processingId: knownProcessingId } =
+    options;
+  const fileExtension = getFileExtension(
+    source?.file_url.split("/").pop() ?? "",
+  );
   let admin;
 
   try {
@@ -517,32 +762,69 @@ export async function processReportDocument(options: {
     return { ok: false, error: "Service role not configured" };
   }
 
-  const { data: report, error: reportError } = await admin
-    .from("reports")
-    .select("id, company_id, title, period, file_url, category")
-    .eq("id", reportId)
-    .maybeSingle();
+  const resolved = await resolveReportForProcessing(
+    reportId,
+    source,
+    source?.company_id,
+  );
 
-  if (reportError || !report) {
-    return { ok: false, error: "Report not found" };
+  logProcessing("process_report_lookup", {
+    reportId,
+    companyId:
+      source?.company_id ??
+      (resolved.ok ? resolved.report.company_id : null),
+    processingId: knownProcessingId ?? null,
+    fileExtension,
+    lookupResult: resolved.lookup,
+    found: resolved.ok,
+  });
+
+  if (!resolved.ok) {
+    await markProcessingFailure(admin, {
+      reportId,
+      processingId: knownProcessingId,
+      error: resolved.error,
+    });
+    return { ok: false, error: resolved.error };
   }
 
+  const report = resolved.report;
   const filename = report.file_url.split("/").pop() ?? "file";
   const ensured = await ensureProcessingRow({
     admin,
     companyId: report.company_id,
-    reportId,
+    reportId: report.id,
     filename,
     force,
   });
 
-  if (!ensured.ok) return ensured;
+  if (!ensured.ok) {
+    await markProcessingFailure(admin, {
+      reportId: report.id,
+      processingId: knownProcessingId,
+      error: ensured.error,
+    });
+    return ensured;
+  }
+
   if (ensured.skip) {
-    logProcessing("skip_existing", { reportId, status: ensured.skip });
+    logProcessing("skip_existing", {
+      reportId: report.id,
+      processingId: ensured.processingId,
+      status: ensured.skip,
+    });
     return { ok: true, status: ensured.skip };
   }
 
-  return runPipeline({
+  logProcessing("process_report_start", {
+    reportId: report.id,
+    companyId: report.company_id,
+    processingId: ensured.processingId,
+    fileExtension: getFileExtension(filename),
+    lookupResult: resolved.lookup,
+  });
+
+  const pipelineResult = await runPipeline({
     admin,
     companyId: report.company_id,
     processingId: ensured.processingId,
@@ -553,8 +835,20 @@ export async function processReportDocument(options: {
     fallbackPeriod: report.period,
     reportCategory: report.category,
     force,
-    sourceMeta: { reportId },
+    sourceMeta: { reportId: report.id },
   });
+
+  logProcessing("process_report_finished", {
+    reportId: report.id,
+    companyId: report.company_id,
+    processingId: ensured.processingId,
+    fileExtension: getFileExtension(filename),
+    finalStatus: pipelineResult.status ?? null,
+    ok: pipelineResult.ok,
+    error: pipelineResult.error ?? null,
+  });
+
+  return pipelineResult;
 }
 
 export async function processInboxDocument(options: {
@@ -618,15 +912,17 @@ export async function processInboxDocument(options: {
 export function scheduleReportProcessing(
   reportId: string,
   force = false,
+  source?: ReportProcessingSource,
 ): void {
   after(async () => {
     try {
-      const result = await processReportDocument({ reportId, force });
+      const result = await processReportDocument({ reportId, force, source });
       logProcessing("scheduled_report_finished", {
         reportId,
         ok: result.ok,
         status: result.status,
         error: result.error ?? null,
+        usedSource: Boolean(source),
       });
     } catch (error) {
       logServerError("scheduleReportProcessing", error, { reportId });

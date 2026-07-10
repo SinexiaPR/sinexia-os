@@ -1,9 +1,13 @@
 export {
+  bootstrapReportProcessing,
   processReportDocument,
   processInboxDocument,
+  queueReportProcessing,
+  resolveReportForProcessing,
   scheduleReportProcessing,
   scheduleInboxDocumentProcessing,
 } from "@/lib/intelligence/processing";
+export type { ReportProcessingSource } from "@/lib/intelligence/processing";
 export { answerWithRetrieval } from "@/lib/intelligence/retrieval";
 export {
   getTrendForCompany,
