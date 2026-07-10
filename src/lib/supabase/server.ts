@@ -20,7 +20,9 @@ export async function createClient() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // setAll is called from a Server Component where cookies cannot be set.
+            // Server Components cannot mutate cookies. Middleware refreshes
+            // sessions; Server Actions (sign-in / sign-out) can set cookies
+            // and will succeed on this path.
           }
         },
       },

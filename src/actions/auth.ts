@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -27,10 +28,45 @@ export async function signIn(formData: FormData) {
   redirect("/dashboard");
 }
 
+function clearSupabaseAuthCookies(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+) {
+  const authCookies = cookieStore
+    .getAll()
+    .filter(
+      (cookie) =>
+        cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
+    );
+
+  for (const cookie of authCookies) {
+    cookieStore.set(cookie.name, "", {
+      path: "/",
+      maxAge: 0,
+      sameSite: "lax",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+    });
+    cookieStore.delete(cookie.name);
+  }
+}
+
+/**
+ * Ends the Supabase session, clears auth cookies, and redirects to /login.
+ * Shared by every Cerrar sesión control (sidebar, sheet, account menu).
+ */
 export async function signOut() {
+  const cookieStore = await cookies();
   const supabase = await createClient();
-  await supabase.auth.signOut();
+
+  // Clears the session and asks the SSR cookie adapter to expire auth cookies.
+  await supabase.auth.signOut({ scope: "local" });
+
+  // Belt-and-suspenders: explicitly expire any remaining Supabase auth cookies
+  // so middleware no longer treats the browser as authenticated.
+  clearSupabaseAuthCookies(cookieStore);
+
   revalidatePath("/", "layout");
+  revalidatePath("/dashboard", "layout");
   redirect("/login");
 }
 
