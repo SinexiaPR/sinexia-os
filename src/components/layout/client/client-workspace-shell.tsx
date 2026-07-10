@@ -7,7 +7,7 @@ import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { WhatsAppSupportButton } from "@/components/support/whatsapp-support-button";
 import { clientNavItems } from "@/config/navigation";
 import type { ClientReportNotifications } from "@/types/notifications";
-import type { Profile } from "@/types";
+import type { AppNotification, Profile } from "@/types";
 
 type ClientWorkspaceShellProps = {
   children: ReactNode;
@@ -15,6 +15,8 @@ type ClientWorkspaceShellProps = {
   companyName?: string | null;
   inboxCount: number;
   reportNotifications: ClientReportNotifications;
+  notifications: AppNotification[];
+  unreadNotifications: number;
 };
 
 export function ClientWorkspaceShell({
@@ -23,6 +25,8 @@ export function ClientWorkspaceShell({
   companyName,
   inboxCount,
   reportNotifications,
+  notifications,
+  unreadNotifications,
 }: ClientWorkspaceShellProps) {
   return (
     <div className="flex min-h-svh flex-col bg-background">
@@ -31,6 +35,8 @@ export function ClientWorkspaceShell({
         companyName={companyName}
         inboxCount={inboxCount}
         reportNotifications={reportNotifications}
+        notifications={notifications}
+        unreadNotifications={unreadNotifications}
       />
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 pt-6 pb-safe-nav sm:px-6 sm:pt-10 md:pb-10 lg:pt-12">

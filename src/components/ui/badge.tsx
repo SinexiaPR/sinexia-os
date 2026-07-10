@@ -15,6 +15,7 @@ const badgeVariants = cva(
         received: "border-blue-200 bg-blue-50 text-blue-900",
         reviewing: "border-amber-200 bg-amber-50 text-amber-900",
         processed: "border-emerald-200 bg-emerald-50 text-emerald-900",
+        needs_info: "border-orange-200 bg-orange-50 text-orange-900",
         rejected: "border-red-200 bg-red-50 text-red-800",
       },
     },

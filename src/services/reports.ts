@@ -77,6 +77,24 @@ export async function getReportCreatedDatesForCompany(
   return (data ?? []).map((report) => report.created_at);
 }
 
+export async function getReportSummariesForCompany(
+  companyId: string,
+): Promise<{ id: string; created_at: string }[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("reports")
+    .select("id, created_at")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
 export async function getRecentReports(
   limit = 8,
 ): Promise<ReportWithCompany[]> {

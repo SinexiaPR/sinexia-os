@@ -6,7 +6,11 @@ import {
   countPendingDocumentsForCompany,
   getCompanyById,
 } from "@/services/documents";
-import { getReportCreatedDatesForCompany } from "@/services/reports";
+import {
+  countUnreadNotifications,
+  getNotificationsForUser,
+} from "@/services/notifications";
+import { getReportSummariesForCompany } from "@/services/reports";
 
 export default async function DashboardLayout({
   children,
@@ -20,22 +24,34 @@ export default async function DashboardLayout({
       ? await getCompanyById(profile.company_id)
       : null;
 
+  const [notifications, unreadNotifications] = await Promise.all([
+    getNotificationsForUser(25),
+    countUnreadNotifications(),
+  ]);
+
   if (profile.role === "admin") {
     const inboxCount = await countPendingDocuments();
 
     return (
-      <AdminWorkspaceShell profile={profile} badgeCounts={{ inbox: inboxCount }}>
+      <AdminWorkspaceShell
+        profile={profile}
+        badgeCounts={{
+          inbox: inboxCount,
+          notifications: unreadNotifications,
+        }}
+        notifications={notifications}
+      >
         {children}
       </AdminWorkspaceShell>
     );
   }
 
-  const [inboxCount, reportCreatedAts] = profile.company_id
+  const [inboxCount, reportSummaries] = profile.company_id
     ? await Promise.all([
         countPendingDocumentsForCompany(profile.company_id),
-        getReportCreatedDatesForCompany(profile.company_id),
+        getReportSummariesForCompany(profile.company_id),
       ])
-    : [0, []];
+    : [0, [] as { id: string; created_at: string }[]];
 
   return (
     <ClientWorkspaceShell
@@ -44,8 +60,12 @@ export default async function DashboardLayout({
       inboxCount={inboxCount}
       reportNotifications={{
         profileId: profile.id,
-        reportCreatedAts,
+        reportCreatedAts: reportSummaries.map((r) => r.created_at),
+        reports: reportSummaries,
+        unreadReportsCount: reportSummaries.length,
       }}
+      notifications={notifications}
+      unreadNotifications={unreadNotifications}
     >
       {children}
     </ClientWorkspaceShell>

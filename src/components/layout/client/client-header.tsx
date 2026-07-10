@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ClientNav } from "@/components/layout/client/client-nav";
+import { NotificationsBell } from "@/components/notifications/notifications-bell";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,13 +28,15 @@ import {
 import { clientNavItems, getPageTitle } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 import type { ClientReportNotifications } from "@/types/notifications";
-import type { Profile } from "@/types";
+import type { AppNotification, Profile } from "@/types";
 
 type ClientHeaderProps = {
   profile: Profile;
   companyName?: string | null;
   inboxCount: number;
   reportNotifications: ClientReportNotifications;
+  notifications: AppNotification[];
+  unreadNotifications: number;
   className?: string;
 };
 
@@ -52,6 +55,8 @@ export function ClientHeader({
   companyName,
   inboxCount,
   reportNotifications,
+  notifications,
+  unreadNotifications,
   className,
 }: ClientHeaderProps) {
   const pathname = usePathname();
@@ -120,6 +125,11 @@ export function ClientHeader({
             {companyName ?? "Portal de Clientes"}
           </p>
         </div>
+
+        <NotificationsBell
+          notifications={notifications}
+          unreadCount={unreadNotifications}
+        />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

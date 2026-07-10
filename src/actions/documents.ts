@@ -7,9 +7,18 @@ import {
   resolveUploadContentType,
   UPLOAD_MAX_BYTES,
 } from "@/lib/constants/upload";
-import { requireClient } from "@/lib/auth/session";
+import { requireAuth, requireClient } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { DOCUMENT_TYPE_OPTIONS } from "@/types";
+import {
+  DOCUMENT_STATUS_OPTIONS,
+  DOCUMENT_TYPE_OPTIONS,
+  type DocumentStatus,
+} from "@/types";
+
+function revalidateDocumentPaths() {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/inbox");
+}
 
 export async function uploadDocument(formData: FormData) {
   const profile = await requireClient();
@@ -93,6 +102,7 @@ export async function uploadDocument(formData: FormData) {
     amount,
     document_type: documentType,
     file_url: storagePath,
+    file_size: file.size,
     status: "received",
   });
 
@@ -101,8 +111,80 @@ export async function uploadDocument(formData: FormData) {
     return { error: "No se pudo registrar el documento." };
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/inbox");
+  revalidateDocumentPaths();
 
+  return { success: true };
+}
+
+export async function updateDocumentStatus(
+  documentId: string,
+  status: DocumentStatus,
+) {
+  const profile = await requireAuth();
+
+  if (profile.role !== "admin") {
+    return { error: "No autorizado." };
+  }
+
+  if (!DOCUMENT_STATUS_OPTIONS.includes(status)) {
+    return { error: "Estado no válido." };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("documents")
+    .update({ status })
+    .eq("id", documentId);
+
+  if (error) {
+    return { error: "No se pudo actualizar el estado." };
+  }
+
+  revalidateDocumentPaths();
+  return { success: true };
+}
+
+export async function deleteDocument(documentId: string) {
+  const profile = await requireClient();
+
+  if (!profile.company_id) {
+    return { error: "Su cuenta no está vinculada a una empresa." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: document, error: fetchError } = await supabase
+    .from("documents")
+    .select("id, file_url, status, company_id")
+    .eq("id", documentId)
+    .eq("company_id", profile.company_id)
+    .maybeSingle();
+
+  if (fetchError || !document) {
+    return { error: "No se encontró el documento." };
+  }
+
+  if (document.status !== "received") {
+    return {
+      error:
+        "Solo puede eliminar documentos con estado Recibido. Contacte a Sinexia si necesita ayuda.",
+    };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("documents")
+    .delete()
+    .eq("id", documentId)
+    .eq("company_id", profile.company_id)
+    .eq("status", "received");
+
+  if (deleteError) {
+    return { error: "No se pudo eliminar el documento." };
+  }
+
+  await supabase.storage.from("documents").remove([document.file_url]);
+
+  revalidateDocumentPaths();
   return { success: true };
 }

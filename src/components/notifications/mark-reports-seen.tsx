@@ -1,29 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
-
-import { notifyReportsSeen } from "@/hooks/use-unread-reports";
-import {
-  resolveReportsSeenTimestamp,
-  setReportsLastSeenAt,
-} from "@/lib/notifications/viewed-reports";
-
-type MarkReportsSeenProps = {
+/**
+ * Intentionally empty: reports are marked viewed only on open/download
+ * via markReportViewed(). Kept for backward-compatible imports.
+ */
+export function MarkReportsSeen(_props: {
   profileId: string;
   reportCreatedAts: string[];
-};
-
-export function MarkReportsSeen({
-  profileId,
-  reportCreatedAts,
-}: MarkReportsSeenProps) {
-  const reportsKey = reportCreatedAts.join("|");
-
-  useEffect(() => {
-    const timestamp = resolveReportsSeenTimestamp(reportCreatedAts);
-    setReportsLastSeenAt(profileId, timestamp);
-    notifyReportsSeen();
-  }, [profileId, reportsKey, reportCreatedAts]);
-
+}) {
   return null;
 }

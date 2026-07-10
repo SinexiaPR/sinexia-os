@@ -1,162 +1,70 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, FileText, Upload } from "lucide-react";
+import { BarChart3, FileText, Upload } from "lucide-react";
 
-import { ClientNotificationAlerts } from "@/components/dashboard/client-notification-alerts";
+import { LatestReportsSection } from "@/components/dashboard/latest-reports-section";
+import { NewReportsMetricCard } from "@/components/dashboard/new-reports-metric";
 import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { NotificationDot } from "@/components/ui/nav-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { formatDateEs, formatDateTimeEs } from "@/lib/portal/format";
 import {
   getCompanyById,
   getDocumentsForCompany,
-  getSignedFileUrl,
 } from "@/services/documents";
 import {
-  getLatestReportForCompany,
-  getReportCreatedDatesForCompany,
+  getReportsForCompany,
+  getSignedReportFileUrl,
 } from "@/services/reports";
 import {
   DOCUMENT_STATUS_LABELS,
-  DOCUMENT_TYPE_LABELS,
   PENDING_STATUSES,
-  type DocumentType,
   type DocumentWithCompany,
   type Profile,
-  type Report,
+  type ReportWithCompany,
 } from "@/types";
 
 type ClientDashboardProps = {
   profile: Profile;
 };
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-}
+type ActivityItem = {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  href: string;
+};
 
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat("es", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(date));
-}
+function buildActivity(
+  documents: DocumentWithCompany[],
+  reports: ReportWithCompany[],
+): ActivityItem[] {
+  const docItems: ActivityItem[] = documents.slice(0, 8).map((doc) => ({
+    id: `doc-${doc.id}`,
+    title:
+      doc.status === "received"
+        ? "Documento enviado"
+        : "Estado de documento actualizado",
+    description: `${doc.supplier} · ${DOCUMENT_STATUS_LABELS[doc.status]}`,
+    timestamp: doc.updated_at || doc.created_at,
+    href: `/dashboard/inbox?doc=${doc.id}`,
+  }));
 
-function documentTypeLabel(type: string) {
-  return DOCUMENT_TYPE_LABELS[type as DocumentType] ?? type;
-}
+  const reportItems: ActivityItem[] = reports.slice(0, 8).map((report) => ({
+    id: `report-${report.id}`,
+    title: "Reporte publicado",
+    description: `${report.title} · ${report.period}`,
+    timestamp: report.created_at,
+    href: `/dashboard/reports?report=${report.id}`,
+  }));
 
-async function LastUploadCard({ document }: { document: DocumentWithCompany }) {
-  const signedUrl = await getSignedFileUrl(document.file_url);
-
-  return (
-    <SurfaceCard padding="lg" className="flex h-full flex-col">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-            Último envío
-          </p>
-          <p className="mt-4 text-xl font-semibold tracking-tight text-foreground">
-            {document.supplier}
-          </p>
-        </div>
-        <div className="flex size-10 items-center justify-center rounded-xl bg-navy-soft text-primary">
-          <FileText className="size-4" />
-        </div>
-      </div>
-
-      <div className="mt-auto space-y-4 pt-8">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={document.status}>
-            {DOCUMENT_STATUS_LABELS[document.status]}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            {documentTypeLabel(document.document_type)}
-          </span>
-        </div>
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-2xl font-semibold tabular-nums">
-              {formatCurrency(document.amount)}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {formatDate(document.created_at)}
-            </p>
-          </div>
-          {signedUrl ? (
-            <Link
-              href={signedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary hover:underline"
-            >
-              Ver archivo
-              <ArrowRight className="size-3.5" />
-            </Link>
-          ) : null}
-        </div>
-      </div>
-    </SurfaceCard>
-  );
-}
-
-function EmptyLastUploadCard() {
-  return (
-    <SurfaceCard padding="lg" className="flex h-full flex-col">
-      <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-        Último envío
-      </p>
-      <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-navy-soft text-primary">
-          <FileText className="size-5" />
-        </div>
-        <p className="mt-4 text-sm font-medium text-foreground">
-          Sin envíos aún
-        </p>
-        <p className="mt-1 max-w-[200px] text-sm text-muted-foreground">
-          Su archivo más reciente aparecerá aquí.
-        </p>
-      </div>
-    </SurfaceCard>
-  );
-}
-
-function LatestReportCard({ report }: { report: Report | null }) {
-  return (
-    <SurfaceCard padding="lg" className="flex h-full flex-col">
-      <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-        Último reporte
-      </p>
-      {report ? (
-        <div className="mt-6 flex flex-1 flex-col">
-          <p className="text-lg font-semibold tracking-tight text-foreground">
-            {report.title}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {report.category} · {formatDate(report.created_at)}
-          </p>
-          <Link
-            href="/dashboard/reports"
-            className="mt-auto pt-8 text-sm font-medium text-primary hover:underline"
-          >
-            Ver reportes →
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
-          <p className="text-sm font-medium text-foreground">
-            Sin reportes aún
-          </p>
-          <p className="mt-1 max-w-[220px] text-sm leading-relaxed text-muted-foreground">
-            Sinexia publicará reportes aquí cuando procese sus documentos.
-          </p>
-        </div>
-      )}
-    </SurfaceCard>
-  );
+  return [...docItems, ...reportItems]
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    )
+    .slice(0, 6);
 }
 
 export async function ClientDashboard({ profile }: ClientDashboardProps) {
@@ -176,51 +84,39 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
     );
   }
 
-  const [company, documents, latestReport, reportCreatedAts] =
-    await Promise.all([
-      getCompanyById(profile.company_id),
-      getDocumentsForCompany(profile.company_id),
-      getLatestReportForCompany(profile.company_id),
-      getReportCreatedDatesForCompany(profile.company_id),
-    ]);
+  const [company, documents, reports] = await Promise.all([
+    getCompanyById(profile.company_id),
+    getDocumentsForCompany(profile.company_id),
+    getReportsForCompany(profile.company_id),
+  ]);
 
-  const pendingCount = documents.filter((doc) =>
+  const pendingDocs = documents.filter((doc) =>
     PENDING_STATUSES.includes(doc.status),
-  ).length;
-  const receivedCount = documents.filter(
-    (doc) => doc.status === "received",
-  ).length;
-  const reviewingCount = documents.filter(
-    (doc) => doc.status === "reviewing",
-  ).length;
-  const reportsAvailable = reportCreatedAts.length;
-
-  const lastUpload = documents[0] ?? null;
-  const firstName = profile.full_name?.split(" ")[0] ?? "cliente";
+  );
   const companyName = company?.name ?? "su empresa";
+  const latestReports = reports.slice(0, 3);
+  const activity = buildActivity(documents, reports);
+
+  const signedReportUrls: Record<string, string | null> = {};
+  await Promise.all(
+    latestReports.map(async (report) => {
+      signedReportUrls[report.id] = await getSignedReportFileUrl(report.file_url);
+    }),
+  );
 
   return (
     <div className="space-y-8 sm:space-y-10">
       <header className="space-y-3">
-        <p className="text-sm font-medium text-primary">{companyName}</p>
         <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          Bienvenido, {firstName}
+          Hola, {companyName}
         </h1>
         <p className="max-w-lg text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-          Envíe documentos, consulte reportes y manténgase al día con el estado
-          de {companyName}.
+          Resumen operativo de documentos y reportes de su empresa.
         </p>
       </header>
 
-      <ClientNotificationAlerts
-        profileId={profile.id}
-        pendingCount={reviewingCount}
-        receivedCount={receivedCount}
-        reportCreatedAts={reportCreatedAts}
-      />
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <SurfaceCard padding="md" className="relative">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SurfaceCard padding="md">
           <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
             Documentos enviados
           </p>
@@ -228,29 +124,26 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
             {documents.length}
           </p>
         </SurfaceCard>
-
-        <SurfaceCard padding="md" className="relative">
-          {pendingCount > 0 ? (
-            <span className="absolute top-5 right-5">
-              <NotificationDot />
-            </span>
-          ) : null}
+        <SurfaceCard padding="md">
           <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
             Pendientes de revisión
           </p>
           <p className="mt-4 text-4xl font-semibold tracking-tight tabular-nums">
-            {pendingCount}
+            {pendingDocs.length}
           </p>
         </SurfaceCard>
-
-        <SurfaceCard padding="md" className="relative">
+        <SurfaceCard padding="md">
           <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
             Reportes disponibles
           </p>
           <p className="mt-4 text-4xl font-semibold tracking-tight tabular-nums">
-            {reportsAvailable}
+            {reports.length}
           </p>
         </SurfaceCard>
+        <NewReportsMetricCard
+          profileId={profile.id}
+          reports={reports.map((r) => ({ id: r.id, created_at: r.created_at }))}
+        />
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -277,13 +170,93 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {lastUpload ? (
-          <LastUploadCard document={lastUpload} />
-        ) : (
-          <EmptyLastUploadCard />
-        )}
-        <LatestReportCard report={latestReport} />
+      <LatestReportsSection
+        reports={latestReports}
+        profileId={profile.id}
+        signedUrls={signedReportUrls}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SurfaceCard padding="md">
+          <h2 className="text-base font-semibold tracking-tight">
+            Actividad reciente
+          </h2>
+          {activity.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              Aún no hay actividad.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {activity.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="flex items-start gap-3 rounded-xl border border-border/70 px-3 py-3 transition-colors hover:bg-muted/40"
+                >
+                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-navy-soft text-primary">
+                    {item.id.startsWith("report") ? (
+                      <BarChart3 className="size-4" />
+                    ) : (
+                      <FileText className="size-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-foreground">{item.title}</p>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {formatDateTimeEs(item.timestamp)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {item.description}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </SurfaceCard>
+
+        <SurfaceCard padding="md">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold tracking-tight">
+              Pendientes
+            </h2>
+            <Link
+              href="/dashboard/inbox"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Ver documentos
+            </Link>
+          </div>
+          {pendingDocs.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              No hay documentos pendientes.
+            </p>
+          ) : (
+            <div className="mt-2 divide-y divide-border/60">
+              {pendingDocs.slice(0, 6).map((doc) => (
+                <Link
+                  key={doc.id}
+                  href={`/dashboard/inbox?doc=${doc.id}`}
+                  className="flex items-center justify-between gap-3 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">
+                      {doc.supplier}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Factura {doc.invoice_number} · {formatDateEs(doc.created_at)}
+                    </p>
+                  </div>
+                  <Badge variant={doc.status}>
+                    {DOCUMENT_STATUS_LABELS[doc.status]}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          )}
+        </SurfaceCard>
       </div>
 
       <ContactSinexiaCard />

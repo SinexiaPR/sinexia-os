@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
+import { NotificationsBell } from "@/components/notifications/notifications-bell";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,11 +29,12 @@ import {
 import { adminNavItems, getPageTitle } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 import type { NavBadgeCounts } from "@/types/notifications";
-import type { Profile } from "@/types";
+import type { AppNotification, Profile } from "@/types";
 
 type AdminHeaderProps = {
   profile: Profile;
   badgeCounts: NavBadgeCounts;
+  notifications: AppNotification[];
   className?: string;
 };
 
@@ -49,6 +51,7 @@ function getInitials(profile: Profile) {
 export function AdminHeader({
   profile,
   badgeCounts,
+  notifications,
   className,
 }: AdminHeaderProps) {
   const pathname = usePathname();
@@ -99,6 +102,11 @@ export function AdminHeader({
       <div className="hidden sm:block md:hidden">
         <BrandLogo href="/dashboard" markOnly size="sm" />
       </div>
+
+      <NotificationsBell
+        notifications={notifications}
+        unreadCount={badgeCounts.notifications}
+      />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

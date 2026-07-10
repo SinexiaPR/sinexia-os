@@ -6,6 +6,7 @@ type SurfaceCardProps = {
   children: ReactNode;
   className?: string;
   padding?: "sm" | "md" | "lg";
+  id?: string;
 };
 
 const paddingMap = {
@@ -18,9 +19,11 @@ export function SurfaceCard({
   children,
   className,
   padding = "md",
+  id,
 }: SurfaceCardProps) {
   return (
     <div
+      id={id}
       className={cn(
         "rounded-2xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
         paddingMap[padding],
