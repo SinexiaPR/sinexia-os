@@ -214,7 +214,7 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
         </h1>
         <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
           Suba documentos a su Inbox, consulte reportes de Sinexia o pregunte a
-          SinexIA sobre sus documentos publicados.
+          SinexIA sobre los datos reales de su empresa.
         </p>
       </header>
 

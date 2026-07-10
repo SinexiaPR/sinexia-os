@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin, requireAuth } from "@/lib/auth/session";
+import { ALL_DETECTED_TYPES } from "@/lib/intelligence/constants";
 import type { DetectedDocumentType } from "@/lib/intelligence/types";
 import {
   processReportDocument,
@@ -10,15 +11,7 @@ import {
 } from "@/lib/intelligence/processing";
 import { createClient } from "@/lib/supabase/server";
 
-const ALLOWED_TYPES = new Set<DetectedDocumentType>([
-  "payroll",
-  "accounts_receivable",
-  "accounts_payable",
-  "custom_aging",
-  "bank_reconciliation",
-  "statement",
-  "other",
-]);
+const ALLOWED_TYPES = new Set<DetectedDocumentType>([...ALL_DETECTED_TYPES]);
 
 export async function reprocessReport(reportId: string) {
   await requireAdmin();

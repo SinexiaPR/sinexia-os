@@ -113,9 +113,11 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
           <p className="text-[13px] font-medium tracking-wide text-primary uppercase">
             {assistantConfig.name}
           </p>
+          <p className="text-sm font-medium text-foreground">
+            {assistantConfig.tagline}
+          </p>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Pregunte sobre los reportes procesados de su empresa. Las
-            respuestas se basan únicamente en documentos autorizados.
+            {assistantConfig.description}
           </p>
         </div>
 
@@ -203,12 +205,14 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                         <p className="font-medium text-foreground">Fuentes</p>
                         {entry.sources.map((source, i) => (
                           <div
-                            key={`${source.reportId}-${i}`}
+                            key={`${source.reportId ?? source.title}-${i}`}
                             className="flex flex-wrap items-center gap-2"
                           >
                             <span>
                               {source.title}
-                              {source.period ? ` · ${source.period}` : ""}
+                              {source.period
+                                ? ` · ${source.period}`
+                                : ""}
                               {source.pageNumber != null
                                 ? ` · pág. ${source.pageNumber}`
                                 : ""}
@@ -258,7 +262,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
           <Input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Pregunte sobre nómina, aging, conciliaciones…"
+            placeholder="Ask anything about your business…"
             disabled={isPending}
             className="h-11"
           />

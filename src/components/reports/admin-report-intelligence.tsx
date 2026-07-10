@@ -42,6 +42,13 @@ const TYPE_OPTIONS: DetectedDocumentType[] = [
   "custom_aging",
   "bank_reconciliation",
   "statement",
+  "homebase_export",
+  "quickbooks_report",
+  "profit_and_loss",
+  "balance_sheet",
+  "bank_statement",
+  "invoice",
+  "purchase_order",
   "other",
 ];
 

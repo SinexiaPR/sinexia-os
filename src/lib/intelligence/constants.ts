@@ -1,4 +1,4 @@
-export const INTELLIGENCE_PROMPT_VERSION = "v1.0.0";
+export const INTELLIGENCE_PROMPT_VERSION = "v1.1.0";
 
 export const INTELLIGENCE_LIMITS = {
   maxFileBytes: 25 * 1024 * 1024,
@@ -24,13 +24,20 @@ export const CHAT_MODEL = "gpt-4o-mini";
 export const CLASSIFICATION_MODEL = "gpt-4o-mini";
 
 export const DETECTED_TYPE_LABELS: Record<string, string> = {
-  payroll: "Nómina / Payroll",
-  accounts_receivable: "Cuentas por cobrar",
-  accounts_payable: "Cuentas por pagar",
+  payroll: "Payroll / Nómina",
+  accounts_receivable: "Accounts Receivable Aging",
+  accounts_payable: "Accounts Payable Aging",
   custom_aging: "Aging personalizado",
-  bank_reconciliation: "Conciliación bancaria",
-  statement: "Estado de cuenta",
-  other: "Otro reporte",
+  bank_reconciliation: "Bank Reconciliation",
+  statement: "Statement / Estado de cuenta",
+  homebase_export: "Homebase Export",
+  quickbooks_report: "QuickBooks Report",
+  profit_and_loss: "Profit & Loss",
+  balance_sheet: "Balance Sheet",
+  bank_statement: "Bank Statement",
+  invoice: "Invoice",
+  purchase_order: "Purchase Order",
+  other: "Other",
 };
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -40,3 +47,20 @@ export const STATUS_LABELS: Record<string, string> = {
   failed: "Falló",
   requires_ocr: "Requiere OCR",
 };
+
+export const ALL_DETECTED_TYPES = [
+  "payroll",
+  "accounts_receivable",
+  "accounts_payable",
+  "custom_aging",
+  "bank_reconciliation",
+  "statement",
+  "homebase_export",
+  "quickbooks_report",
+  "profit_and_loss",
+  "balance_sheet",
+  "bank_statement",
+  "invoice",
+  "purchase_order",
+  "other",
+] as const;

@@ -79,6 +79,7 @@ export async function askSinexIA(params: {
         reportId: params.reportId,
         category: params.category,
         period: params.period,
+        userId: profile.id,
       },
     });
 
@@ -122,6 +123,9 @@ export async function getSinexIASuggestions() {
     suggestions: buildSuggestedQuestions(
       docs.map((d) => ({
         detected_document_type: d.detected_document_type,
+        detected_period: d.detected_period,
+        structured_summary: d.structured_summary as never,
+        reports: d.reports as never,
       })),
     ),
   };

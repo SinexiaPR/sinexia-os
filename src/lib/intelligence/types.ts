@@ -12,6 +12,13 @@ export type DetectedDocumentType =
   | "custom_aging"
   | "bank_reconciliation"
   | "statement"
+  | "homebase_export"
+  | "quickbooks_report"
+  | "profit_and_loss"
+  | "balance_sheet"
+  | "bank_statement"
+  | "invoice"
+  | "purchase_order"
   | "other";
 
 export type ExtractedChunk = {
@@ -38,6 +45,8 @@ export type StructuredSummary = {
   companyName: string | null;
   reportPeriod: string | null;
   documentDate: string | null;
+  currency: string | null;
+  sourceSystem: string | null;
   mainTotals: Record<string, number | string | null>;
   entities: {
     customers?: string[];
@@ -57,6 +66,7 @@ export type SourceReference = {
   documentId?: string;
   title: string;
   period: string | null;
+  reportDate?: string | null;
   pageNumber?: number | null;
   sheetName?: string | null;
   viewPath?: string;
@@ -78,5 +88,20 @@ export type TrendResult = {
   points: TrendPoint[];
   available: boolean;
   message: string | null;
-  comparedDocuments: Array<{ reportId: string; title: string; period: string | null }>;
+  comparedDocuments: Array<{
+    reportId: string;
+    title: string;
+    period: string | null;
+  }>;
+};
+
+export type DocumentComparison = {
+  available: boolean;
+  message: string | null;
+  current: { title: string; period: string | null; reportId?: string };
+  previous: { title: string; period: string | null; reportId?: string };
+  totalDelta: Record<string, { previous: number | null; current: number | null; change: number | null }>;
+  newEntities: string[];
+  removedEntities: string[];
+  highlights: string[];
 };

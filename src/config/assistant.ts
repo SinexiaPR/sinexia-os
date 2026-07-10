@@ -1,13 +1,16 @@
 export const assistantConfig = {
   name: "SinexIA",
   fullName: "SinexIA Document Intelligence",
+  tagline: "Ask anything about your business.",
+  description:
+    "SinexIA analyzes your financial reports, payrolls, receivables, payables and operational documents to answer using your company's actual data.",
   disclaimer:
     "SinexIA responde solo con base en los documentos de su empresa. Esta información es operativa y no constituye asesoría fiscal, legal ni financiera. Confirme con Sinexia cuando sea necesario.",
   suggestedPrompts: [
-    "¿Qué documentos nuevos publicó Sinexia?",
-    "Resumime este reporte.",
-    "¿Cuál es el total pendiente por cobrar?",
-    "¿Cuál es el total de la nómina de esta semana?",
+    "How much is currently outstanding?",
+    "Compare with last week's report.",
+    "Summarize this payroll.",
+    "What changed since the previous upload?",
   ] as const,
 } as const;
 

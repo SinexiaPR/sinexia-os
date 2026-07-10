@@ -75,6 +75,10 @@ export async function classifyWithStructuredOutput(params: {
     companyName: parsed.companyName ?? null,
     reportPeriod: parsed.reportPeriod ?? null,
     documentDate: parsed.documentDate ?? null,
+    currency:
+      typeof parsed.currency === "string" ? parsed.currency : null,
+    sourceSystem:
+      typeof parsed.sourceSystem === "string" ? parsed.sourceSystem : null,
     mainTotals: parsed.mainTotals ?? {},
     entities: parsed.entities ?? {},
     briefSummary:
@@ -133,6 +137,13 @@ function normalizeType(
     "custom_aging",
     "bank_reconciliation",
     "statement",
+    "homebase_export",
+    "quickbooks_report",
+    "profit_and_loss",
+    "balance_sheet",
+    "bank_statement",
+    "invoice",
+    "purchase_order",
     "other",
   ]);
   if (typeof value === "string" && allowed.has(value)) {

@@ -1,4 +1,7 @@
-import { INTELLIGENCE_LIMITS, INTELLIGENCE_PROMPT_VERSION } from "@/lib/intelligence/constants";
+import {
+  INTELLIGENCE_LIMITS,
+  INTELLIGENCE_PROMPT_VERSION,
+} from "@/lib/intelligence/constants";
 import { classifyDocument } from "@/lib/intelligence/classification";
 import { embedChunks } from "@/lib/intelligence/embeddings";
 import {
@@ -9,93 +12,50 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REPORTS_BUCKET } from "@/lib/constants/reports";
 import { logServerError } from "@/lib/errors/action-error";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-type ProcessReportOptions = {
-  reportId: string;
-  force?: boolean;
-};
+const DOCUMENTS_BUCKET = "documents";
 
-function logProcessing(
-  event: string,
-  meta: Record<string, unknown>,
-) {
+function logProcessing(event: string, meta: Record<string, unknown>) {
   console.info(`[sinexia-intelligence] ${event}`, meta);
 }
 
-/**
- * Process a published report for SinexIA (extract → classify → embed).
- * Uses service-role client. Safe to call fire-and-forget after upload.
- */
-export async function processReportDocument(
-  options: ProcessReportOptions,
-): Promise<{ ok: boolean; status?: string; error?: string }> {
-  const { reportId, force = false } = options;
-  let admin;
-
-  try {
-    admin = createAdminClient();
-  } catch (error) {
-    logServerError("Intelligence admin client", error, { reportId });
-    return { ok: false, error: "Service role not configured" };
+function parseReportDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const iso = value.match(/\d{4}-\d{2}-\d{2}/);
+  if (iso) return iso[0];
+  const parsed = Date.parse(value);
+  if (!Number.isNaN(parsed)) {
+    return new Date(parsed).toISOString().slice(0, 10);
   }
+  return null;
+}
 
-  const { data: report, error: reportError } = await admin
-    .from("reports")
-    .select("id, company_id, title, period, file_url, category")
-    .eq("id", reportId)
-    .maybeSingle();
+async function runPipeline(params: {
+  admin: SupabaseClient;
+  companyId: string;
+  processingId: string;
+  storageBucket: string;
+  storagePath: string;
+  filename: string;
+  titleHint: string;
+  fallbackPeriod: string | null;
+  sourceMeta: { reportId?: string; documentId?: string };
+}): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const {
+    admin,
+    companyId,
+    processingId,
+    storageBucket,
+    storagePath,
+    filename,
+    titleHint,
+    fallbackPeriod,
+    sourceMeta,
+  } = params;
 
-  if (reportError || !report) {
-    return { ok: false, error: "Report not found" };
-  }
-
-  const filename = report.file_url.split("/").pop() ?? "file";
-  const analyzable = isAnalyzableFilename(filename);
   const fileFormat = getFileExtension(filename) || null;
-
-  // Existing processing row?
-  const { data: existing } = await admin
-    .from("document_processing")
-    .select("id, status")
-    .eq("report_id", reportId)
-    .maybeSingle();
-
-  if (
-    existing &&
-    !force &&
-    (existing.status === "completed" ||
-      existing.status === "processing" ||
-      existing.status === "requires_ocr")
-  ) {
-    logProcessing("skip_existing", {
-      reportId,
-      status: existing.status,
-    });
-    return { ok: true, status: existing.status };
-  }
-
-  let processingId = existing?.id as string | undefined;
-
-  if (!processingId) {
-    const { data: inserted, error: insertError } = await admin
-      .from("document_processing")
-      .insert({
-        report_id: reportId,
-        company_id: report.company_id,
-        status: "pending",
-        file_format: fileFormat,
-        is_analyzable: analyzable,
-        prompt_version: INTELLIGENCE_PROMPT_VERSION,
-      })
-      .select("id")
-      .single();
-
-    if (insertError || !inserted) {
-      logServerError("Create document_processing", insertError, { reportId });
-      return { ok: false, error: "Failed to create processing record" };
-    }
-    processingId = inserted.id;
-  }
+  const analyzable = isAnalyzableFilename(filename);
 
   if (!analyzable) {
     await admin
@@ -104,13 +64,14 @@ export async function processReportDocument(
         status: "failed",
         is_analyzable: false,
         file_format: fileFormat,
+        original_filename: filename,
         processing_error:
           "Formato no analizable. El archivo original sigue disponible para descarga.",
         processed_at: new Date().toISOString(),
       })
       .eq("id", processingId);
 
-    logProcessing("not_analyzable", { reportId, fileFormat });
+    logProcessing("not_analyzable", { ...sourceMeta, fileFormat });
     return { ok: true, status: "failed" };
   }
 
@@ -121,23 +82,23 @@ export async function processReportDocument(
       processing_error: null,
       is_analyzable: true,
       file_format: fileFormat,
+      original_filename: filename,
       updated_at: new Date().toISOString(),
     })
     .eq("id", processingId);
 
-  logProcessing("start", { reportId, processingId, fileFormat });
+  logProcessing("start", { ...sourceMeta, processingId, fileFormat });
 
   try {
     const { data: fileData, error: downloadError } = await admin.storage
-      .from(REPORTS_BUCKET)
-      .download(report.file_url);
+      .from(storageBucket)
+      .download(storagePath);
 
     if (downloadError || !fileData) {
       throw new Error(downloadError?.message ?? "Download failed");
     }
 
-    const arrayBuffer = await fileData.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = Buffer.from(await fileData.arrayBuffer());
 
     if (buffer.byteLength > INTELLIGENCE_LIMITS.maxFileBytes) {
       throw new Error(
@@ -153,6 +114,7 @@ export async function processReportDocument(
         .update({
           status: "requires_ocr",
           extracted_text: null,
+          original_filename: filename,
           structured_summary: {
             warnings: [
               "Documento sin texto extraíble. Se requiere OCR (pendiente).",
@@ -166,29 +128,29 @@ export async function processReportDocument(
         })
         .eq("id", processingId);
 
-      // Clear any old chunks
       await admin
         .from("document_chunks")
         .delete()
         .eq("document_processing_id", processingId);
 
-      logProcessing("requires_ocr", { reportId, processingId });
+      logProcessing("requires_ocr", { ...sourceMeta, processingId });
       return { ok: true, status: "requires_ocr" };
     }
 
     const classification = await classifyDocument({
-      filename: `${report.title}.${fileFormat}`,
+      filename: `${titleHint}.${fileFormat}`,
       extractedText: extraction.text,
     });
 
-    // Prefer admin-entered period if AI period is null
     const detectedPeriod =
-      classification.summary.reportPeriod || report.period || null;
+      classification.summary.reportPeriod || fallbackPeriod || null;
+    const reportDate = parseReportDate(
+      classification.summary.documentDate ?? detectedPeriod,
+    );
 
     const { chunks: embeddedChunks, tokenUsage: embedTokens } =
       await embedChunks(extraction.chunks);
 
-    // Replace chunks
     await admin
       .from("document_chunks")
       .delete()
@@ -197,7 +159,7 @@ export async function processReportDocument(
     if (embeddedChunks.length) {
       const rows = embeddedChunks.map((chunk, index) => ({
         document_processing_id: processingId,
-        company_id: report.company_id,
+        company_id: companyId,
         content: chunk.content,
         page_number: chunk.pageNumber,
         sheet_name: chunk.sheetName,
@@ -224,6 +186,10 @@ export async function processReportDocument(
         status: "completed",
         detected_document_type: classification.summary.documentType,
         detected_period: detectedPeriod,
+        report_date: reportDate,
+        currency: classification.summary.currency,
+        source_system: classification.summary.sourceSystem,
+        original_filename: filename,
         extracted_text: extraction.text.slice(
           0,
           INTELLIGENCE_LIMITS.maxExtractedTextChars,
@@ -244,7 +210,7 @@ export async function processReportDocument(
       .eq("id", processingId);
 
     logProcessing("completed", {
-      reportId,
+      ...sourceMeta,
       processingId,
       chunks: embeddedChunks.length,
       tokens: totalTokens,
@@ -265,21 +231,203 @@ export async function processReportDocument(
       })
       .eq("id", processingId);
 
-    logServerError("processReportDocument", error, {
-      reportId,
-      processingId,
-    });
-
+    logServerError("runPipeline", error, { ...sourceMeta, processingId });
     return { ok: false, status: "failed", error: message };
   }
+}
+
+async function ensureProcessingRow(params: {
+  admin: SupabaseClient;
+  companyId: string;
+  reportId?: string | null;
+  documentId?: string | null;
+  filename: string;
+  force: boolean;
+}): Promise<
+  | { ok: true; processingId: string; skip?: string }
+  | { ok: false; error: string }
+> {
+  const { admin, companyId, reportId, documentId, filename, force } = params;
+  const fileFormat = getFileExtension(filename) || null;
+  const analyzable = isAnalyzableFilename(filename);
+
+  let existingQuery = admin
+    .from("document_processing")
+    .select("id, status");
+
+  if (reportId) {
+    existingQuery = existingQuery.eq("report_id", reportId);
+  } else if (documentId) {
+    existingQuery = existingQuery.eq("document_id", documentId);
+  }
+
+  const { data: existing } = await existingQuery.maybeSingle();
+
+  if (
+    existing &&
+    !force &&
+    (existing.status === "completed" ||
+      existing.status === "processing" ||
+      existing.status === "requires_ocr")
+  ) {
+    return { ok: true, processingId: existing.id, skip: existing.status };
+  }
+
+  if (existing?.id) {
+    return { ok: true, processingId: existing.id };
+  }
+
+  const { data: inserted, error: insertError } = await admin
+    .from("document_processing")
+    .insert({
+      report_id: reportId ?? null,
+      document_id: documentId ?? null,
+      company_id: companyId,
+      status: "pending",
+      file_format: fileFormat,
+      is_analyzable: analyzable,
+      original_filename: filename,
+      prompt_version: INTELLIGENCE_PROMPT_VERSION,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !inserted) {
+    logServerError("Create document_processing", insertError, {
+      reportId,
+      documentId,
+    });
+    return { ok: false, error: "Failed to create processing record" };
+  }
+
+  return { ok: true, processingId: inserted.id };
+}
+
+export async function processReportDocument(options: {
+  reportId: string;
+  force?: boolean;
+}): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const { reportId, force = false } = options;
+  let admin;
+
+  try {
+    admin = createAdminClient();
+  } catch (error) {
+    logServerError("Intelligence admin client", error, { reportId });
+    return { ok: false, error: "Service role not configured" };
+  }
+
+  const { data: report, error: reportError } = await admin
+    .from("reports")
+    .select("id, company_id, title, period, file_url, category")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  if (reportError || !report) {
+    return { ok: false, error: "Report not found" };
+  }
+
+  const filename = report.file_url.split("/").pop() ?? "file";
+  const ensured = await ensureProcessingRow({
+    admin,
+    companyId: report.company_id,
+    reportId,
+    filename,
+    force,
+  });
+
+  if (!ensured.ok) return ensured;
+  if (ensured.skip) {
+    logProcessing("skip_existing", { reportId, status: ensured.skip });
+    return { ok: true, status: ensured.skip };
+  }
+
+  return runPipeline({
+    admin,
+    companyId: report.company_id,
+    processingId: ensured.processingId,
+    storageBucket: REPORTS_BUCKET,
+    storagePath: report.file_url,
+    filename,
+    titleHint: report.title,
+    fallbackPeriod: report.period,
+    sourceMeta: { reportId },
+  });
+}
+
+export async function processInboxDocument(options: {
+  documentId: string;
+  force?: boolean;
+}): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const { documentId, force = false } = options;
+  let admin;
+
+  try {
+    admin = createAdminClient();
+  } catch (error) {
+    logServerError("Intelligence admin client", error, { documentId });
+    return { ok: false, error: "Service role not configured" };
+  }
+
+  const { data: doc, error: docError } = await admin
+    .from("documents")
+    .select(
+      "id, company_id, supplier, invoice_number, invoice_date, document_type, file_url",
+    )
+    .eq("id", documentId)
+    .maybeSingle();
+
+  if (docError || !doc) {
+    return { ok: false, error: "Document not found" };
+  }
+
+  const filename = doc.file_url.split("/").pop() ?? "file";
+  const titleHint =
+    `${doc.document_type} ${doc.supplier} ${doc.invoice_number}`.trim();
+
+  const ensured = await ensureProcessingRow({
+    admin,
+    companyId: doc.company_id,
+    documentId,
+    filename,
+    force,
+  });
+
+  if (!ensured.ok) return ensured;
+  if (ensured.skip) {
+    logProcessing("skip_existing", { documentId, status: ensured.skip });
+    return { ok: true, status: ensured.skip };
+  }
+
+  return runPipeline({
+    admin,
+    companyId: doc.company_id,
+    processingId: ensured.processingId,
+    storageBucket: DOCUMENTS_BUCKET,
+    storagePath: doc.file_url,
+    filename,
+    titleHint,
+    fallbackPeriod: doc.invoice_date,
+    sourceMeta: { documentId },
+  });
 }
 
 export function scheduleReportProcessing(
   reportId: string,
   force = false,
 ): void {
-  // Fire-and-forget; do not block upload response
   void processReportDocument({ reportId, force }).catch((error) => {
     logServerError("scheduleReportProcessing", error, { reportId });
+  });
+}
+
+export function scheduleInboxDocumentProcessing(
+  documentId: string,
+  force = false,
+): void {
+  void processInboxDocument({ documentId, force }).catch((error) => {
+    logServerError("scheduleInboxDocumentProcessing", error, {
+      documentId,
+    });
   });
 }

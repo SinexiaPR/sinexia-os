@@ -8,6 +8,8 @@ import {
   UPLOAD_MAX_BYTES,
 } from "@/lib/constants/upload";
 import { requireClient } from "@/lib/auth/session";
+import { scheduleInboxDocumentProcessing } from "@/lib/intelligence/processing";
+import { isAnalyzableFilename } from "@/lib/intelligence/extraction";
 import { createClient } from "@/lib/supabase/server";
 import { DOCUMENT_TYPE_OPTIONS } from "@/types";
 
@@ -101,8 +103,14 @@ export async function uploadDocument(formData: FormData) {
     return { error: "No se pudo registrar el documento." };
   }
 
+  // Async SinexIA analysis for analyzable formats only (PDF/Excel/CSV)
+  if (isAnalyzableFilename(sanitizedName)) {
+    scheduleInboxDocumentProcessing(documentId);
+  }
+
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/inbox");
+  revalidatePath("/dashboard/sia");
 
   return { success: true };
 }
