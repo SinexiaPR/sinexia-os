@@ -62,8 +62,26 @@ const STRUCTURED_TYPES = new Set<DetectedDocumentType>([
 function shouldSkipEmbeddings(
   documentType: DetectedDocumentType,
   profileConfidence: number,
+  reportCategory?: string | null,
 ): boolean {
+  if (
+    reportCategory &&
+    REPORT_CATEGORY_TO_TYPE[reportCategory] === documentType &&
+    STRUCTURED_TYPES.has(documentType)
+  ) {
+    return true;
+  }
+
   return profileConfidence >= 0.35 && STRUCTURED_TYPES.has(documentType);
+}
+
+function logSpreadsheetStep(
+  step: string,
+  meta: Record<string, unknown>,
+  fileFormat: string | null,
+): void {
+  if (fileFormat !== "xlsx" && fileFormat !== "xls") return;
+  logProcessing(step, meta);
 }
 
 function parseReportDate(value: string | null | undefined): string | null {
@@ -255,6 +273,52 @@ async function runPipeline(params: {
 
     const extraction = await extractDocument(buffer, filename);
 
+    logSpreadsheetStep(
+      "xlsx_extract_complete",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        chunkCount: extraction.chunks.length,
+        sheetCount:
+          typeof extraction.meta?.sheetCount === "number"
+            ? extraction.meta.sheetCount
+            : null,
+        sheetsWithData:
+          typeof extraction.meta?.sheetsWithData === "number"
+            ? extraction.meta.sheetsWithData
+            : null,
+        rowCount:
+          typeof extraction.meta?.rowCount === "number"
+            ? extraction.meta.rowCount
+            : null,
+      },
+      fileFormat,
+    );
+
+    if (
+      (fileFormat === "xlsx" || fileFormat === "xls") &&
+      extraction.text.length === 0
+    ) {
+      logSpreadsheetStep(
+        "xlsx_extract_empty",
+        {
+          reportId: sourceMeta.reportId ?? null,
+          processingId,
+          companyId,
+          fileExtension: fileFormat,
+          reason: "no_non_empty_sheet_rows",
+          sheetCount:
+            typeof extraction.meta?.sheetCount === "number"
+              ? extraction.meta.sheetCount
+              : 0,
+        },
+        fileFormat,
+      );
+    }
+
     if (extraction.requiresOcr) {
       await admin
         .from("document_processing")
@@ -300,6 +364,36 @@ async function runPipeline(params: {
       buffer,
     });
 
+    const structuredProfileGenerated =
+      profile.confidence > 0 &&
+      (profile.summary.length > 0 ||
+        Object.values(profile.structuredData).some(
+          (value) => value != null && value !== "",
+        ));
+
+    logSpreadsheetStep(
+      "xlsx_profile_extracted",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        structuredProfileGenerated,
+        documentType: profile.documentType,
+        confidence: profile.confidence,
+        employeeCount:
+          typeof profile.structuredData.employee_count === "number"
+            ? profile.structuredData.employee_count
+            : null,
+        totalPayroll:
+          typeof profile.structuredData.total_payroll === "number"
+            ? profile.structuredData.total_payroll
+            : null,
+      },
+      fileFormat,
+    );
+
     const skipGptClassification =
       Boolean(reportCategory) || profile.confidence >= 0.35;
 
@@ -326,6 +420,7 @@ async function runPipeline(params: {
     const skipEmbeddings = shouldSkipEmbeddings(
       profile.documentType,
       profile.confidence,
+      reportCategory,
     );
 
     let embedTokens = 0;
@@ -363,21 +458,41 @@ async function runPipeline(params: {
       }
     }
 
-    await upsertDocumentProfile({
-      admin,
-      processingId,
-      companyId,
-      reportId: sourceMeta.reportId ?? null,
-      documentId: sourceMeta.documentId ?? null,
-      profile: {
-        ...profile,
-        period: detectedPeriod,
-        structuredData: {
-          ...profile.structuredData,
+    let profileInsertResult = "ok";
+    try {
+      await upsertDocumentProfile({
+        admin,
+        processingId,
+        companyId,
+        reportId: sourceMeta.reportId ?? null,
+        documentId: sourceMeta.documentId ?? null,
+        profile: {
+          ...profile,
           period: detectedPeriod,
+          structuredData: {
+            ...profile.structuredData,
+            period: detectedPeriod,
+          },
         },
+      });
+    } catch (error) {
+      profileInsertResult =
+        error instanceof Error ? error.message : "document_profiles upsert failed";
+      throw error;
+    }
+
+    logSpreadsheetStep(
+      "xlsx_profile_insert",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        structuredProfileGenerated,
+        documentProfilesInsertResult: profileInsertResult,
       },
-    });
+      fileFormat,
+    );
 
     const totalTokens =
       (classification.tokenUsage ?? 0) + (embedTokens ?? 0);
@@ -426,6 +541,21 @@ async function runPipeline(params: {
       type: classification.summary.documentType,
     });
 
+    logSpreadsheetStep(
+      "xlsx_pipeline_finished",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        structuredProfileGenerated,
+        documentProfilesInsertResult: profileInsertResult,
+        finalStatus: "completed",
+      },
+      fileFormat,
+    );
+
     return { ok: true, status: "completed" };
   } catch (error) {
     const message =
@@ -439,6 +569,19 @@ async function runPipeline(params: {
         processed_at: new Date().toISOString(),
       })
       .eq("id", processingId);
+
+    logSpreadsheetStep(
+      "xlsx_pipeline_failed",
+      {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        finalStatus: "failed",
+        error: message,
+      },
+      fileFormat,
+    );
 
     logServerError("runPipeline", error, { ...sourceMeta, processingId });
     return { ok: false, status: "failed", error: message };

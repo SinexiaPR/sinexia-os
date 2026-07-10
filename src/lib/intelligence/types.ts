@@ -35,6 +35,7 @@ export type ExtractionResult = {
   meta: {
     pageCount?: number;
     sheetCount?: number;
+    sheetsWithData?: number;
     rowCount?: number;
     format: "pdf" | "xlsx" | "xls" | "csv" | "unsupported";
   };

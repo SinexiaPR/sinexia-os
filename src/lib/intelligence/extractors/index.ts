@@ -1,3 +1,4 @@
+import { extractPayrollFromExcelBuffer } from "@/lib/intelligence/extractors/payroll-excel";
 import {
   extractAccountsPayableProfile,
   extractAccountsReceivableProfile,
@@ -80,8 +81,15 @@ export function runSpecializedExtractor(
 
   switch (type) {
     case "payroll":
-    case "homebase_export":
+    case "homebase_export": {
+      if (params.buffer) {
+        const excelPayroll = extractPayrollFromExcelBuffer(params.buffer, base);
+        if (excelPayroll) {
+          return excelPayroll;
+        }
+      }
       return extractPayrollProfile(params.extraction, base);
+    }
     case "accounts_receivable":
     case "custom_aging":
       return extractAccountsReceivableProfile(params.extraction, base);
