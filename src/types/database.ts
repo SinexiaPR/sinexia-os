@@ -6,6 +6,28 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+type DocumentStatus =
+  | "received"
+  | "reviewing"
+  | "processed"
+  | "needs_info"
+  | "rejected";
+
+type ReportCategory =
+  | "Aging"
+  | "Profit & Loss"
+  | "Balance Sheet"
+  | "Bank Reconciliation"
+  | "Payroll"
+  | "Statement"
+  | "Custom Report";
+
+type NotificationKind =
+  | "document_uploaded"
+  | "document_status_changed"
+  | "document_needs_info"
+  | "report_published";
+
 export type Database = {
   public: {
     Tables: {
@@ -70,8 +92,10 @@ export type Database = {
           amount: number;
           document_type: string;
           file_url: string;
-          status: "received" | "reviewing" | "processed" | "rejected";
+          file_size: number | null;
+          status: DocumentStatus;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -84,8 +108,10 @@ export type Database = {
           amount: number;
           document_type: string;
           file_url: string;
-          status?: "received" | "reviewing" | "processed" | "rejected";
+          file_size?: number | null;
+          status?: DocumentStatus;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -98,8 +124,10 @@ export type Database = {
           amount?: number;
           document_type?: string;
           file_url?: string;
-          status?: "received" | "reviewing" | "processed" | "rejected";
+          file_size?: number | null;
+          status?: DocumentStatus;
           created_at?: string;
+          updated_at?: string;
         };
       };
       reports: {
@@ -108,14 +136,7 @@ export type Database = {
           company_id: string;
           uploaded_by: string;
           title: string;
-          category:
-            | "Aging"
-            | "Profit & Loss"
-            | "Balance Sheet"
-            | "Bank Reconciliation"
-            | "Payroll"
-            | "Statement"
-            | "Custom Report";
+          category: ReportCategory;
           period: string;
           notes: string | null;
           file_url: string;
@@ -127,14 +148,7 @@ export type Database = {
           company_id: string;
           uploaded_by: string;
           title: string;
-          category:
-            | "Aging"
-            | "Profit & Loss"
-            | "Balance Sheet"
-            | "Bank Reconciliation"
-            | "Payroll"
-            | "Statement"
-            | "Custom Report";
+          category: ReportCategory;
           period: string;
           notes?: string | null;
           file_url: string;
@@ -146,19 +160,53 @@ export type Database = {
           company_id?: string;
           uploaded_by?: string;
           title?: string;
-          category?:
-            | "Aging"
-            | "Profit & Loss"
-            | "Balance Sheet"
-            | "Bank Reconciliation"
-            | "Payroll"
-            | "Statement"
-            | "Custom Report";
+          category?: ReportCategory;
           period?: string;
           notes?: string | null;
           file_url?: string;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      notifications: {
+        Row: {
+          id: string;
+          recipient_id: string;
+          company_id: string | null;
+          kind: NotificationKind;
+          title: string;
+          body: string;
+          href: string | null;
+          document_id: string | null;
+          report_id: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recipient_id: string;
+          company_id?: string | null;
+          kind: NotificationKind;
+          title: string;
+          body: string;
+          href?: string | null;
+          document_id?: string | null;
+          report_id?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          recipient_id?: string;
+          company_id?: string | null;
+          kind?: NotificationKind;
+          title?: string;
+          body?: string;
+          href?: string | null;
+          document_id?: string | null;
+          report_id?: string | null;
+          read_at?: string | null;
+          created_at?: string;
         };
       };
     };

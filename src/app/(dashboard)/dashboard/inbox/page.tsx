@@ -1,53 +1,70 @@
 import type { Metadata } from "next";
 
 import { DocumentUploadForm } from "@/components/dashboard/document-upload-form";
-import { DocumentList } from "@/components/dashboard/document-list";
+import { DocumentCenter } from "@/components/dashboard/document-center";
 import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
 import { PageHeader } from "@/components/layout/page-header";
+import { ScrollToHighlight } from "@/components/portal/scroll-to-highlight";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireAuth } from "@/lib/auth/session";
 import {
   getAllDocuments,
+  getCompanies,
   getDocumentsForCompany,
+  getSignedFileUrl,
 } from "@/services/documents";
 
 export const metadata: Metadata = {
   title: "Documentos",
 };
 
-export default async function InboxPage() {
+type InboxPageProps = {
+  searchParams?: Promise<{ doc?: string }>;
+};
+
+export default async function InboxPage({ searchParams }: InboxPageProps) {
   const profile = await requireAuth();
+  const params = searchParams ? await searchParams : {};
+  const highlightId = params.doc ?? null;
 
-  const items =
-    profile.role === "admin"
-      ? await getAllDocuments()
+  const isAdmin = profile.role === "admin";
+
+  const [items, companies] = await Promise.all([
+    isAdmin
+      ? getAllDocuments()
       : profile.company_id
-        ? await getDocumentsForCompany(profile.company_id)
-        : [];
+        ? getDocumentsForCompany(profile.company_id)
+        : Promise.resolve([]),
+    isAdmin ? getCompanies() : Promise.resolve([]),
+  ]);
 
-  const isClient = profile.role === "client";
+  const signedUrls: Record<string, string | null> = {};
+  await Promise.all(
+    items.map(async (doc) => {
+      signedUrls[doc.id] = await getSignedFileUrl(doc.file_url);
+    }),
+  );
 
   return (
-    <div className={isClient ? "space-y-8 pb-2 sm:space-y-10" : "space-y-10"}>
-      {isClient ? (
+    <div className={isAdmin ? "space-y-10" : "space-y-8 pb-2 sm:space-y-10"}>
+      {isAdmin ? (
+        <PageHeader
+          eyebrow="Administración"
+          title="Documentos"
+          description="Centro de documentos de todas las empresas clientes."
+        />
+      ) : (
         <header className="space-y-2">
           <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
             Documentos
           </h1>
           <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-            Envíe documentos desde su teléfono o computadora. Todo llega aquí
-            automáticamente.
+            Envíe, busque y gestione los documentos de su empresa.
           </p>
         </header>
-      ) : (
-        <PageHeader
-          eyebrow="Administración"
-          title="Documentos"
-          description="Todos los archivos enviados por las empresas clientes, en un solo lugar."
-        />
       )}
 
-      {isClient ? (
+      {!isAdmin ? (
         <div id="upload" className="scroll-mt-24">
           <SurfaceCard padding="lg">
             <h2 className="text-base font-semibold tracking-tight">
@@ -63,18 +80,17 @@ export default async function InboxPage() {
         </div>
       ) : null}
 
-      <DocumentList
+      <DocumentCenter
         documents={items}
-        title={isClient ? "Sus documentos" : "Todos los documentos"}
-        showCompany={profile.role === "admin"}
-        emptyMessage={
-          isClient
-            ? "No hay documentos aún. Envíe el primero arriba."
-            : "Aún no hay documentos de ninguna empresa."
-        }
+        profile={profile}
+        companies={companies}
+        signedUrls={signedUrls}
+        highlightId={highlightId}
       />
 
-      {isClient ? <ContactSinexiaCard /> : null}
+      <ScrollToHighlight id={highlightId} prefix="doc" />
+
+      {!isAdmin ? <ContactSinexiaCard /> : null}
     </div>
   );
 }

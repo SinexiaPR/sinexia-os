@@ -91,9 +91,11 @@ export default async function AyudaPage() {
               <span className="font-medium text-foreground">
                 Falta información
               </span>{" "}
-              /{" "}
+              — Se requiere corrección o datos adicionales.
+            </li>
+            <li>
               <span className="font-medium text-foreground">Rechazado</span> —
-              Se requiere corrección o un nuevo envío.
+              El documento no fue aceptado; envíe uno nuevo si aplica.
             </li>
           </ul>
         </SurfaceCard>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { NavBadge } from "@/components/ui/nav-badge";
-import { useUnreadReportsCount } from "@/hooks/use-unread-reports";
+import { useUnviewedReportsCount } from "@/hooks/use-unread-reports";
 import type { NavItem } from "@/config/navigation";
 import type { ClientReportNotifications } from "@/types/notifications";
 import { cn } from "@/lib/utils";
@@ -23,9 +23,9 @@ export function MobileBottomNav({
   className,
 }: MobileBottomNavProps) {
   const pathname = usePathname();
-  const unreadReportsCount = useUnreadReportsCount(
+  const unreadReportsCount = useUnviewedReportsCount(
     reportNotifications?.profileId ?? "",
-    reportNotifications?.reportCreatedAts ?? [],
+    reportNotifications?.reports ?? [],
   );
 
   const mobileItems = items.filter((item) => item.mobile !== false).slice(0, 5);

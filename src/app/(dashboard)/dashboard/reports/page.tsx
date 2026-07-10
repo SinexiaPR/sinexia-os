@@ -1,22 +1,32 @@
 import type { Metadata } from "next";
 
 import { AdminReportForm } from "@/components/reports/admin-report-form";
-import { AdminReportsList } from "@/components/reports/admin-reports-list";
-import { ClientReportCard } from "@/components/reports/client-report-card-server";
+import { ReportCenter } from "@/components/reports/report-center";
 import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
 import { MarkReportsSeen } from "@/components/notifications/mark-reports-seen";
 import { PageHeader } from "@/components/layout/page-header";
+import { ScrollToHighlight } from "@/components/portal/scroll-to-highlight";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireAuth } from "@/lib/auth/session";
 import { getCompanies } from "@/services/documents";
-import { getAllReports, getReportsForCompany } from "@/services/reports";
+import {
+  getAllReports,
+  getReportsForCompany,
+  getSignedReportFileUrl,
+} from "@/services/reports";
 
 export const metadata: Metadata = {
   title: "Reportes",
 };
 
-export default async function ReportsPage() {
+type ReportsPageProps = {
+  searchParams?: Promise<{ report?: string }>;
+};
+
+export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const profile = await requireAuth();
+  const params = searchParams ? await searchParams : {};
+  const highlightId = params.report ?? null;
 
   if (profile.role === "admin") {
     const [companies, reports] = await Promise.all([
@@ -24,12 +34,19 @@ export default async function ReportsPage() {
       getAllReports(),
     ]);
 
+    const signedUrls: Record<string, string | null> = {};
+    await Promise.all(
+      reports.map(async (report) => {
+        signedUrls[report.id] = await getSignedReportFileUrl(report.file_url);
+      }),
+    );
+
     return (
       <div className="space-y-10">
         <PageHeader
           eyebrow="Administración"
           title="Reportes"
-          description="Publique archivos de reportes para las empresas clientes."
+          description="Publique y gestione reportes para las empresas clientes."
         />
 
         <SurfaceCard padding="lg">
@@ -48,8 +65,15 @@ export default async function ReportsPage() {
           <h2 className="text-base font-semibold tracking-tight">
             Todos los reportes
           </h2>
-          <AdminReportsList reports={reports} />
+          <ReportCenter
+            reports={reports}
+            profile={profile}
+            companies={companies}
+            signedUrls={signedUrls}
+            highlightId={highlightId}
+          />
         </div>
+        <ScrollToHighlight id={highlightId} prefix="report" />
       </div>
     );
   }
@@ -70,6 +94,13 @@ export default async function ReportsPage() {
   const reports = await getReportsForCompany(profile.company_id);
   const reportCreatedAts = reports.map((report) => report.created_at);
 
+  const signedUrls: Record<string, string | null> = {};
+  await Promise.all(
+    reports.map(async (report) => {
+      signedUrls[report.id] = await getSignedReportFileUrl(report.file_url);
+    }),
+  );
+
   return (
     <div className="space-y-8 pb-2 sm:space-y-10">
       <MarkReportsSeen
@@ -81,8 +112,7 @@ export default async function ReportsPage() {
           Reportes
         </h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-          Reportes publicados por Sinexia para su empresa. Consulte y descargue
-          cuando estén disponibles.
+          Reportes publicados por Sinexia para su empresa.
         </p>
       </header>
 
@@ -98,16 +128,15 @@ export default async function ReportsPage() {
           </div>
         </SurfaceCard>
       ) : (
-        <div className="space-y-4">
-          {reports.map((report) => (
-            <ClientReportCard
-              key={report.id}
-              report={report}
-              profileId={profile.id}
-            />
-          ))}
-        </div>
+        <ReportCenter
+          reports={reports}
+          profile={profile}
+          signedUrls={signedUrls}
+          highlightId={highlightId}
+        />
       )}
+
+      <ScrollToHighlight id={highlightId} prefix="report" />
 
       <ContactSinexiaCard />
     </div>

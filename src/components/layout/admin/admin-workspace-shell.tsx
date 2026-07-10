@@ -6,18 +6,20 @@ import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { WhatsAppSupportButton } from "@/components/support/whatsapp-support-button";
 import { adminNavItems } from "@/config/navigation";
 import type { NavBadgeCounts } from "@/types/notifications";
-import type { Profile } from "@/types";
+import type { AppNotification, Profile } from "@/types";
 
 type AdminWorkspaceShellProps = {
   children: ReactNode;
   profile: Profile;
   badgeCounts: NavBadgeCounts;
+  notifications: AppNotification[];
 };
 
 export function AdminWorkspaceShell({
   children,
   profile,
   badgeCounts,
+  notifications,
 }: AdminWorkspaceShellProps) {
   return (
     <div className="flex min-h-svh bg-background">
@@ -28,7 +30,11 @@ export function AdminWorkspaceShell({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <AdminHeader profile={profile} badgeCounts={badgeCounts} />
+        <AdminHeader
+          profile={profile}
+          badgeCounts={badgeCounts}
+          notifications={notifications}
+        />
         <main className="flex-1">
           <div className="mx-auto w-full max-w-7xl px-4 pt-6 pb-safe-nav sm:px-8 sm:pt-10 md:pb-10">
             {children}

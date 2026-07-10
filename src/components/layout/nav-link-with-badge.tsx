@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { NavBadge } from "@/components/ui/nav-badge";
-import { useUnreadReportsCount } from "@/hooks/use-unread-reports";
+import { useUnviewedReportsCount } from "@/hooks/use-unread-reports";
 import type { NavBadgeKey, NavItem } from "@/config/navigation";
 import type {
   ClientReportNotifications,
@@ -87,9 +87,9 @@ export function ClientNavLinks({
   onNavigate,
 }: ClientNavLinksProps) {
   const pathname = usePathname();
-  const unreadReportsCount = useUnreadReportsCount(
+  const unreadReportsCount = useUnviewedReportsCount(
     reportNotifications.profileId,
-    reportNotifications.reportCreatedAts,
+    reportNotifications.reports ?? [],
   );
 
   return (
