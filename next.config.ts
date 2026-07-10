@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "xlsx"],
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas", "xlsx"],
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",
