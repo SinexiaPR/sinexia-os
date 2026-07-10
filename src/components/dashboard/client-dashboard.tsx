@@ -1,34 +1,21 @@
 import Link from "next/link";
-import { ArrowUpRight, FileText, Upload } from "lucide-react";
+import {
+  BarChart3,
+  MessageCircle,
+  Sparkles,
+  Upload,
+} from "lucide-react";
 
-import { ClientNotificationAlerts } from "@/components/dashboard/client-notification-alerts";
-import { Badge } from "@/components/ui/badge";
-import { NotificationDot } from "@/components/ui/nav-badge";
-import { SurfaceCard } from "@/components/ui/surface-card";
-import {
-  getCompanyById,
-  getDocumentsForCompany,
-  getSignedFileUrl,
-} from "@/services/documents";
-import { getLatestReportForCompany, getReportCreatedDatesForCompany } from "@/services/reports";
-import {
-  DOCUMENT_STATUS_LABELS,
-  PENDING_STATUSES,
-  type DocumentWithCompany,
-  type Profile,
-  type Report,
-} from "@/types";
+import { ClientRecentActivity } from "@/components/dashboard/client-recent-activity";
+import { MetricCard, SurfaceCard } from "@/components/ui/surface-card";
+import { sinexiaContact } from "@/config/contact";
+import { getCompanyById } from "@/services/documents";
+import { getClientDashboardData } from "@/services/client-dashboard";
+import type { Profile } from "@/types";
 
 type ClientDashboardProps = {
   profile: Profile;
 };
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-}
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat("es", {
@@ -38,142 +25,43 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-async function LastUploadCard({ document }: { document: DocumentWithCompany }) {
-  const signedUrl = await getSignedFileUrl(document.file_url);
-
-  return (
-    <SurfaceCard padding="lg" className="flex h-full flex-col">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-            Último envío
-          </p>
-          <p className="mt-4 text-xl font-semibold tracking-tight text-foreground">
-            {document.supplier}
-          </p>
-        </div>
-        <div className="flex size-10 items-center justify-center rounded-xl bg-muted">
-          <FileText className="size-4 text-muted-foreground" />
-        </div>
-      </div>
-
-      <div className="mt-auto space-y-4 pt-8">
-        <div className="flex items-center gap-2">
-          <Badge variant={document.status}>
-            {DOCUMENT_STATUS_LABELS[document.status]}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            {document.document_type}
-          </span>
-        </div>
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-2xl font-semibold tabular-nums">
-              {formatCurrency(document.amount)}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {formatDate(document.created_at)}
-            </p>
-          </div>
-          {signedUrl ? (
-            <Link
-              href={signedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-            >
-              Ver
-              <ArrowUpRight className="size-3.5" />
-            </Link>
-          ) : null}
-        </div>
-      </div>
-    </SurfaceCard>
-  );
+function formatDateTime(date: string) {
+  return new Intl.DateTimeFormat("es", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(date));
 }
 
-function EmptyLastUploadCard() {
-  return (
-    <SurfaceCard padding="lg" className="flex h-full flex-col">
-      <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-        Último envío
-      </p>
-      <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
-          <FileText className="size-5 text-muted-foreground" />
-        </div>
-        <p className="mt-4 text-sm font-medium text-foreground">
-          Sin envíos aún
-        </p>
-        <p className="mt-1 max-w-[200px] text-sm text-muted-foreground">
-          Su archivo más reciente aparecerá aquí.
-        </p>
-      </div>
-    </SurfaceCard>
-  );
-}
-
-function LatestReportCard({ report }: { report: Report | null }) {
-  return (
-    <SurfaceCard padding="lg" className="flex h-full flex-col">
-      <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-        Último reporte
-      </p>
-      {report ? (
-        <div className="mt-6 flex flex-1 flex-col">
-          <p className="text-lg font-semibold tracking-tight text-foreground">
-            {report.title}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {report.category} · {formatDate(report.created_at)}
-          </p>
-          <Link
-            href="/dashboard/reports"
-            className="mt-auto pt-8 text-sm font-medium text-primary hover:underline"
-          >
-            Ver reportes →
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
-          <p className="text-sm font-medium text-foreground">
-            Sin reportes aún
-          </p>
-          <p className="mt-1 max-w-[220px] text-sm leading-relaxed text-muted-foreground">
-            Sinexia publicará reportes aquí cuando procese sus documentos.
-          </p>
-        </div>
-      )}
-    </SurfaceCard>
-  );
-}
-
-function QuickUploadCard() {
-  return (
-    <Link href="/dashboard/inbox#upload" className="group block h-full">
-      <SurfaceCard
-        padding="lg"
-        className="flex h-full flex-col border-primary/20 bg-primary/[0.03] transition-colors hover:border-primary/30 hover:bg-primary/[0.05]"
-      >
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-transform group-hover:scale-105">
-          <Upload className="size-5" />
-        </div>
-        <div className="mt-6">
-          <p className="text-lg font-semibold tracking-tight text-foreground">
-            Subir documento
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Envíe un archivo a su Inbox. Sinexia lo revisará — sin carpetas ni
-            clasificaciones.
-          </p>
-        </div>
-        <p className="mt-auto pt-8 text-sm font-medium text-primary">
-          Subir ahora →
-        </p>
-      </SurfaceCard>
-    </Link>
-  );
-}
+const quickActions = [
+  {
+    label: "Subir documento",
+    description: "Enviar a Inbox",
+    href: "/dashboard/inbox#upload",
+    icon: Upload,
+  },
+  {
+    label: "Reportes",
+    description: "Ver publicados",
+    href: "/dashboard/reports",
+    icon: BarChart3,
+  },
+  {
+    label: "Preguntar a SinexIA",
+    description: "Consultas con datos",
+    href: "/dashboard/sia",
+    icon: Sparkles,
+  },
+  {
+    label: "Contactar Sinexia",
+    description: "WhatsApp",
+    href: sinexiaContact.whatsappHref,
+    icon: MessageCircle,
+    external: true,
+  },
+] as const;
 
 export async function ClientDashboard({ profile }: ClientDashboardProps) {
   if (!profile.company_id) {
@@ -187,20 +75,11 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
     );
   }
 
-  const [company, documents, latestReport, reportCreatedAts] = await Promise.all([
+  const [{ stats, activity }, company] = await Promise.all([
+    getClientDashboardData(profile.company_id),
     getCompanyById(profile.company_id),
-    getDocumentsForCompany(profile.company_id),
-    getLatestReportForCompany(profile.company_id),
-    getReportCreatedDatesForCompany(profile.company_id),
   ]);
 
-  const pendingCount = documents.filter((doc) =>
-    PENDING_STATUSES.includes(doc.status),
-  ).length;
-  const receivedCount = documents.filter((doc) => doc.status === "received").length;
-  const reviewingCount = documents.filter((doc) => doc.status === "reviewing").length;
-
-  const lastUpload = documents[0] ?? null;
   const firstName = profile.full_name?.split(" ")[0] ?? "cliente";
 
   return (
@@ -212,47 +91,128 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
         <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           Hola, {firstName}
         </h1>
-        <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
-          Suba documentos a su Inbox, consulte reportes de Sinexia o pregunte a
-          SinexIA sobre los datos reales de su empresa.
+        <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
+          Resumen ejecutivo de reportes, documentos y actividad reciente.
         </p>
       </header>
 
-      <ClientNotificationAlerts
-        profileId={profile.id}
-        pendingCount={reviewingCount}
-        receivedCount={receivedCount}
-        reportCreatedAts={reportCreatedAts}
-      />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          label="Reportes publicados"
+          value={stats.publishedReports}
+          hint="Disponibles para consulta"
+        />
+        <MetricCard
+          label="Documentos pendientes"
+          value={stats.pendingDocuments}
+          hint="Recibidos o en revisión"
+        />
+        <MetricCard
+          label="Documentos analizados"
+          value={stats.analyzedDocuments}
+          hint="Procesados por SinexIA"
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <SurfaceCard padding="lg" className="relative">
-          {pendingCount > 0 ? (
-            <span className="absolute top-6 right-6">
-              <NotificationDot />
-            </span>
-          ) : null}
+        <SurfaceCard padding="lg" className="flex flex-col">
           <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
-            Pendientes
+            Último reporte
           </p>
-          <p className="mt-6 text-5xl font-semibold tracking-tight tabular-nums">
-            {pendingCount}
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            En revisión por Sinexia
-          </p>
+          {stats.lastReport ? (
+            <div className="mt-4 flex flex-1 flex-col">
+              <p className="text-lg font-semibold tracking-tight text-foreground">
+                {stats.lastReport.title}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {stats.lastReport.category} · {stats.lastReport.period}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Publicado el {formatDate(stats.lastReport.createdAt)}
+              </p>
+              <Link
+                href="/dashboard/reports"
+                className="mt-auto pt-6 text-sm font-medium text-primary hover:underline"
+              >
+                Ver reportes →
+              </Link>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Sinexia publicará reportes aquí cuando estén listos.
+            </p>
+          )}
         </SurfaceCard>
 
-        <QuickUploadCard />
-
-        {lastUpload ? (
-          <LastUploadCard document={lastUpload} />
-        ) : (
-          <EmptyLastUploadCard />
-        )}
-
-        <LatestReportCard report={latestReport} />
+        <SurfaceCard padding="lg" className="flex flex-col">
+          <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
+            Última actualización
+          </p>
+          {stats.lastUpdate ? (
+            <div className="mt-4 flex flex-1 flex-col">
+              <p className="text-lg font-semibold tracking-tight text-foreground">
+                {formatDateTime(stats.lastUpdate)}
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Fecha más reciente entre reportes, envíos y análisis de SinexIA.
+              </p>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Aún no hay actividad registrada en su cuenta.
+            </p>
+          )}
+        </SurfaceCard>
       </div>
+
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold tracking-tight">
+          Acciones rápidas
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+            const card = (
+              <SurfaceCard
+                padding="md"
+                className="flex h-full flex-col transition-colors hover:bg-muted/30"
+              >
+                <div className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                  <Icon className="size-4" />
+                </div>
+                <p className="mt-4 text-sm font-semibold text-foreground">
+                  {action.label}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {action.description}
+                </p>
+              </SurfaceCard>
+            );
+
+            if ("external" in action && action.external) {
+              return (
+                <Link
+                  key={action.label}
+                  href={action.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  {card}
+                </Link>
+              );
+            }
+
+            return (
+              <Link key={action.label} href={action.href} className="block">
+                {card}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      <ClientRecentActivity items={activity} />
     </div>
   );
 }
