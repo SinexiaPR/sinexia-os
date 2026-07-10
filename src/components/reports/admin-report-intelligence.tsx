@@ -161,21 +161,59 @@ export function AdminReportIntelligence({
           Object.keys(profile.structured_data).length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs font-medium text-foreground">
-                Datos estructurados
+                Extracted profile
               </p>
               <dl className="grid gap-1 text-xs sm:grid-cols-2">
                 {Object.entries(profile.structured_data)
-                  .filter(([key]) => key !== "source_document")
-                  .slice(0, 12)
+                  .filter(
+                    ([key]) =>
+                      !["source_document", "customers", "invoices"].includes(
+                        key,
+                      ),
+                  )
+                  .slice(0, 16)
                   .map(([key, value]) => (
                     <div key={key} className="flex gap-2">
                       <dt className="text-muted-foreground">{key}:</dt>
                       <dd className="font-medium text-foreground">
-                        {value == null ? "—" : String(value)}
+                        {value == null
+                          ? "—"
+                          : Array.isArray(value)
+                            ? `${value.length} items`
+                            : String(value)}
                       </dd>
                     </div>
                   ))}
               </dl>
+              {Array.isArray(profile.structured_data.customers) &&
+              (profile.structured_data.customers as unknown[]).length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">
+                    Top customers
+                  </p>
+                  <ul className="space-y-0.5 text-xs text-muted-foreground">
+                    {(
+                      profile.structured_data.customers as Array<{
+                        name?: string;
+                        balance?: number;
+                        invoice_count?: number;
+                      }>
+                    )
+                      .slice(0, 5)
+                      .map((c) => (
+                        <li key={c.name}>
+                          {c.name}: $
+                          {typeof c.balance === "number"
+                            ? c.balance.toLocaleString()
+                            : "—"}
+                          {c.invoice_count
+                            ? ` · ${c.invoice_count} invoices`
+                            : ""}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

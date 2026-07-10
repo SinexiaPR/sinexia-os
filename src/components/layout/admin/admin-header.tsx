@@ -1,12 +1,13 @@
 "use client";
 
-import { MenuIcon } from "lucide-react";
 import Link from "next/link";
+import { MenuIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import { SignOutControl } from "@/components/auth/sign-out-control";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +33,7 @@ import type { Profile } from "@/types";
 type AdminHeaderProps = {
   profile: Profile;
   badgeCounts: NavBadgeCounts;
+  notificationUnreadCount: number;
   className?: string;
 };
 
@@ -45,7 +47,12 @@ function getInitials(profile: Profile) {
     .join("");
 }
 
-export function AdminHeader({ profile, badgeCounts, className }: AdminHeaderProps) {
+export function AdminHeader({
+  profile,
+  badgeCounts,
+  notificationUnreadCount,
+  className,
+}: AdminHeaderProps) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = useMemo(
@@ -56,7 +63,7 @@ export function AdminHeader({ profile, badgeCounts, className }: AdminHeaderProp
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/80 bg-background/90 px-4 backdrop-blur-md sm:px-6",
+        "sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border/80 bg-background/90 px-4 backdrop-blur-md sm:gap-3 sm:px-6",
         className,
       )}
     >
@@ -64,17 +71,21 @@ export function AdminHeader({ profile, badgeCounts, className }: AdminHeaderProp
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" className="md:hidden">
             <MenuIcon className="size-4" />
-            <span className="sr-only">Open navigation</span>
+            <span className="sr-only">Abrir navegación</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="left" className="flex w-72 flex-col p-0">
           <SheetHeader className="sr-only">
-            <SheetTitle>Navigation</SheetTitle>
+            <SheetTitle>Navegación</SheetTitle>
           </SheetHeader>
           <AdminSidebar
             badgeCounts={badgeCounts}
             onNavigate={() => setMobileNavOpen(false)}
+            className="flex-1"
           />
+          <div className="border-t border-sidebar-border p-3">
+            <SignOutControl variant="nav" />
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -82,9 +93,11 @@ export function AdminHeader({ profile, badgeCounts, className }: AdminHeaderProp
         {title}
       </h1>
 
+      <NotificationBell initialUnreadCount={notificationUnreadCount} />
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative size-9 rounded-full p-0">
+          <Button variant="ghost" className="relative size-10 rounded-full p-0">
             <Avatar className="size-9">
               <AvatarFallback className="bg-primary text-xs text-primary-foreground">
                 {getInitials(profile)}
@@ -98,15 +111,15 @@ export function AdminHeader({ profile, badgeCounts, className }: AdminHeaderProp
               <p className="text-sm font-medium">
                 {profile.full_name ?? profile.email}
               </p>
-              <p className="text-xs text-muted-foreground">Administrator</p>
+              <p className="text-xs text-muted-foreground">Administrador</p>
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link href="/dashboard/profile">Profile</Link>
+            <Link href="/dashboard/profile">Perfil</Link>
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <SignOutButton />
+            <DropdownMenuSeparator />
+            <SignOutControl variant="menu" />
         </DropdownMenuContent>
       </DropdownMenu>
     </header>

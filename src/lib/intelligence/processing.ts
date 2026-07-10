@@ -23,11 +23,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { REPORTS_BUCKET } from "@/lib/constants/reports";
 import { logServerError } from "@/lib/errors/action-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 
 const DOCUMENTS_BUCKET = "documents";
 
 function logProcessing(event: string, meta: Record<string, unknown>) {
   console.info(`[sinexia-intelligence] ${event}`, meta);
+}
+
+function hashBuffer(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex");
 }
 
 const STRUCTURED_TYPES = new Set<DetectedDocumentType>([
@@ -72,6 +77,7 @@ async function runPipeline(params: {
   titleHint: string;
   fallbackPeriod: string | null;
   reportCategory?: string | null;
+  force?: boolean;
   sourceMeta: { reportId?: string; documentId?: string };
 }): Promise<{ ok: boolean; status?: string; error?: string }> {
   const {
@@ -84,6 +90,7 @@ async function runPipeline(params: {
     titleHint,
     fallbackPeriod,
     reportCategory,
+    force = false,
     sourceMeta,
   } = params;
 
@@ -132,11 +139,108 @@ async function runPipeline(params: {
     }
 
     const buffer = Buffer.from(await fileData.arrayBuffer());
+    const contentHash = hashBuffer(buffer);
 
     if (buffer.byteLength > INTELLIGENCE_LIMITS.maxFileBytes) {
       throw new Error(
         `File exceeds intelligence limit of ${INTELLIGENCE_LIMITS.maxFileBytes} bytes`,
       );
+    }
+
+    // Reuse structured profile when identical file content was already processed
+    if (!force) {
+      const { data: currentRow } = await admin
+        .from("document_processing")
+        .select("id, status, content_hash")
+        .eq("id", processingId)
+        .maybeSingle();
+
+      if (
+        currentRow?.status === "completed" &&
+        currentRow.content_hash &&
+        currentRow.content_hash === contentHash
+      ) {
+        logProcessing("skip_identical_hash", {
+          ...sourceMeta,
+          processingId,
+          contentHash,
+        });
+        return { ok: true, status: "completed" };
+      }
+
+      const { data: twin } = await admin
+        .from("document_processing")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("content_hash", contentHash)
+        .eq("status", "completed")
+        .neq("id", processingId)
+        .limit(1)
+        .maybeSingle();
+
+      if (twin?.id) {
+        const { data: twinProfile } = await admin
+          .from("document_profiles")
+          .select("*")
+          .eq("document_processing_id", twin.id)
+          .maybeSingle();
+
+        if (twinProfile?.structured_data) {
+          await admin
+            .from("document_processing")
+            .update({
+              status: "completed",
+              content_hash: contentHash,
+              detected_document_type: twinProfile.document_type,
+              detected_period: twinProfile.period,
+              structured_summary: {
+                documentType: twinProfile.document_type,
+                briefSummary: twinProfile.summary,
+                confidence: twinProfile.extraction_confidence,
+                mainTotals: {},
+                entities: {},
+                warnings: ["Reused structured profile from identical file."],
+                companyName: null,
+                reportPeriod: twinProfile.period,
+                documentDate: null,
+                currency: null,
+                sourceSystem: "profile_reuse",
+              },
+              processing_error: null,
+              processed_at: new Date().toISOString(),
+              is_analyzable: true,
+            })
+            .eq("id", processingId);
+
+          await upsertDocumentProfile({
+            admin,
+            processingId,
+            companyId,
+            reportId: sourceMeta.reportId,
+            documentId: sourceMeta.documentId,
+            profile: {
+              documentType: twinProfile.document_type ?? "accounts_receivable",
+              period: twinProfile.period,
+              structuredData: twinProfile.structured_data as Record<
+                string,
+                unknown
+              >,
+              summary:
+                twinProfile.summary ??
+                "Perfil reutilizado (archivo idéntico).",
+              confidence: Number(twinProfile.extraction_confidence ?? 0.8),
+            },
+          });
+
+          logProcessing("reuse_identical_profile", {
+            ...sourceMeta,
+            processingId,
+            from: twin.id,
+            contentHash,
+          });
+          return { ok: true, status: "completed" };
+        }
+      }
     }
 
     const extraction = await extractDocument(buffer, filename);
@@ -183,6 +287,7 @@ async function runPipeline(params: {
       fallbackPeriod,
       uploadDate,
       reportCategory,
+      buffer,
     });
 
     const skipGptClassification =
@@ -274,9 +379,16 @@ async function runPipeline(params: {
         detected_document_type: profile.documentType ?? classification.summary.documentType,
         detected_period: detectedPeriod,
         report_date: reportDate,
-        currency: classification.summary.currency,
-        source_system: classification.summary.sourceSystem,
+        currency:
+          (typeof profile.structuredData.currency === "string"
+            ? profile.structuredData.currency
+            : null) ?? classification.summary.currency,
+        source_system:
+          (typeof profile.structuredData.source_system === "string"
+            ? profile.structuredData.source_system
+            : null) ?? classification.summary.sourceSystem,
         original_filename: filename,
+        content_hash: contentHash,
         extracted_text: extraction.text.slice(
           0,
           INTELLIGENCE_LIMITS.maxExtractedTextChars,
@@ -439,6 +551,7 @@ export async function processReportDocument(options: {
     titleHint: report.title,
     fallbackPeriod: report.period,
     reportCategory: report.category,
+    force,
     sourceMeta: { reportId },
   });
 }
@@ -496,6 +609,7 @@ export async function processInboxDocument(options: {
     filename,
     titleHint,
     fallbackPeriod: doc.invoice_date,
+    force,
     sourceMeta: { documentId },
   });
 }

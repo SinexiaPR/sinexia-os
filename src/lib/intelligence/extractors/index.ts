@@ -8,6 +8,10 @@ import {
   extractPayrollProfile,
   extractProfitLossProfile,
 } from "@/lib/intelligence/extractors/specialized";
+import {
+  detectQuickBooksAR,
+  extractQuickBooksARProfile,
+} from "@/lib/intelligence/extractors/quickbooks-ar";
 import { REPORT_CATEGORY_TO_TYPE } from "@/lib/intelligence/profiles/types";
 import type { ExtractionProfileResult } from "@/lib/intelligence/profiles/types";
 import type {
@@ -24,6 +28,7 @@ type RunSpecializedExtractorParams = {
   fallbackPeriod: string | null;
   uploadDate: string;
   reportCategory?: string | null;
+  buffer?: Buffer | null;
 };
 
 export function resolveExtractorType(
@@ -39,16 +44,39 @@ export function resolveExtractorType(
 export function runSpecializedExtractor(
   params: RunSpecializedExtractorParams,
 ): ExtractionProfileResult {
-  const type = resolveExtractorType(
-    params.documentType,
-    params.reportCategory,
-  );
   const base = {
     filename: params.filename,
     titleHint: params.titleHint,
     fallbackPeriod: params.fallbackPeriod,
     uploadDate: params.uploadDate,
   };
+
+  // Specialized QuickBooks AR processor (v1) — try first, keep generic fallback
+  const qbVariant = detectQuickBooksAR(
+    params.extraction.text,
+    params.filename,
+    params.titleHint,
+  );
+  if (
+    qbVariant ||
+    params.reportCategory === "Aging" ||
+    params.documentType === "accounts_receivable" ||
+    params.documentType === "custom_aging" ||
+    params.documentType === "quickbooks_report"
+  ) {
+    const qb = extractQuickBooksARProfile(params.extraction, {
+      ...base,
+      buffer: params.buffer,
+    });
+    if (qb && qb.confidence >= 0.35) {
+      return qb;
+    }
+  }
+
+  const type = resolveExtractorType(
+    params.documentType,
+    params.reportCategory,
+  );
 
   switch (type) {
     case "payroll":
@@ -60,8 +88,16 @@ export function runSpecializedExtractor(
     case "accounts_payable":
       return extractAccountsPayableProfile(params.extraction, base);
     case "profit_and_loss":
-    case "quickbooks_report":
       return extractProfitLossProfile(params.extraction, base);
+    case "quickbooks_report": {
+      // Prefer AR if aging signals exist; otherwise P&L heuristic
+      const qb = extractQuickBooksARProfile(params.extraction, {
+        ...base,
+        buffer: params.buffer,
+      });
+      if (qb && qb.confidence >= 0.4) return qb;
+      return extractProfitLossProfile(params.extraction, base);
+    }
     case "balance_sheet":
       return extractBalanceSheetProfile(params.extraction, base);
     case "bank_reconciliation":
@@ -87,15 +123,36 @@ export function profileToStructuredSummary(
     }
   }
 
+  const customers = Array.isArray(data.customers)
+    ? (data.customers as Array<{ name?: string }>)
+        .map((c) => c.name)
+        .filter((n): n is string => Boolean(n))
+        .slice(0, 25)
+    : [];
+
   return {
     documentType: profile.documentType ?? heuristicType,
     companyName: typeof data.company === "string" ? data.company : null,
     reportPeriod: profile.period,
-    documentDate: null,
-    currency: null,
-    sourceSystem: "structured_extractor",
+    documentDate:
+      typeof data.report_date === "string" ? data.report_date : null,
+    currency: typeof data.currency === "string" ? data.currency : null,
+    sourceSystem:
+      typeof data.source_system === "string"
+        ? data.source_system
+        : "structured_extractor",
     mainTotals,
-    entities: {},
+    entities: {
+      customers,
+      balances: customers.length
+        ? (data.customers as Array<{ name: string; balance: number }>)
+            .slice(0, 15)
+            .map((c) => ({
+              label: c.name,
+              amount: typeof c.balance === "number" ? c.balance : null,
+            }))
+        : undefined,
+    },
     briefSummary: profile.summary,
     warnings:
       profile.confidence < 0.4

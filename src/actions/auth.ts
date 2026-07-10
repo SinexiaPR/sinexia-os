@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
+export type SignOutState = {
+  error: string | null;
+};
+
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -27,9 +31,21 @@ export async function signIn(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function signOut() {
+export async function signOut(
+  _prevState: SignOutState,
+  _formData: FormData,
+): Promise<SignOutState> {
+  console.log("[auth] logout started");
+
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    console.error("[auth] signOut error:", error.message);
+    return { error: "No se pudo cerrar sesión. Intente de nuevo." };
+  }
+
+  console.log("[auth] signOut success");
   revalidatePath("/", "layout");
   redirect("/login");
 }

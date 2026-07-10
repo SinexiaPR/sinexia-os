@@ -11,7 +11,8 @@ type ClientNotificationAlertsProps = {
   profileId: string;
   pendingCount: number;
   receivedCount: number;
-  reportCreatedAts: string[];
+  reportIds: string[];
+  viewedReportIds: string[];
   className?: string;
 };
 
@@ -56,10 +57,15 @@ export function ClientNotificationAlerts({
   profileId,
   pendingCount,
   receivedCount,
-  reportCreatedAts,
+  reportIds,
+  viewedReportIds,
   className,
 }: ClientNotificationAlertsProps) {
-  const unreadReportsCount = useUnreadReportsCount(profileId, reportCreatedAts);
+  const unreadReportsCount = useUnreadReportsCount(
+    profileId,
+    reportIds,
+    viewedReportIds,
+  );
 
   const hasAlerts =
     receivedCount > 0 || pendingCount > 0 || unreadReportsCount > 0;

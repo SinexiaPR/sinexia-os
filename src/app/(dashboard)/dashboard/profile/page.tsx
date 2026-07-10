@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
+import { SignOutControl } from "@/components/auth/sign-out-control";
 import { updateProfile } from "@/actions/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,8 @@ export default async function ProfilePage() {
 
         {isClient ? <ContactSinexiaCard /> : null}
       </div>
+
+      <SignOutControl variant="button" className="max-w-xl" />
     </div>
   );
 }

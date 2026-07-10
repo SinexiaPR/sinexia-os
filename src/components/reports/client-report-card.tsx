@@ -1,8 +1,13 @@
 import Link from "next/link";
 
+import {
+  ClientReportActions,
+  ReportNewBadge,
+} from "@/components/reports/client-report-actions";
 import { ReportCategoryDisplay } from "@/components/reports/report-category-display";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { STATUS_LABELS } from "@/lib/intelligence/constants";
+import type { DocumentProfileRow } from "@/lib/intelligence/profiles/types";
 import type {
   DetectedDocumentType,
   DocumentProcessingStatus,
@@ -23,6 +28,9 @@ type ClientProcessingInfo = {
 type ClientReportCardProps = {
   report: ReportWithCompany;
   processing?: ClientProcessingInfo | null;
+  profile?: DocumentProfileRow | null;
+  profileId: string;
+  isUnread?: boolean;
 };
 
 function formatDate(date: string) {
@@ -33,23 +41,56 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
+function arSuggestions(reportId: string): Array<{ label: string; href: string }> {
+  const q = (text: string) =>
+    `/dashboard/sia?reportId=${reportId}&q=${encodeURIComponent(text)}`;
+  return [
+    {
+      label: "¿Cuál es mi total por cobrar?",
+      href: q("¿Cuál es mi total por cobrar?"),
+    },
+    { label: "¿Quién debe más?", href: q("¿Quién debe más?") },
+    {
+      label: "¿Cuántas facturas hay?",
+      href: q("¿Cuántas facturas hay?"),
+    },
+    {
+      label: "Comparar con el reporte anterior",
+      href: q("Comparar con el reporte anterior"),
+    },
+  ];
+}
+
 export async function ClientReportCard({
   report,
   processing,
+  profile,
+  profileId,
+  isUnread = false,
 }: ClientReportCardProps) {
   const signedUrl = await getSignedReportFileUrl(report.file_url);
   const status = processing?.status;
   const statusLabel = status ? (STATUS_LABELS[status] ?? status) : null;
   const brief =
     status === "completed"
-      ? processing?.structured_summary?.briefSummary
+      ? profile?.summary ?? processing?.structured_summary?.briefSummary
       : null;
+  const isAR =
+    profile?.document_type === "accounts_receivable" ||
+    processing?.detected_document_type === "accounts_receivable" ||
+    report.category === "Aging";
+  const suggestions =
+    status === "completed" && isAR ? arSuggestions(report.id) : [];
 
   return (
-    <SurfaceCard padding="lg">
+    <div id={`report-${report.id}`}>
+      <SurfaceCard padding="lg">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
-          <ReportCategoryDisplay category={report.category} variant="client" />
+          <div className="flex flex-wrap items-center gap-2">
+            <ReportCategoryDisplay category={report.category} variant="client" />
+            <ReportNewBadge show={isUnread} />
+          </div>
           <h2 className="text-lg font-semibold tracking-tight text-foreground">
             {report.title}
           </h2>
@@ -87,46 +128,44 @@ export async function ClientReportCard({
           ) : null}
 
           {brief ? (
-            <p className="text-sm leading-relaxed text-foreground/90">
-              {brief}
-            </p>
+            <div className="space-y-1 pt-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Resumen
+              </p>
+              <p className="text-sm leading-relaxed text-foreground/90">
+                {brief}
+              </p>
+            </div>
+          ) : null}
+
+          {suggestions.length ? (
+            <div className="space-y-2 pt-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Preguntas sugeridas
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((s) => (
+                  <Link
+                    key={s.label}
+                    href={s.href}
+                    className="rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                  >
+                    {s.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ) : null}
         </div>
 
-        <div className="flex shrink-0 flex-col gap-2 sm:items-stretch">
-          {signedUrl ? (
-            <>
-              <Link
-                href={signedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-border px-5 text-sm font-medium text-primary sm:min-w-[140px]"
-              >
-                Ver
-              </Link>
-              <Link
-                href={signedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground sm:min-w-[140px]"
-              >
-                Descargar
-              </Link>
-            </>
-          ) : (
-            <span className="inline-flex h-11 w-full items-center justify-center text-sm text-muted-foreground sm:w-auto">
-              No disponible
-            </span>
-          )}
-          <Link
-            href={`/dashboard/sia?reportId=${report.id}`}
-            className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]"
-          >
-            Preguntar a SinexIA
-          </Link>
-        </div>
+        <ClientReportActions
+          reportId={report.id}
+          profileId={profileId}
+          signedUrl={signedUrl}
+          isUnread={isUnread}
+        />
       </div>
-    </SurfaceCard>
+      </SurfaceCard>
+    </div>
   );
 }

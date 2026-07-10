@@ -35,6 +35,32 @@ export type SinexiaGptCacheRow = {
   expires_at: string | null;
 };
 
+export type PortalNotificationRow = {
+  id: string;
+  dedupe_key: string;
+  audience: "client" | "admin";
+  kind: string;
+  company_id: string | null;
+  report_id: string | null;
+  document_id: string | null;
+  title: string;
+  description: string;
+  href: string;
+  created_at: string;
+};
+
+export type NotificationReadRow = {
+  notification_id: string;
+  user_id: string;
+  read_at: string;
+};
+
+export type ReportViewRow = {
+  user_id: string;
+  report_id: string;
+  viewed_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -248,6 +274,61 @@ export type Database = {
           model_name?: string | null;
           created_at?: string;
           expires_at?: string | null;
+        };
+      };
+      notifications: {
+        Row: PortalNotificationRow;
+        Insert: {
+          id?: string;
+          dedupe_key: string;
+          audience: "client" | "admin";
+          kind: string;
+          company_id?: string | null;
+          report_id?: string | null;
+          document_id?: string | null;
+          title: string;
+          description: string;
+          href: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          dedupe_key?: string;
+          audience?: "client" | "admin";
+          kind?: string;
+          company_id?: string | null;
+          report_id?: string | null;
+          document_id?: string | null;
+          title?: string;
+          description?: string;
+          href?: string;
+          created_at?: string;
+        };
+      };
+      notification_reads: {
+        Row: NotificationReadRow;
+        Insert: {
+          notification_id: string;
+          user_id: string;
+          read_at?: string;
+        };
+        Update: {
+          notification_id?: string;
+          user_id?: string;
+          read_at?: string;
+        };
+      };
+      report_views: {
+        Row: ReportViewRow;
+        Insert: {
+          user_id: string;
+          report_id: string;
+          viewed_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          report_id?: string;
+          viewed_at?: string;
         };
       };
     };

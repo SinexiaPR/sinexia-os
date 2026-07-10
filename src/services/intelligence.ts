@@ -172,10 +172,11 @@ export function buildSuggestedQuestionsFromProfiles(
 
   if (types.has("accounts_receivable") || types.has("custom_aging")) {
     suggestions.push(
-      "Total receivables",
-      "How many customers are in receivables?",
-      "How many invoices?",
-      "Compare with previous report",
+      "What is my total receivable?",
+      "Who owes the most?",
+      "How many invoices exist?",
+      "How many customers exist?",
+      "Compare with previous report.",
     );
   }
 
