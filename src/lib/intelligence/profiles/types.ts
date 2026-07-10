@@ -21,6 +21,30 @@ export type AccountsReceivableProfile = {
   oldest_invoice_days: number | null;
   source_document: string | null;
   upload_date: string | null;
+  /** Present when QuickBooks AR specialized extractor ran */
+  kind?: "quickbooks_ar";
+  variant?: string;
+  report_date?: string | null;
+  currency?: string | null;
+  source_system?: string;
+  grand_total?: number | null;
+  current?: number | null;
+  days_1_30?: number | null;
+  days_31_60?: number | null;
+  days_61_90?: number | null;
+  days_90_plus?: number | null;
+  customers?: Array<{
+    name: string;
+    invoice_count: number;
+    balance: number;
+    oldest_invoice: string | null;
+    current?: number | null;
+    days_1_30?: number | null;
+    days_31_60?: number | null;
+    days_61_90?: number | null;
+    days_90_plus?: number | null;
+  }>;
+  original_filename?: string | null;
 };
 
 export type AccountsPayableProfile = {

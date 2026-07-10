@@ -53,8 +53,9 @@ type SinexIAPanelProps = {
 export function SinexIAPanel({ reports }: SinexIAPanelProps) {
   const searchParams = useSearchParams();
   const initialReportId = searchParams.get("reportId") ?? "";
+  const initialQuestion = searchParams.get("q") ?? "";
 
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialQuestion);
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -65,6 +66,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
   const [category, setCategory] = useState("");
   const [period, setPeriod] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [autoAsked, setAutoAsked] = useState(false);
 
   useEffect(() => {
     void getSinexIASuggestions().then((res) => {
@@ -122,6 +124,13 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
       }
     });
   }
+
+  useEffect(() => {
+    if (autoAsked || !initialQuestion.trim()) return;
+    setAutoAsked(true);
+    submitQuestion(initialQuestion);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ask once from deep link
+  }, [initialQuestion, autoAsked]);
 
   return (
     <div className="space-y-6">

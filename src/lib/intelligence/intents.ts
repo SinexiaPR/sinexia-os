@@ -6,6 +6,8 @@ export type QueryIntent =
   | "receivable_total"
   | "customer_count"
   | "invoice_count_receivable"
+  | "top_debtors"
+  | "aging_buckets"
   | "payable_total"
   | "vendor_count"
   | "invoice_count_payable"
@@ -42,16 +44,37 @@ const RECEIVABLE_TOTAL = [
   /cuentas?\s*por\s*cobrar/i,
   /outstanding/i,
   /total\s*por\s*cobrar/i,
+  /what\s*is\s*my\s*receivable/i,
+  /grand\s*total/i,
 ];
 const CUSTOMER_COUNT = [
   /how\s*many\s*customers?/i,
   /cu[aá]ntos?\s*clientes?/i,
   /customer\s*count/i,
+  /how\s*many\s*customers?\s*exist/i,
 ];
 const INVOICE_COUNT = [
   /how\s*many\s*invoices?/i,
   /cu[aá]ntas?\s*facturas?/i,
   /invoice\s*count/i,
+  /how\s*many\s*invoices?\s*exist/i,
+];
+const TOP_DEBTORS = [
+  /who\s*owes\s*the\s*most/i,
+  /top\s*debtor/i,
+  /largest\s*(customer\s*)?balance/i,
+  /qui[eé]n\s*debe\s*m[aá]s/i,
+  /clientes?\s*con\s*mayor/i,
+];
+const AGING_BUCKETS = [
+  /1\s*[-–]\s*30/i,
+  /31\s*[-–]\s*60/i,
+  /61\s*[-–]\s*90/i,
+  /90\s*\+/i,
+  /aging\s*bucket/i,
+  /over\s*60\s*days/i,
+  /more\s*than\s*60/i,
+  /vencid/i,
 ];
 const PAYABLE_TOTAL = [
   /total\s*payable/i,
@@ -127,6 +150,8 @@ export function detectQueryIntent(question: string): QueryIntent {
   if (matchesAny(q, TIPS)) return "total_tips";
 
   if (matchesAny(q, RECEIVABLE_TOTAL)) return "receivable_total";
+  if (matchesAny(q, TOP_DEBTORS)) return "top_debtors";
+  if (matchesAny(q, AGING_BUCKETS)) return "aging_buckets";
   if (matchesAny(q, CUSTOMER_COUNT)) return "customer_count";
   if (matchesAny(q, INVOICE_COUNT) && /payable|pagar|vendor|proveedor/i.test(q)) {
     return "invoice_count_payable";

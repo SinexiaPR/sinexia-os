@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ReportCategoryDisplay } from "@/components/reports/report-category-display";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { STATUS_LABELS } from "@/lib/intelligence/constants";
+import type { DocumentProfileRow } from "@/lib/intelligence/profiles/types";
 import type {
   DetectedDocumentType,
   DocumentProcessingStatus,
@@ -23,6 +24,7 @@ type ClientProcessingInfo = {
 type ClientReportCardProps = {
   report: ReportWithCompany;
   processing?: ClientProcessingInfo | null;
+  profile?: DocumentProfileRow | null;
 };
 
 function formatDate(date: string) {
@@ -33,17 +35,35 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
+function arSuggestions(reportId: string): Array<{ label: string; href: string }> {
+  const q = (text: string) =>
+    `/dashboard/sia?reportId=${reportId}&q=${encodeURIComponent(text)}`;
+  return [
+    { label: "What is my total receivable?", href: q("What is my total receivable?") },
+    { label: "Who owes the most?", href: q("Who owes the most?") },
+    { label: "How many invoices exist?", href: q("How many invoices exist?") },
+    { label: "Compare with previous report.", href: q("Compare with previous report.") },
+  ];
+}
+
 export async function ClientReportCard({
   report,
   processing,
+  profile,
 }: ClientReportCardProps) {
   const signedUrl = await getSignedReportFileUrl(report.file_url);
   const status = processing?.status;
   const statusLabel = status ? (STATUS_LABELS[status] ?? status) : null;
   const brief =
     status === "completed"
-      ? processing?.structured_summary?.briefSummary
+      ? profile?.summary ?? processing?.structured_summary?.briefSummary
       : null;
+  const isAR =
+    profile?.document_type === "accounts_receivable" ||
+    processing?.detected_document_type === "accounts_receivable" ||
+    report.category === "Aging";
+  const suggestions =
+    status === "completed" && isAR ? arSuggestions(report.id) : [];
 
   return (
     <SurfaceCard padding="lg">
@@ -87,9 +107,33 @@ export async function ClientReportCard({
           ) : null}
 
           {brief ? (
-            <p className="text-sm leading-relaxed text-foreground/90">
-              {brief}
-            </p>
+            <div className="space-y-1 pt-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Summary
+              </p>
+              <p className="text-sm leading-relaxed text-foreground/90">
+                {brief}
+              </p>
+            </div>
+          ) : null}
+
+          {suggestions.length ? (
+            <div className="space-y-2 pt-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Suggested questions
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((s) => (
+                  <Link
+                    key={s.label}
+                    href={s.href}
+                    className="rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                  >
+                    {s.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ) : null}
         </div>
 
@@ -102,7 +146,7 @@ export async function ClientReportCard({
                 rel="noopener noreferrer"
                 className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-border px-5 text-sm font-medium text-primary sm:min-w-[140px]"
               >
-                Ver
+                Original Report
               </Link>
               <Link
                 href={signedUrl}
@@ -123,7 +167,7 @@ export async function ClientReportCard({
             href={`/dashboard/sia?reportId=${report.id}`}
             className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]"
           >
-            Preguntar a SinexIA
+            Ask SinexIA
           </Link>
         </div>
       </div>

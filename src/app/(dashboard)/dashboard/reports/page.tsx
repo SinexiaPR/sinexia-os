@@ -77,9 +77,10 @@ export default async function ReportsPage() {
   }
 
   const reports = await getReportsForCompany(profile.company_id);
-  const processingMap = await getProcessingByReportIds(
-    reports.map((r) => r.id),
-  );
+  const [processingMap, profilesMap] = await Promise.all([
+    getProcessingByReportIds(reports.map((r) => r.id)),
+    getProfilesByReportIds(reports.map((r) => r.id)),
+  ]);
   const reportCreatedAts = reports.map((report) => report.created_at);
 
   return (
@@ -116,6 +117,7 @@ export default async function ReportsPage() {
               key={report.id}
               report={report}
               processing={processingMap.get(report.id) ?? null}
+              profile={profilesMap.get(report.id) ?? null}
             />
           ))}
         </div>
