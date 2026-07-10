@@ -1,9 +1,8 @@
 "use client";
 
-import { BrandLogo } from "@/components/brand/brand-logo";
-import { SignOutButton } from "@/components/auth/sign-out-button";
 import { AdminNavLinks } from "@/components/layout/nav-link-with-badge";
 import { adminNavItems } from "@/config/navigation";
+import { siteConfig } from "@/config/site";
 import type { NavBadgeCounts } from "@/types/notifications";
 import { cn } from "@/lib/utils";
 
@@ -25,8 +24,16 @@ export function AdminSidebar({
         className,
       )}
     >
-      <div className="flex h-16 items-center border-b border-sidebar-border px-4">
-        <BrandLogo href="/dashboard" showSubtitle size="sm" inverted />
+      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-5">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
+          S
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{siteConfig.name}</p>
+          <p className="truncate text-xs text-sidebar-foreground/60">
+            Admin workspace
+          </p>
+        </div>
       </div>
 
       <AdminNavLinks
@@ -34,10 +41,6 @@ export function AdminSidebar({
         badgeCounts={badgeCounts}
         onNavigate={onNavigate}
       />
-
-      <div className="mt-auto border-t border-sidebar-border p-3">
-        <SignOutButton variant="sidebar" />
-      </div>
     </aside>
   );
 }

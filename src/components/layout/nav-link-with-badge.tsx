@@ -6,10 +6,7 @@ import { usePathname } from "next/navigation";
 import { NavBadge } from "@/components/ui/nav-badge";
 import { useUnreadReportsCount } from "@/hooks/use-unread-reports";
 import type { NavBadgeKey, NavItem } from "@/config/navigation";
-import type {
-  ClientReportNotifications,
-  NavBadgeCounts,
-} from "@/types/notifications";
+import type { ClientReportNotifications, NavBadgeCounts } from "@/types/notifications";
 import { cn } from "@/lib/utils";
 
 type NavLinkProps = {
@@ -58,7 +55,7 @@ export function NavLinkWithBadge({
       onClick={onNavigate}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
         isActive ? activeClassName : inactiveClassName,
       )}
     >
@@ -93,11 +90,11 @@ export function ClientNavLinks({
   );
 
   return (
-    <nav className={cn("flex flex-col gap-1", className)} aria-label="Menú">
+    <nav className={cn("flex flex-col gap-1", className)}>
       {companyName ? (
         <div className="mb-6 px-3">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Empresa
+            Company
           </p>
           <p className="mt-1 truncate text-sm font-semibold text-foreground">
             {companyName}
@@ -118,7 +115,7 @@ export function ClientNavLinks({
             inboxCount={inboxCount}
             reportsCount={unreadReportsCount}
             onNavigate={onNavigate}
-            activeClassName="bg-primary text-primary-foreground"
+            activeClassName="bg-foreground text-background shadow-sm"
             inactiveClassName="text-muted-foreground hover:bg-muted hover:text-foreground"
             iconClassName={isActive ? undefined : "opacity-80"}
           />
@@ -144,10 +141,7 @@ export function AdminNavLinks({
   const pathname = usePathname();
 
   return (
-    <nav
-      className={cn("flex-1 space-y-0.5 p-3", className)}
-      aria-label="Menú de administración"
-    >
+    <nav className={cn("flex-1 space-y-0.5 p-3", className)}>
       {items.map((item) => {
         const isActive =
           pathname === item.href ||

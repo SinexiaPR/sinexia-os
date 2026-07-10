@@ -5,7 +5,7 @@ import { SiaPanel } from "@/components/assistant/sia-panel";
 import { requireAuth } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Asistente",
+  title: "SIA",
 };
 
 export default async function SiaPage() {
@@ -16,14 +16,12 @@ export default async function SiaPage() {
   }
 
   return (
-    <div className="space-y-8 sm:space-y-10">
+    <div className="space-y-10">
       <header className="space-y-2">
-        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-          Asistente SIA
-        </h1>
-        <p className="max-w-lg text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-          Consultas rápidas sobre sus documentos, pendientes de revisión y
-          reportes publicados por Sinexia.
+        <h1 className="text-3xl font-semibold tracking-tight">SIA</h1>
+        <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
+          Sinexia Intelligent Assistant — consultas rápidas sobre su Inbox,
+          documentos en revisión y reportes publicados por Sinexia.
         </p>
       </header>
 

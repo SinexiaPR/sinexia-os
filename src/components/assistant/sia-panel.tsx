@@ -58,8 +58,8 @@ export function SiaPanel() {
             {assistantConfig.name}
           </p>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Asistente orientativo basado en la información de su portal:
-            documentos, pendientes de revisión y reportes disponibles.
+            Asistente orientativo basado en la información de su portal: Inbox,
+            documentos pendientes y reportes disponibles.
           </p>
         </div>
 

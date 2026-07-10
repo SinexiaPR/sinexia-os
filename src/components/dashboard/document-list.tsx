@@ -14,8 +14,8 @@ type DocumentListProps = {
 
 export function DocumentList({
   documents,
-  title = "Documentos",
-  emptyMessage = "Aún no hay documentos.",
+  title = "Inbox",
+  emptyMessage = "No items yet.",
   showCompany = false,
   viewAllHref,
 }: DocumentListProps) {
@@ -28,7 +28,7 @@ export function DocumentList({
             href={viewAllHref}
             className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            Ver todos
+            View all
           </Link>
         ) : null}
       </div>

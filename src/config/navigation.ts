@@ -1,10 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
-  Building2,
-  CircleHelp,
-  FileText,
+  Inbox,
   LayoutDashboard,
+  Sparkles,
   User,
 } from "lucide-react";
 
@@ -15,82 +14,36 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   badgeKey?: NavBadgeKey;
-  /** Show in mobile bottom navigation */
-  mobile?: boolean;
 };
 
 export const clientNavItems: NavItem[] = [
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   {
-    title: "Inicio",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    mobile: true,
-  },
-  {
-    title: "Documentos",
+    title: "Inbox",
     href: "/dashboard/inbox",
-    icon: FileText,
+    icon: Inbox,
     badgeKey: "inbox",
-    mobile: true,
   },
   {
-    title: "Reportes",
+    title: "Reports",
     href: "/dashboard/reports",
     icon: BarChart3,
     badgeKey: "reports",
-    mobile: true,
   },
-  {
-    title: "Ayuda",
-    href: "/dashboard/ayuda",
-    icon: CircleHelp,
-    mobile: true,
-  },
-  {
-    title: "Mi cuenta",
-    href: "/dashboard/profile",
-    icon: User,
-    mobile: true,
-  },
+  { title: "SIA", href: "/dashboard/sia", icon: Sparkles },
+  { title: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
 export const adminNavItems: NavItem[] = [
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   {
-    title: "Inicio",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    mobile: true,
-  },
-  {
-    title: "Documentos",
+    title: "Inbox",
     href: "/dashboard/inbox",
-    icon: FileText,
+    icon: Inbox,
     badgeKey: "inbox",
-    mobile: true,
   },
-  {
-    title: "Reportes",
-    href: "/dashboard/reports",
-    icon: BarChart3,
-    mobile: true,
-  },
-  {
-    title: "Empresas",
-    href: "/dashboard/empresas",
-    icon: Building2,
-    mobile: true,
-  },
-  {
-    title: "Ayuda",
-    href: "/dashboard/ayuda",
-    icon: CircleHelp,
-    mobile: true,
-  },
-  {
-    title: "Mi cuenta",
-    href: "/dashboard/profile",
-    icon: User,
-  },
+  { title: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+  { title: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
 export function getPageTitle(pathname: string, items: NavItem[]): string {
@@ -100,5 +53,5 @@ export function getPageTitle(pathname: string, items: NavItem[]): string {
       (item.href !== "/dashboard" && pathname.startsWith(item.href)),
   );
 
-  return match?.title ?? "Inicio";
+  return match?.title ?? "Dashboard";
 }

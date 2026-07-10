@@ -12,9 +12,9 @@ const badgeVariants = cva(
         secondary:
           "border-transparent bg-secondary text-secondary-foreground",
         outline: "border-border text-foreground",
-        received: "border-blue-200 bg-blue-50 text-blue-900",
-        reviewing: "border-amber-200 bg-amber-50 text-amber-900",
-        processed: "border-emerald-200 bg-emerald-50 text-emerald-900",
+        received: "border-blue-200 bg-blue-50 text-blue-800",
+        reviewing: "border-amber-200 bg-amber-50 text-amber-800",
+        processed: "border-emerald-200 bg-emerald-50 text-emerald-800",
         rejected: "border-red-200 bg-red-50 text-red-800",
       },
     },

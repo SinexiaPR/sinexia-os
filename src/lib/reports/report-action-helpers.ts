@@ -15,7 +15,7 @@ export function reportError(
   logServerError(context, error, meta);
   const result: ReportActionState = {
     success: false,
-    error: extractErrorMessage(error) || `No se pudo completar: ${context}.`,
+    error: extractErrorMessage(error) || `${context} failed.`,
   };
   console.log("[createReport] returning:", result);
   return result;

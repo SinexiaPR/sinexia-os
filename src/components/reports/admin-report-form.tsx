@@ -46,6 +46,8 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
   >(createReport, reportActionInitialState);
 
   useEffect(() => {
+    console.log("[AdminReportForm] action state:", state);
+
     if (!state.success) {
       return;
     }
@@ -60,7 +62,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
   function handleFileSelect(file: File | undefined) {
     if (!file) return;
     if (!isAllowedUploadFile(file)) {
-      setLocalError("Formato no admitido. Use PDF, Excel, Word o imagen.");
+      setLocalError("Unsupported file type.");
       return;
     }
     setLocalError(null);
@@ -71,7 +73,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     if (!selectedFile) {
       event.preventDefault();
-      setLocalError("Seleccione el archivo del reporte.");
+      setLocalError("Select a report file.");
       return;
     }
     setLocalError(null);
@@ -99,7 +101,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="company_id">Empresa</Label>
+          <Label htmlFor="company_id">Company</Label>
           <select
             id="company_id"
             name="company_id"
@@ -107,7 +109,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
             disabled={isPending}
             className={selectClassName}
           >
-            <option value="">Seleccionar empresa</option>
+            <option value="">Select company</option>
             {companies.map((company) => (
               <option key={company.id} value={company.id}>
                 {company.name}
@@ -117,7 +119,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="category">Categoría</Label>
+          <Label htmlFor="category">Category</Label>
           <select
             id="category"
             name="category"
@@ -125,7 +127,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
             disabled={isPending}
             className={selectClassName}
           >
-            <option value="">Seleccionar categoría</option>
+            <option value="">Select category</option>
             {REPORT_CATEGORIES.map((category) => (
               <option key={category} value={category}>
                 {REPORT_CATEGORY_META[category].adminOptionLabel}
@@ -135,11 +137,11 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="period">Periodo</Label>
+          <Label htmlFor="period">Period</Label>
           <Input
             id="period"
             name="period"
-            placeholder="ej. Enero 2026"
+            placeholder="e.g. January 2026"
             required
             disabled={isPending}
             className="h-12 rounded-xl sm:h-11"
@@ -147,7 +149,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="title">Título del reporte</Label>
+          <Label htmlFor="title">Report title</Label>
           <Input
             id="title"
             name="title"
@@ -158,19 +160,19 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="notes">Notas para el cliente</Label>
+          <Label htmlFor="notes">Notes for client</Label>
           <textarea
             id="notes"
             name="notes"
             rows={3}
             disabled={isPending}
             className="flex w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:text-sm"
-            placeholder="Mensaje opcional visible para el cliente"
+            placeholder="Optional message visible to the client"
           />
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label>Archivo del reporte</Label>
+          <Label>Report file</Label>
           <Button
             type="button"
             variant="outline"
@@ -178,7 +180,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
             onClick={() => pickerInputRef.current?.click()}
             className="h-12 w-full rounded-xl sm:h-11"
           >
-            {selectedFile ? selectedFile.name : "Elegir archivo"}
+            {selectedFile ? selectedFile.name : "Choose file"}
           </Button>
           <input
             ref={pickerInputRef}
@@ -192,28 +194,19 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
       </div>
 
       {localError ? (
-        <p
-          role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-        >
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
           {localError}
         </p>
       ) : null}
 
       {showError ? (
-        <p
-          role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-        >
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
           {state.error}
         </p>
       ) : null}
 
       {state.success === true ? (
-        <p
-          role="status"
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900"
-        >
+        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Reporte publicado correctamente.
         </p>
       ) : null}
@@ -223,7 +216,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
         disabled={isPending || !selectedFile}
         className={cn("h-12 rounded-xl sm:h-11")}
       >
-        {isPending ? "Guardando…" : "Publicar reporte"}
+        {isPending ? "Saving…" : "Save report"}
       </Button>
     </form>
   );

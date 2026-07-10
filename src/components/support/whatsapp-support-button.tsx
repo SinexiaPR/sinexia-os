@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import {
   Tooltip,
@@ -24,19 +23,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-/** Hide floating button on form-heavy pages so it doesn't cover inputs */
-const HIDDEN_PATH_PREFIXES = ["/dashboard/inbox"];
-
 export function WhatsAppSupportButton() {
-  const pathname = usePathname();
-  const hideFloating = HIDDEN_PATH_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-
-  if (hideFloating) {
-    return null;
-  }
-
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -44,19 +31,19 @@ export function WhatsAppSupportButton() {
           href={sinexiaContact.whatsappHref}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={sinexiaContact.whatsappLabel}
+          aria-label={sinexiaContact.whatsappTooltip}
           className={cn(
-            "fixed z-30 flex items-center justify-center rounded-full text-white shadow-md transition-opacity hover:opacity-95 active:opacity-90",
-            "right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] size-12",
-            "md:right-6 md:bottom-6 md:size-12",
-            "bg-[#25D366] hover:bg-[#1fbe5c]",
-            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+            "fixed z-40 flex items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95",
+            "bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-4 size-14",
+            "sm:bottom-6 sm:right-6 sm:size-12",
+            "bg-[#25D366] hover:bg-[#20bd5a]",
+            "ring-4 ring-[#25D366]/20",
           )}
         >
-          <WhatsAppIcon className="size-6" />
+          <WhatsAppIcon className="size-7 sm:size-6" />
         </Link>
       </TooltipTrigger>
-      <TooltipContent side="left" sideOffset={10} className="hidden md:block">
+      <TooltipContent side="left" sideOffset={10} className="hidden sm:block">
         {sinexiaContact.whatsappTooltip}
       </TooltipContent>
     </Tooltip>

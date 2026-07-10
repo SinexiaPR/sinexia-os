@@ -11,7 +11,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { getCompanyById } from "@/services/documents";
 
 export const metadata: Metadata = {
-  title: "Mi cuenta",
+  title: "Profile",
 };
 
 export default async function ProfilePage() {
@@ -25,21 +25,19 @@ export default async function ProfilePage() {
   const isClient = profile.role === "client";
 
   return (
-    <div className={isClient ? "space-y-8 sm:space-y-10" : "space-y-10"}>
+    <div className={isClient ? "space-y-10" : "space-y-12"}>
       {isClient ? (
         <header className="space-y-2">
-          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-            Mi cuenta
-          </h1>
-          <p className="text-[15px] text-muted-foreground sm:text-base">
+          <h1 className="text-3xl font-semibold tracking-tight">Perfil</h1>
+          <p className="text-base text-muted-foreground">
             Su cuenta, empresa y contacto con Sinexia.
           </p>
         </header>
       ) : (
         <PageHeader
-          eyebrow="Administración"
-          title="Mi cuenta"
-          description="Datos de su cuenta de administrador."
+          eyebrow="Admin workspace"
+          title="Profile"
+          description="Your account details."
         />
       )}
 
@@ -48,61 +46,63 @@ export default async function ProfilePage() {
       >
         <SurfaceCard padding="lg">
           <h2 className="text-base font-semibold tracking-tight">
-            Información personal
+            {isClient ? "Información personal" : "Personal information"}
           </h2>
           <form action={updateProfile} className="mt-6 space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="full_name">Nombre completo</Label>
+              <Label htmlFor="full_name">
+                {isClient ? "Nombre completo" : "Full name"}
+              </Label>
               <Input
                 id="full_name"
                 name="full_name"
                 defaultValue={profile.full_name ?? ""}
-                placeholder="Su nombre"
-                className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
+                placeholder={isClient ? "Su nombre" : "Your name"}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Correo electrónico</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 name="email"
                 value={profile.email}
                 disabled
                 readOnly
-                className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
               />
             </div>
 
-            <Button type="submit" className="h-11 rounded-xl">
-              Guardar cambios
+            <Button type="submit">
+              {isClient ? "Guardar cambios" : "Save changes"}
             </Button>
           </form>
         </SurfaceCard>
 
         <SurfaceCard padding="lg">
           <h2 className="text-base font-semibold tracking-tight">
-            {isClient ? "Empresa" : "Espacio de trabajo"}
+            {isClient ? "Empresa" : "Workspace"}
           </h2>
           <dl className="mt-6 space-y-5">
             {!isClient ? (
               <div>
-                <dt className="text-sm text-muted-foreground">Rol</dt>
-                <dd className="mt-1 font-medium">Administrador</dd>
+                <dt className="text-sm text-muted-foreground">Role</dt>
+                <dd className="mt-1 font-medium capitalize">{profile.role}</dd>
               </div>
             ) : null}
             {company ? (
               <div>
-                <dt className="text-sm text-muted-foreground">Empresa</dt>
+                <dt className="text-sm text-muted-foreground">
+                  {isClient ? "Empresa" : "Company"}
+                </dt>
                 <dd className="mt-1 font-medium">{company.name}</dd>
               </div>
             ) : null}
             <div>
               <dt className="text-sm text-muted-foreground">
-                {isClient ? "Cliente desde" : "Miembro desde"}
+                {isClient ? "Cliente desde" : "Member since"}
               </dt>
               <dd className="mt-1 font-medium">
-                {new Intl.DateTimeFormat("es", {
+                {new Intl.DateTimeFormat(isClient ? "es" : "en-US", {
                   month: "long",
                   day: "numeric",
                   year: "numeric",
@@ -112,7 +112,7 @@ export default async function ProfilePage() {
           </dl>
         </SurfaceCard>
 
-        <ContactSinexiaCard className={isClient ? undefined : "lg:col-span-2"} />
+        {isClient ? <ContactSinexiaCard /> : null}
       </div>
     </div>
   );

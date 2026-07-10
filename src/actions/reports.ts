@@ -36,36 +36,36 @@ export async function createReport(
     const file = formData.get("file");
 
     if (!companyId) {
-      return validationError("Seleccione una empresa.");
+      return validationError("Missing company_id.");
     }
 
     if (!title) {
-      return validationError("Indique el título del reporte.");
+      return validationError("Missing title.");
     }
 
     if (!category) {
-      return validationError("Seleccione una categoría.");
+      return validationError("Missing category.");
     }
 
     if (!period) {
-      return validationError("Indique el periodo.");
+      return validationError("Missing period.");
     }
 
     if (!isReportCategory(category)) {
-      return validationError(`Categoría de reporte no válida: ${category}`);
+      return validationError(`Invalid report category: ${category}`);
     }
 
     if (!(file instanceof File) || file.size === 0) {
-      return validationError("Debe adjuntar el archivo del reporte.");
+      return validationError("A report file is required.");
     }
 
     if (file.size > UPLOAD_MAX_BYTES) {
-      return validationError("El archivo supera el límite de 50 MB.");
+      return validationError("File exceeds the 50 MB limit.");
     }
 
     if (!isAllowedUploadFile(file)) {
       return validationError(
-        "Formato no admitido. Use PDF, Excel, Word o imagen.",
+        "Unsupported file type. Use PDF, Excel, Word, or image.",
       );
     }
 
@@ -145,7 +145,7 @@ export async function deleteReport(reportId: string) {
     .maybeSingle();
 
   if (fetchError || !report) {
-    return { error: "No se encontró el reporte." };
+    return { error: "Report not found." };
   }
 
   const { error: deleteError } = await supabase
@@ -154,7 +154,7 @@ export async function deleteReport(reportId: string) {
     .eq("id", reportId);
 
   if (deleteError) {
-    return { error: "No se pudo eliminar el reporte." };
+    return { error: "Failed to delete report." };
   }
 
   await supabase.storage.from(REPORTS_BUCKET).remove([report.file_url]);
