@@ -22,7 +22,7 @@ import type { DetectedDocumentType } from "@/lib/intelligence/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REPORTS_BUCKET } from "@/lib/constants/reports";
 import { logServerError } from "@/lib/errors/action-error";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
 import { after } from "next/server";
 
@@ -39,6 +39,231 @@ export type ReportProcessingSource = {
 
 function logProcessing(event: string, meta: Record<string, unknown>) {
   console.info(`[sinexia-intelligence] ${event}`, meta);
+}
+
+function postgresErrorMeta(error: PostgrestError | null | undefined) {
+  const message = error?.message ?? null;
+  const details = error?.details ?? null;
+  const constraintMatch = `${message ?? ""} ${details ?? ""}`.match(
+    /constraint "([^"]+)"/i,
+  );
+
+  return {
+    postgresCode: error?.code ?? null,
+    postgresMessage: message,
+    constraintName: constraintMatch?.[1] ?? null,
+  };
+}
+
+function formatProcessingInsertError(error: PostgrestError | null | undefined) {
+  const meta = postgresErrorMeta(error);
+  if (!meta.postgresMessage) {
+    return "Failed to create processing record";
+  }
+
+  return `Failed to create processing record (${meta.postgresCode ?? "unknown"}: ${meta.postgresMessage})`;
+}
+
+async function fetchProcessingBySource(params: {
+  admin: SupabaseClient;
+  reportId?: string | null;
+  documentId?: string | null;
+}): Promise<{ id: string; status: string } | null> {
+  const { admin, reportId, documentId } = params;
+
+  if (!reportId && !documentId) {
+    return null;
+  }
+
+  let query = admin.from("document_processing").select("id, status");
+
+  if (reportId) {
+    query = query.eq("report_id", reportId);
+  } else if (documentId) {
+    query = query.eq("document_id", documentId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error && error.code !== "PGRST116") {
+    logProcessing("processing_insert_failed", {
+      reportId: reportId ?? null,
+      companyId: null,
+      client: "service_role",
+      lookup: "existing_row",
+      ...postgresErrorMeta(error),
+    });
+    return null;
+  }
+
+  return data ?? null;
+}
+
+async function ensureProcessingRow(params: {
+  admin: SupabaseClient;
+  companyId: string;
+  reportId?: string | null;
+  documentId?: string | null;
+  filename: string;
+  force: boolean;
+}): Promise<
+  | { ok: true; processingId: string; skip?: string }
+  | { ok: false; error: string }
+> {
+  const { admin, companyId, reportId, documentId, filename, force } = params;
+  const fileFormat = getFileExtension(filename) || null;
+  const analyzable = isAnalyzableFilename(filename);
+
+  if (!reportId && !documentId) {
+    return { ok: false, error: "Missing report or document id" };
+  }
+
+  logProcessing("processing_insert_start", {
+    reportId: reportId ?? null,
+    companyId,
+    documentId: documentId ?? null,
+    fileExtension: fileFormat,
+    client: "service_role",
+    force,
+  });
+
+  const pendingPatch = {
+    company_id: companyId,
+    status: "pending" as const,
+    file_format: fileFormat,
+    is_analyzable: analyzable,
+    original_filename: filename,
+    prompt_version: INTELLIGENCE_PROMPT_VERSION,
+    processing_error: null,
+    processed_at: null,
+  };
+
+  const existing = await fetchProcessingBySource({
+    admin,
+    reportId,
+    documentId,
+  });
+
+  if (
+    existing &&
+    !force &&
+    (existing.status === "completed" ||
+      existing.status === "processing" ||
+      existing.status === "requires_ocr")
+  ) {
+    logProcessing("processing_insert_success", {
+      reportId: reportId ?? null,
+      companyId,
+      processingId: existing.id,
+      client: "service_role",
+      action: "reuse_existing",
+      status: existing.status,
+    });
+    return { ok: true, processingId: existing.id, skip: existing.status };
+  }
+
+  if (existing?.id) {
+    const { error: updateError } = await admin
+      .from("document_processing")
+      .update(pendingPatch)
+      .eq("id", existing.id);
+
+    if (updateError) {
+      logProcessing("processing_insert_failed", {
+        reportId: reportId ?? null,
+        companyId,
+        processingId: existing.id,
+        client: "service_role",
+        action: "update_existing",
+        ...postgresErrorMeta(updateError),
+      });
+      return { ok: false, error: formatProcessingInsertError(updateError) };
+    }
+
+    logProcessing("processing_insert_success", {
+      reportId: reportId ?? null,
+      companyId,
+      processingId: existing.id,
+      client: "service_role",
+      action: "update_existing",
+      status: "pending",
+    });
+    return { ok: true, processingId: existing.id };
+  }
+
+  const { data: inserted, error: insertError } = await admin
+    .from("document_processing")
+    .insert({
+      report_id: reportId ?? null,
+      document_id: documentId ?? null,
+      ...pendingPatch,
+    })
+    .select("id")
+    .single();
+
+  if (!insertError && inserted) {
+    logProcessing("processing_insert_success", {
+      reportId: reportId ?? null,
+      companyId,
+      processingId: inserted.id,
+      client: "service_role",
+      action: "insert",
+      status: "pending",
+    });
+    return { ok: true, processingId: inserted.id };
+  }
+
+  if (insertError?.code === "23505") {
+    const duplicate = await fetchProcessingBySource({
+      admin,
+      reportId,
+      documentId,
+    });
+
+    if (duplicate?.id) {
+      const { error: updateError } = await admin
+        .from("document_processing")
+        .update(pendingPatch)
+        .eq("id", duplicate.id);
+
+      if (updateError) {
+        logProcessing("processing_insert_failed", {
+          reportId: reportId ?? null,
+          companyId,
+          processingId: duplicate.id,
+          client: "service_role",
+          action: "duplicate_update",
+          ...postgresErrorMeta(updateError),
+        });
+        return { ok: false, error: formatProcessingInsertError(updateError) };
+      }
+
+      logProcessing("processing_insert_success", {
+        reportId: reportId ?? null,
+        companyId,
+        processingId: duplicate.id,
+        client: "service_role",
+        action: "duplicate_resolved",
+        status: "pending",
+      });
+      return { ok: true, processingId: duplicate.id };
+    }
+  }
+
+  logProcessing("processing_insert_failed", {
+    reportId: reportId ?? null,
+    companyId,
+    client: "service_role",
+    action: "insert",
+    ...postgresErrorMeta(insertError),
+  });
+  logServerError("Create document_processing", insertError, {
+    reportId,
+    documentId,
+    companyId,
+  });
+
+  return { ok: false, error: formatProcessingInsertError(insertError) };
 }
 
 function hashBuffer(buffer: Buffer): string {
@@ -588,75 +813,6 @@ async function runPipeline(params: {
   }
 }
 
-async function ensureProcessingRow(params: {
-  admin: SupabaseClient;
-  companyId: string;
-  reportId?: string | null;
-  documentId?: string | null;
-  filename: string;
-  force: boolean;
-}): Promise<
-  | { ok: true; processingId: string; skip?: string }
-  | { ok: false; error: string }
-> {
-  const { admin, companyId, reportId, documentId, filename, force } = params;
-  const fileFormat = getFileExtension(filename) || null;
-  const analyzable = isAnalyzableFilename(filename);
-
-  let existingQuery = admin
-    .from("document_processing")
-    .select("id, status");
-
-  if (reportId) {
-    existingQuery = existingQuery.eq("report_id", reportId);
-  } else if (documentId) {
-    existingQuery = existingQuery.eq("document_id", documentId);
-  } else {
-    return { ok: false, error: "Missing report or document id" };
-  }
-
-  const { data: existing } = await existingQuery.maybeSingle();
-
-  if (
-    existing &&
-    !force &&
-    (existing.status === "completed" ||
-      existing.status === "processing" ||
-      existing.status === "requires_ocr")
-  ) {
-    return { ok: true, processingId: existing.id, skip: existing.status };
-  }
-
-  if (existing?.id) {
-    return { ok: true, processingId: existing.id };
-  }
-
-  const { data: inserted, error: insertError } = await admin
-    .from("document_processing")
-    .insert({
-      report_id: reportId ?? null,
-      document_id: documentId ?? null,
-      company_id: companyId,
-      status: "pending",
-      file_format: fileFormat,
-      is_analyzable: analyzable,
-      original_filename: filename,
-      prompt_version: INTELLIGENCE_PROMPT_VERSION,
-    })
-    .select("id")
-    .single();
-
-  if (insertError || !inserted) {
-    logServerError("Create document_processing", insertError, {
-      reportId,
-      documentId,
-    });
-    return { ok: false, error: "Failed to create processing record" };
-  }
-
-  return { ok: true, processingId: inserted.id };
-}
-
 export async function resolveReportForProcessing(
   reportId: string,
   source?: ReportProcessingSource | null,
@@ -758,69 +914,40 @@ export async function resolveReportForProcessing(
 
 export async function bootstrapReportProcessing(
   source: ReportProcessingSource,
-  supabase?: SupabaseClient,
+  force = false,
 ): Promise<{ ok: boolean; processingId?: string; error?: string }> {
   const filename = source.file_url.split("/").pop() ?? "file";
 
+  let admin;
   try {
-    const admin = createAdminClient();
-    const ensured = await ensureProcessingRow({
-      admin,
-      companyId: source.company_id,
-      reportId: source.id,
-      filename,
-      force: false,
-    });
-
-    if (ensured.ok) {
-      return { ok: true, processingId: ensured.processingId };
-    }
-
-    return { ok: false, error: ensured.error };
+    admin = createAdminClient();
   } catch (error) {
-    if (!supabase) {
-      logServerError("bootstrapReportProcessing", error, {
-        reportId: source.id,
-      });
-      return { ok: false, error: "Could not create processing record" };
-    }
-  }
-
-  const fileFormat = getFileExtension(filename) || null;
-  const analyzable = isAnalyzableFilename(filename);
-
-  const { data: existing } = await supabase
-    .from("document_processing")
-    .select("id")
-    .eq("report_id", source.id)
-    .maybeSingle();
-
-  if (existing?.id) {
-    return { ok: true, processingId: existing.id };
-  }
-
-  const { data: inserted, error: insertError } = await supabase
-    .from("document_processing")
-    .insert({
-      report_id: source.id,
-      company_id: source.company_id,
-      status: "pending",
-      file_format: fileFormat,
-      is_analyzable: analyzable,
-      original_filename: filename,
-      prompt_version: INTELLIGENCE_PROMPT_VERSION,
-    })
-    .select("id")
-    .single();
-
-  if (insertError || !inserted) {
-    logServerError("bootstrapReportProcessing authed", insertError, {
+    logProcessing("processing_insert_failed", {
       reportId: source.id,
+      companyId: source.company_id,
+      client: "service_role",
+      action: "bootstrap",
+      postgresMessage:
+        error instanceof Error
+          ? error.message
+          : "Service role not configured",
     });
-    return { ok: false, error: "Could not create processing record" };
+    return { ok: false, error: "Service role not configured" };
   }
 
-  return { ok: true, processingId: inserted.id };
+  const ensured = await ensureProcessingRow({
+    admin,
+    companyId: source.company_id,
+    reportId: source.id,
+    filename,
+    force,
+  });
+
+  if (ensured.ok) {
+    return { ok: true, processingId: ensured.processingId };
+  }
+
+  return { ok: false, error: ensured.error };
 }
 
 async function markProcessingFailure(
@@ -850,11 +977,10 @@ async function markProcessingFailure(
 
 export async function queueReportProcessing(
   source: ReportProcessingSource,
-  supabase: SupabaseClient,
   force = false,
 ): Promise<{ ok: boolean; status?: string; error?: string }> {
   const fileExtension = getFileExtension(source.file_url.split("/").pop() ?? "");
-  const bootstrap = await bootstrapReportProcessing(source, supabase);
+  const bootstrap = await bootstrapReportProcessing(source, force);
 
   logProcessing("queue_report_processing", {
     reportId: source.id,
@@ -863,6 +989,10 @@ export async function queueReportProcessing(
     fileExtension,
     lookupResult: bootstrap.ok ? "bootstrap_ok" : bootstrap.error ?? "bootstrap_failed",
   });
+
+  if (!bootstrap.ok) {
+    return { ok: false, error: bootstrap.error ?? "Failed to create processing record" };
+  }
 
   const result = await processReportDocument({
     reportId: source.id,

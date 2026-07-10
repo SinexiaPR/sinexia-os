@@ -137,7 +137,14 @@ export async function createReport(
       file_url: storagePath,
     };
 
-    await queueReportProcessing(reportSource, supabase);
+    const processingResult = await queueReportProcessing(reportSource);
+
+    if (!processingResult.ok) {
+      logServerError("Report processing bootstrap", processingResult.error, {
+        reportId,
+        companyId,
+      });
+    }
 
     revalidatePath("/dashboard/reports");
     revalidatePath("/dashboard");
