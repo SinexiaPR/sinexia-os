@@ -27,7 +27,7 @@ export function DeleteReportButton({ reportId }: DeleteReportButtonProps) {
       }
     >
       <Trash2 className="size-4" />
-      <span className="sr-only">Delete report</span>
+      <span className="sr-only">Eliminar reporte</span>
     </Button>
   );
 }

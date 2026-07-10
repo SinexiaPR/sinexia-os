@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DOCUMENT_TYPE_OPTIONS } from "@/types";
+import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPE_OPTIONS } from "@/types";
 import { cn } from "@/lib/utils";
 
 const initialState: { error?: string; success?: boolean } = {};
@@ -256,7 +256,7 @@ export function DocumentUploadForm() {
             <option value="">Seleccionar</option>
             {DOCUMENT_TYPE_OPTIONS.map((type) => (
               <option key={type} value={type}>
-                {type}
+                {DOCUMENT_TYPE_LABELS[type]}
               </option>
             ))}
           </select>
@@ -264,20 +264,30 @@ export function DocumentUploadForm() {
       </div>
 
       {localError ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
           {localError}
         </p>
       ) : null}
 
       {state.error ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
           {state.error}
         </p>
       ) : null}
 
       {state.success ? (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          Documento recibido por Sinexia.
+        <p
+          role="status"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900"
+        >
+          Documento enviado correctamente. Sinexia lo recibió y lo revisará
+          pronto.
         </p>
       ) : null}
 
@@ -287,7 +297,7 @@ export function DocumentUploadForm() {
         disabled={isPending || !selectedFile}
         className={cn(
           "h-14 w-full rounded-xl text-base font-semibold sm:h-12 sm:text-sm",
-          "sticky bottom-4 z-10 shadow-md sm:static sm:shadow-none",
+          "sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] z-10 shadow-md md:static md:bottom-auto md:shadow-none",
         )}
       >
         {isPending ? "Enviando…" : "Enviar documento"}

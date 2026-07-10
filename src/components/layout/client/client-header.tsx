@@ -25,7 +25,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { clientNavItems, getPageTitle } from "@/config/navigation";
-import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 import type { ClientReportNotifications } from "@/types/notifications";
 import type { Profile } from "@/types";
@@ -65,23 +64,33 @@ export function ClientHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md",
+        "sticky top-0 z-30 border-b border-border/70 bg-card/90 backdrop-blur-md",
         className,
       )}
     >
-      <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:h-16 sm:px-6">
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden">
-              <MenuIcon className="size-4" />
-              <span className="sr-only">Open navigation</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-11 md:hidden"
+              aria-label="Abrir menú"
+            >
+              <MenuIcon className="size-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-6">
-            <SheetHeader className="mb-6 px-0">
-              <SheetTitle className="text-left text-base font-semibold">
-                {siteConfig.name}
-              </SheetTitle>
+          <SheetContent side="left" className="w-[min(100%,20rem)] p-6">
+            <SheetHeader className="mb-6 px-0 text-left">
+              <SheetTitle className="sr-only">Menú</SheetTitle>
+              <div className="text-left">
+                <p className="font-display text-base font-semibold tracking-[0.14em] text-primary uppercase">
+                  SINEXIA
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Portal de Clientes
+                </p>
+              </div>
             </SheetHeader>
             <ClientNav
               companyName={companyName}
@@ -89,24 +98,38 @@ export function ClientHeader({
               reportNotifications={reportNotifications}
               onNavigate={() => setMobileNavOpen(false)}
             />
+            <div className="mt-8 border-t border-border/70 pt-4">
+              <SignOutButton variant="button" />
+            </div>
           </SheetContent>
         </Sheet>
 
         <div className="min-w-0 flex-1 md:hidden">
-          <p className="truncate text-sm font-semibold">{title}</p>
+          <p className="truncate text-sm font-semibold text-foreground">
+            {title}
+          </p>
+          {companyName ? (
+            <p className="truncate text-xs text-muted-foreground">
+              {companyName}
+            </p>
+          ) : null}
         </div>
 
         <div className="hidden min-w-0 flex-1 md:block">
           <p className="truncate text-sm font-medium text-muted-foreground">
-            {companyName ?? siteConfig.name}
+            {companyName ?? "Portal de Clientes"}
           </p>
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative size-9 rounded-full p-0">
+            <Button
+              variant="ghost"
+              className="relative size-11 rounded-full p-0"
+              aria-label="Menú de cuenta"
+            >
               <Avatar className="size-9">
-                <AvatarFallback className="bg-muted text-xs font-medium text-foreground">
+                <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
                   {getInitials(profile)}
                 </AvatarFallback>
               </Avatar>
@@ -125,7 +148,7 @@ export function ClientHeader({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile">Profile</Link>
+              <Link href="/dashboard/profile">Mi cuenta</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <SignOutButton />

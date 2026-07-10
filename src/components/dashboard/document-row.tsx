@@ -2,7 +2,12 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { getSignedFileUrl } from "@/services/documents";
-import { DOCUMENT_STATUS_LABELS, type DocumentWithCompany } from "@/types";
+import {
+  DOCUMENT_STATUS_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  type DocumentType,
+  type DocumentWithCompany,
+} from "@/types";
 import { cn } from "@/lib/utils";
 
 type DocumentRowProps = {
@@ -20,11 +25,15 @@ function formatCurrency(amount: number) {
 
 function formatDate(date: string | null) {
   if (!date) return "—";
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("es", {
     month: "short",
     day: "numeric",
     year: "numeric",
   }).format(new Date(date));
+}
+
+function documentTypeLabel(type: string) {
+  return DOCUMENT_TYPE_LABELS[type as DocumentType] ?? type;
 }
 
 export async function DocumentRow({
@@ -33,6 +42,8 @@ export async function DocumentRow({
   className,
 }: DocumentRowProps) {
   const signedUrl = await getSignedFileUrl(document.file_url);
+  const isPending =
+    document.status === "received" || document.status === "reviewing";
 
   return (
     <div
@@ -47,9 +58,13 @@ export async function DocumentRow({
           <Badge variant={document.status}>
             {DOCUMENT_STATUS_LABELS[document.status]}
           </Badge>
+          {isPending ? (
+            <span className="inline-flex size-2 rounded-full bg-red-500/90" aria-hidden />
+          ) : null}
         </div>
         <p className="text-sm text-muted-foreground">
-          Invoice {document.invoice_number} · {document.document_type}
+          Factura {document.invoice_number} ·{" "}
+          {documentTypeLabel(document.document_type)}
         </p>
         {showCompany && document.company ? (
           <p className="text-sm text-muted-foreground">{document.company.name}</p>
@@ -68,9 +83,9 @@ export async function DocumentRow({
             href={signedUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm font-medium text-primary hover:underline"
+            className="inline-flex min-h-10 items-center text-sm font-medium text-primary hover:underline"
           >
-            View file
+            Ver archivo
           </Link>
         ) : null}
       </div>
