@@ -1,38 +1,79 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const LOCAL_VIEWED_PREFIX = "sinexia:report-viewed:";
+const VIEWED_EVENT = "sinexia:report-viewed";
 
-function subscribe(onStoreChange: () => void) {
-  window.addEventListener("sinexia:report-viewed", onStoreChange);
-  window.addEventListener("storage", onStoreChange);
-  return () => {
-    window.removeEventListener("sinexia:report-viewed", onStoreChange);
-    window.removeEventListener("storage", onStoreChange);
-  };
+/** Stable empty snapshot for SSR and initial client render. */
+const EMPTY_VIEWED: string[] = [];
+
+function readLocalViewedIds(profileId: string): string[] {
+  if (typeof window === "undefined") {
+    return EMPTY_VIEWED;
+  }
+
+  const raw = window.sessionStorage.getItem(`${LOCAL_VIEWED_PREFIX}${profileId}`);
+  if (!raw) {
+    return EMPTY_VIEWED;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return EMPTY_VIEWED;
+    }
+    return parsed.filter((id): id is string => typeof id === "string");
+  } catch {
+    return EMPTY_VIEWED;
+  }
 }
 
-function getLocalViewedIds(profileId: string): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  const raw = window.sessionStorage.getItem(`${LOCAL_VIEWED_PREFIX}${profileId}`);
-  if (!raw) return new Set();
-  try {
-    return new Set(JSON.parse(raw) as string[]);
-  } catch {
-    return new Set();
+function viewedIdsEqual(a: string[], b: string[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
   }
+  return true;
+}
+
+function useLocalViewedIds(profileId: string): string[] {
+  const [localViewed, setLocalViewed] = useState(EMPTY_VIEWED);
+
+  useEffect(() => {
+    function syncFromStorage() {
+      setLocalViewed((prev) => {
+        const next = readLocalViewedIds(profileId);
+        return viewedIdsEqual(prev, next) ? prev : next;
+      });
+    }
+
+    syncFromStorage();
+
+    window.addEventListener(VIEWED_EVENT, syncFromStorage);
+    window.addEventListener("storage", syncFromStorage);
+
+    return () => {
+      window.removeEventListener(VIEWED_EVENT, syncFromStorage);
+      window.removeEventListener("storage", syncFromStorage);
+    };
+  }, [profileId]);
+
+  return localViewed;
 }
 
 export function addLocalViewedReport(profileId: string, reportId: string) {
   if (typeof window === "undefined") return;
-  const current = getLocalViewedIds(profileId);
-  current.add(reportId);
+
+  const current = readLocalViewedIds(profileId);
+  if (current.includes(reportId)) return;
+
   window.sessionStorage.setItem(
     `${LOCAL_VIEWED_PREFIX}${profileId}`,
-    JSON.stringify([...current]),
+    JSON.stringify([...current, reportId]),
   );
-  window.dispatchEvent(new Event("sinexia:report-viewed"));
+  window.dispatchEvent(new Event(VIEWED_EVENT));
 }
 
 export function useUnreadReportsCount(
@@ -40,14 +81,20 @@ export function useUnreadReportsCount(
   reportIds: string[],
   viewedReportIds: string[],
 ): number {
-  const localViewed = useSyncExternalStore(
-    subscribe,
-    () => getLocalViewedIds(profileId),
-    () => new Set<string>(),
-  );
+  const localViewed = useLocalViewedIds(profileId);
 
-  const viewed = new Set([...viewedReportIds, ...localViewed]);
-  return reportIds.filter((id) => !viewed.has(id)).length;
+  const viewed = useMemo(() => {
+    const merged = new Set(viewedReportIds);
+    for (const id of localViewed) {
+      merged.add(id);
+    }
+    return merged;
+  }, [viewedReportIds, localViewed]);
+
+  return useMemo(
+    () => reportIds.filter((id) => !viewed.has(id)).length,
+    [reportIds, viewed],
+  );
 }
 
 export function useIsReportUnread(
@@ -55,17 +102,20 @@ export function useIsReportUnread(
   viewedReportIds: string[],
   profileId: string,
 ): boolean {
-  const localViewed = useSyncExternalStore(
-    subscribe,
-    () => getLocalViewedIds(profileId),
-    () => new Set<string>(),
-  );
+  const localViewed = useLocalViewedIds(profileId);
 
-  const viewed = new Set([...viewedReportIds, ...localViewed]);
+  const viewed = useMemo(() => {
+    const merged = new Set(viewedReportIds);
+    for (const id of localViewed) {
+      merged.add(id);
+    }
+    return merged;
+  }, [viewedReportIds, localViewed]);
+
   return !viewed.has(reportId);
 }
 
 /** @deprecated */
 export function notifyReportsSeen() {
-  window.dispatchEvent(new Event("sinexia:report-viewed"));
+  window.dispatchEvent(new Event(VIEWED_EVENT));
 }
