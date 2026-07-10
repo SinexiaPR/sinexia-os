@@ -11,8 +11,21 @@ import {
   compareLatestDocuments,
   isComparisonIntent,
 } from "@/lib/intelligence/comparison";
+import {
+  buildGptCacheKey,
+  getCachedGptResponse,
+  setCachedGptResponse,
+} from "@/lib/intelligence/gpt-cache";
+import {
+  detectQueryIntent,
+  requiresOpenAI,
+} from "@/lib/intelligence/intents";
+import {
+  answerFromStructuredQuery,
+} from "@/lib/intelligence/query-engine";
 import { getAvailableTrendSummaries } from "@/lib/intelligence/trends";
 import type { SourceReference } from "@/lib/intelligence/types";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { buildAssistantContext } from "@/services/assistant-context";
 
@@ -42,7 +55,13 @@ export type RetrievedChunk = {
   category: string | null;
 };
 
-type AnswerTier = "chunks" | "summaries" | "pending" | "portal_metadata";
+type AnswerTier =
+  | "structured"
+  | "cached"
+  | "chunks"
+  | "summaries"
+  | "pending"
+  | "portal_metadata";
 
 async function resolveAllowedProcessingIds(
   filters: RetrievalFilters,
@@ -252,37 +271,112 @@ async function enrichChunks(
   });
 }
 
-/** Tier 2: search structured summaries when chunk retrieval is empty */
 async function retrieveFromSummaries(
   question: string,
   filters: RetrievalFilters,
 ): Promise<RetrievedChunk[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("document_processing")
+  const { data: profiles } = await supabase
+    .from("document_profiles")
     .select(
-      "id, report_id, document_id, detected_period, report_date, structured_summary, extracted_text, reports(id, title, category, period), documents(id, supplier, invoice_number, document_type)",
+      "id, document_processing_id, report_id, document_id, period, summary, structured_data, document_processing!inner(id, detected_period, report_date, status, reports(id, title, category, period), documents(id, supplier, invoice_number, document_type))",
     )
     .eq("company_id", filters.companyId)
-    .eq("status", "completed")
-    .order("processed_at", { ascending: false })
+    .eq("document_processing.status", "completed")
+    .order("upload_date", { ascending: false })
     .limit(15);
 
-  if (!data?.length) return [];
+  if (!profiles?.length) {
+    const { data } = await supabase
+      .from("document_processing")
+      .select(
+        "id, report_id, document_id, detected_period, report_date, structured_summary, extracted_text, reports(id, title, category, period), documents(id, supplier, invoice_number, document_type)",
+      )
+      .eq("company_id", filters.companyId)
+      .eq("status", "completed")
+      .order("processed_at", { ascending: false })
+      .limit(15);
+
+    if (!data?.length) return [];
+
+    const terms = question
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 3);
+
+    const scored = data
+      .map((row) => {
+        const summary = row.structured_summary as {
+          briefSummary?: string;
+        } | null;
+        const haystack = [
+          summary?.briefSummary ?? "",
+          (row.extracted_text ?? "").slice(0, 4000),
+        ]
+          .join("\n")
+          .toLowerCase();
+        const score = terms.reduce(
+          (acc, term) => acc + (haystack.includes(term) ? 1 : 0),
+          0.1,
+        );
+        return { row, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    return scored.map(({ row, score }) => {
+      const report = row.reports as unknown as {
+        id: string;
+        title: string;
+        category: string;
+        period: string;
+      } | null;
+      const document = row.documents as unknown as {
+        id: string;
+        supplier: string;
+        invoice_number: string;
+        document_type: string;
+      } | null;
+      const summary = row.structured_summary as {
+        briefSummary?: string;
+      } | null;
+
+      return {
+        id: row.id,
+        document_processing_id: row.id,
+        content:
+          summary?.briefSummary ||
+          (row.extracted_text ?? "").slice(0, 1200) ||
+          "Documento analizado sin resumen.",
+        page_number: null,
+        sheet_name: null,
+        row_reference: null,
+        similarity: score,
+        report_id: report?.id ?? row.report_id,
+        document_id: document?.id ?? row.document_id,
+        title: report?.title
+          ? report.title
+          : document
+            ? `${document.document_type} · ${document.supplier}`
+            : "Documento",
+        period: report?.period ?? null,
+        detected_period: row.detected_period,
+        report_date: row.report_date,
+        category: report?.category ?? document?.document_type ?? null,
+      };
+    });
+  }
 
   const terms = question
     .toLowerCase()
     .split(/\s+/)
     .filter((t) => t.length > 3);
 
-  const scored = data
+  const scored = profiles
     .map((row) => {
-      const summary = row.structured_summary as {
-        briefSummary?: string;
-      } | null;
       const haystack = [
-        summary?.briefSummary ?? "",
-        (row.extracted_text ?? "").slice(0, 4000),
+        row.summary ?? "",
+        JSON.stringify(row.structured_data ?? {}),
       ]
         .join("\n")
         .toLowerCase();
@@ -296,43 +390,39 @@ async function retrieveFromSummaries(
     .slice(0, 5);
 
   return scored.map(({ row, score }) => {
-    const report = row.reports as unknown as {
+    const proc = row.document_processing as unknown as {
       id: string;
-      title: string;
-      category: string;
-      period: string;
-    } | null;
-    const document = row.documents as unknown as {
-      id: string;
-      supplier: string;
-      invoice_number: string;
-      document_type: string;
-    } | null;
-    const summary = row.structured_summary as {
-      briefSummary?: string;
-    } | null;
+      detected_period: string | null;
+      report_date: string | null;
+      reports?: { id: string; title: string; category: string; period: string };
+      documents?: {
+        id: string;
+        supplier: string;
+        invoice_number: string;
+        document_type: string;
+      };
+    };
+    const report = proc.reports;
+    const document = proc.documents;
 
     return {
-      id: row.id,
-      document_processing_id: row.id,
-      content:
-        summary?.briefSummary ||
-        (row.extracted_text ?? "").slice(0, 1200) ||
-        "Documento analizado sin resumen.",
+      id: row.document_processing_id,
+      document_processing_id: row.document_processing_id,
+      content: row.summary ?? "Documento analizado.",
       page_number: null,
       sheet_name: null,
       row_reference: null,
       similarity: score,
-      report_id: report?.id ?? row.report_id,
-      document_id: document?.id ?? row.document_id,
+      report_id: row.report_id ?? report?.id ?? null,
+      document_id: row.document_id ?? document?.id ?? null,
       title: report?.title
         ? report.title
         : document
           ? `${document.document_type} · ${document.supplier}`
           : "Documento",
-      period: report?.period ?? null,
-      detected_period: row.detected_period,
-      report_date: row.report_date,
+      period: row.period ?? report?.period ?? null,
+      detected_period: proc.detected_period,
+      report_date: proc.report_date,
       category: report?.category ?? document?.document_type ?? null,
     };
   });
@@ -468,6 +558,52 @@ async function buildComparisonContext(
     .join("\n");
 }
 
+async function tryGptCache(params: {
+  question: string;
+  filters: RetrievalFilters;
+  processingId?: string | null;
+}): Promise<string | null> {
+  try {
+    const admin = createAdminClient();
+    const cacheKey = buildGptCacheKey({
+      companyId: params.filters.companyId,
+      question: params.question,
+      processingId: params.processingId,
+    });
+    return await getCachedGptResponse({ admin, cacheKey });
+  } catch {
+    return null;
+  }
+}
+
+async function storeGptCache(params: {
+  question: string;
+  filters: RetrievalFilters;
+  processingId?: string | null;
+  response: string;
+  modelName?: string | null;
+}): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const cacheKey = buildGptCacheKey({
+      companyId: params.filters.companyId,
+      question: params.question,
+      processingId: params.processingId,
+    });
+    await setCachedGptResponse({
+      admin,
+      cacheKey,
+      companyId: params.filters.companyId,
+      question: params.question,
+      response: params.response,
+      modelName: params.modelName,
+      processingId: params.processingId,
+    });
+  } catch {
+    // cache write is best-effort
+  }
+}
+
 export async function answerWithRetrieval(params: {
   question: string;
   filters: RetrievalFilters;
@@ -477,7 +613,46 @@ export async function answerWithRetrieval(params: {
   model: string | null;
   tier: AnswerTier;
 }> {
-  // Tier 1: analyzed document chunks (vector / keyword)
+  const intent = detectQueryIntent(params.question);
+
+  const structured = await answerFromStructuredQuery({
+    question: params.question,
+    companyId: params.filters.companyId,
+    reportId: params.filters.reportId,
+    period: params.filters.period,
+  });
+
+  if (structured.answered) {
+    return {
+      message:
+        structured.message + formatSourcesAppendix(structured.sources),
+      sources: structured.sources,
+      model: null,
+      tier: "structured",
+    };
+  }
+
+  const { processingId } = await resolveAllowedProcessingIds(params.filters);
+
+  if (
+    isOpenAIConfigured() &&
+    requiresOpenAI(intent)
+  ) {
+    const cached = await tryGptCache({
+      question: params.question,
+      filters: params.filters,
+      processingId,
+    });
+    if (cached) {
+      return {
+        message: cached,
+        sources: [],
+        model: "cache",
+        tier: "cached",
+      };
+    }
+  }
+
   let chunks = await retrieveRelevantChunks(
     params.question,
     params.filters,
@@ -485,13 +660,11 @@ export async function answerWithRetrieval(params: {
   );
   let tier: AnswerTier = "chunks";
 
-  // Tier 2: structured summaries of completed docs / published reports
   if (!chunks.length) {
     chunks = await retrieveFromSummaries(params.question, params.filters);
     if (chunks.length) tier = "summaries";
   }
 
-  // Tier 3: pending / processing / OCR notice
   if (!chunks.length) {
     const pending = await getPendingNotice(params.filters.companyId);
     if (pending) {
@@ -504,7 +677,6 @@ export async function answerWithRetrieval(params: {
     }
   }
 
-  // Tier 4: portal metadata ONLY when no analyzed documents exist
   if (!chunks.length) {
     const supabase = await createClient();
     const { count } = await supabase
@@ -523,7 +695,6 @@ export async function answerWithRetrieval(params: {
       };
     }
 
-    // Last resort — no completed intelligence docs at all
     const context = await buildAssistantContext({
       id: params.filters.userId ?? "",
       email: "",
@@ -586,6 +757,18 @@ export async function answerWithRetrieval(params: {
     };
   }
 
+  if (!requiresOpenAI(intent) && intent !== "unknown") {
+    const top = chunks[0];
+    return {
+      message:
+        `Según el documento «${top.title}» (${top.detected_period ?? top.period ?? "sin periodo"}):\n\n${top.content.slice(0, 600)}` +
+        formatSourcesAppendix(sources),
+      sources,
+      model: null,
+      tier,
+    };
+  }
+
   const result = await chatCompletion({
     system: CHAT_SYSTEM_PROMPT,
     user: CHAT_USER_TEMPLATE({
@@ -599,6 +782,14 @@ export async function answerWithRetrieval(params: {
   const message = result.content.includes("Sources")
     ? result.content
     : result.content + formatSourcesAppendix(sources);
+
+  await storeGptCache({
+    question: params.question,
+    filters: params.filters,
+    processingId,
+    response: message,
+    modelName: result.model,
+  });
 
   return {
     message,

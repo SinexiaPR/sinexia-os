@@ -187,3 +187,10 @@ export function isDetectedDocumentType(
     (ALL_DETECTED_TYPES as readonly string[]).includes(value)
   );
 }
+
+export function detectDocumentTypeHeuristic(
+  filename: string,
+  extractedText: string,
+): DetectedDocumentType {
+  return heuristicClassify(extractedText.slice(0, 8000), filename);
+}

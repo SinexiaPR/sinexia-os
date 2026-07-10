@@ -2,12 +2,13 @@
 
 import { assistantConfig } from "@/config/assistant";
 import { requireClient } from "@/lib/auth/session";
+import { getDocumentHistory } from "@/lib/intelligence/profiles/store";
 import { answerWithRetrieval } from "@/lib/intelligence/retrieval";
 import { getAvailableTrendSummaries } from "@/lib/intelligence/trends";
 import { createClient } from "@/lib/supabase/server";
 import {
-  buildSuggestedQuestions,
-  getCompletedProcessingForCompany,
+  buildSuggestedQuestionsFromProfiles,
+  getProfilesForCompanySuggestions,
 } from "@/services/intelligence";
 
 export type SinexIAChatResult = {
@@ -118,16 +119,48 @@ export async function getSinexIASuggestions() {
     return { suggestions: assistantConfig.suggestedPrompts as unknown as string[] };
   }
 
-  const docs = await getCompletedProcessingForCompany(profile.company_id);
+  const profiles = await getProfilesForCompanySuggestions(profile.company_id);
   return {
-    suggestions: buildSuggestedQuestions(
-      docs.map((d) => ({
-        detected_document_type: d.detected_document_type,
-        detected_period: d.detected_period,
-        structured_summary: d.structured_summary as never,
-        reports: d.reports as never,
+    suggestions: buildSuggestedQuestionsFromProfiles(
+      profiles.map((p) => ({
+        document_type: p.document_type,
+        period: p.period,
+        structured_data: p.structured_data as Record<string, unknown>,
       })),
     ),
+  };
+}
+
+export async function getSinexIADocumentHistory() {
+  const profile = await requireClient();
+  if (!profile.company_id) {
+    return { history: [] };
+  }
+
+  const history = await getDocumentHistory(profile.company_id, 10);
+  return {
+    history: history.map((row) => {
+      const proc = row.document_processing as {
+        processed_at?: string | null;
+        reports?: { title?: string; category?: string } | null;
+        documents?: { supplier?: string; document_type?: string } | null;
+      } | null;
+
+      return {
+        id: row.id as string,
+        documentType: row.document_type as string | null,
+        period: row.period as string | null,
+        summary: row.summary as string | null,
+        confidence: row.extraction_confidence as number | null,
+        uploadDate: row.upload_date as string | null,
+        reportId: row.report_id as string | null,
+        title:
+          proc?.reports?.title ??
+          (proc?.documents
+            ? `${proc.documents.document_type} · ${proc.documents.supplier}`
+            : "Documento"),
+      };
+    }),
   };
 }
 

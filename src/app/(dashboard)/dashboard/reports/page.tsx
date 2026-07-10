@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireAuth } from "@/lib/auth/session";
 import { getCompanies } from "@/services/documents";
-import { getProcessingByReportIds } from "@/services/intelligence";
+import { getProcessingByReportIds, getProfilesByReportIds } from "@/services/intelligence";
 import { getAllReports, getReportsForCompany } from "@/services/reports";
 
 export const metadata: Metadata = {
@@ -24,9 +24,10 @@ export default async function ReportsPage() {
       getCompanies(),
       getAllReports(),
     ]);
-    const processingMap = await getProcessingByReportIds(
-      reports.map((r) => r.id),
-    );
+    const [processingMap, profilesMap] = await Promise.all([
+      getProcessingByReportIds(reports.map((r) => r.id)),
+      getProfilesByReportIds(reports.map((r) => r.id)),
+    ]);
 
     return (
       <div className="space-y-10">
@@ -57,6 +58,7 @@ export default async function ReportsPage() {
           <AdminReportsList
             reports={reports}
             processingByReportId={processingMap}
+            profilesByReportId={profilesMap}
           />
         </div>
       </div>

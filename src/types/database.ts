@@ -6,6 +6,35 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+export type DocumentProfileRow = {
+  id: string;
+  document_processing_id: string;
+  company_id: string;
+  report_id: string | null;
+  document_id: string | null;
+  document_type: string | null;
+  period: string | null;
+  structured_data: Json;
+  summary: string | null;
+  extraction_confidence: number | null;
+  source_document: string | null;
+  upload_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SinexiaGptCacheRow = {
+  id: string;
+  cache_key: string;
+  company_id: string;
+  document_processing_id: string | null;
+  question_normalized: string;
+  response: string;
+  model_name: string | null;
+  created_at: string;
+  expires_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -161,6 +190,67 @@ export type Database = {
           updated_at?: string;
         };
       };
+      document_profiles: {
+        Row: DocumentProfileRow;
+        Insert: {
+          id?: string;
+          document_processing_id: string;
+          company_id: string;
+          report_id?: string | null;
+          document_id?: string | null;
+          document_type?: string | null;
+          period?: string | null;
+          structured_data?: Json;
+          summary?: string | null;
+          extraction_confidence?: number | null;
+          source_document?: string | null;
+          upload_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          document_processing_id?: string;
+          company_id?: string;
+          report_id?: string | null;
+          document_id?: string | null;
+          document_type?: string | null;
+          period?: string | null;
+          structured_data?: Json;
+          summary?: string | null;
+          extraction_confidence?: number | null;
+          source_document?: string | null;
+          upload_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      sinexia_gpt_cache: {
+        Row: SinexiaGptCacheRow;
+        Insert: {
+          id?: string;
+          cache_key: string;
+          company_id: string;
+          document_processing_id?: string | null;
+          question_normalized: string;
+          response: string;
+          model_name?: string | null;
+          created_at?: string;
+          expires_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          cache_key?: string;
+          company_id?: string;
+          document_processing_id?: string | null;
+          question_normalized?: string;
+          response?: string;
+          model_name?: string | null;
+          created_at?: string;
+          expires_at?: string | null;
+        };
+      };
     };
   };
 };
+

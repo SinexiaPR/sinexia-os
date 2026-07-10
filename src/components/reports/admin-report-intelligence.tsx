@@ -13,6 +13,7 @@ import {
   DETECTED_TYPE_LABELS,
   STATUS_LABELS,
 } from "@/lib/intelligence/constants";
+import type { DocumentProfileRow } from "@/lib/intelligence/profiles/types";
 import type {
   DetectedDocumentType,
   DocumentProcessingStatus,
@@ -33,6 +34,7 @@ export type AdminProcessingInfo = {
 type AdminReportIntelligenceProps = {
   reportId: string;
   processing: AdminProcessingInfo | null;
+  profile?: DocumentProfileRow | null;
 };
 
 const TYPE_OPTIONS: DetectedDocumentType[] = [
@@ -55,8 +57,10 @@ const TYPE_OPTIONS: DetectedDocumentType[] = [
 export function AdminReportIntelligence({
   reportId,
   processing,
+  profile,
 }: AdminReportIntelligenceProps) {
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showJson, setShowJson] = useState(false);
   const [docType, setDocType] = useState<DetectedDocumentType>(
     processing?.detected_document_type ?? "other",
   );
@@ -66,6 +70,12 @@ export function AdminReportIntelligence({
 
   const status = processing?.status ?? "pending";
   const statusLabel = STATUS_LABELS[status] ?? status;
+  const summaryText =
+    profile?.summary ?? processing?.structured_summary?.briefSummary ?? null;
+  const confidence =
+    profile?.extraction_confidence ??
+    processing?.structured_summary?.confidence ??
+    null;
 
   return (
     <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
@@ -94,6 +104,11 @@ export function AdminReportIntelligence({
         {processing?.detected_period ? (
           <span>Periodo detectado: {processing.detected_period}</span>
         ) : null}
+        {confidence != null ? (
+          <span>
+            Confianza: {Math.round(confidence * 100)}%
+          </span>
+        ) : null}
       </div>
 
       {processing?.processing_error ? (
@@ -118,7 +133,7 @@ export function AdminReportIntelligence({
             });
           }}
         >
-          Procesar nuevamente
+          Reprocess
         </Button>
         <Button
           type="button"
@@ -139,9 +154,47 @@ export function AdminReportIntelligence({
       {showAnalysis ? (
         <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
           <p className="text-muted-foreground">
-            {processing?.structured_summary?.briefSummary ??
-              "Sin resumen automático todavía."}
+            {summaryText ?? "Sin resumen automático todavía."}
           </p>
+
+          {profile?.structured_data &&
+          Object.keys(profile.structured_data).length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-foreground">
+                Datos estructurados
+              </p>
+              <dl className="grid gap-1 text-xs sm:grid-cols-2">
+                {Object.entries(profile.structured_data)
+                  .filter(([key]) => key !== "source_document")
+                  .slice(0, 12)
+                  .map(([key, value]) => (
+                    <div key={key} className="flex gap-2">
+                      <dt className="text-muted-foreground">{key}:</dt>
+                      <dd className="font-medium text-foreground">
+                        {value == null ? "—" : String(value)}
+                      </dd>
+                    </div>
+                  ))}
+              </dl>
+            </div>
+          ) : null}
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-xs"
+            onClick={() => setShowJson((v) => !v)}
+          >
+            {showJson ? "Ocultar JSON" : "JSON Viewer"}
+          </Button>
+
+          {showJson && profile?.structured_data ? (
+            <pre className="max-h-48 overflow-auto rounded-md border border-border bg-background p-2 text-[11px] leading-relaxed text-foreground">
+              {JSON.stringify(profile.structured_data, null, 2)}
+            </pre>
+          ) : null}
+
           {processing?.structured_summary?.warnings?.length ? (
             <ul className="list-disc pl-4 text-xs text-amber-800">
               {processing.structured_summary.warnings.map((w) => (

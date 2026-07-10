@@ -19,6 +19,11 @@ type ComparableRow = {
     invoice_number: string;
     document_type: string;
   } | null;
+  document_profiles?: Array<{
+    structured_data: Record<string, unknown> | null;
+    extraction_confidence: number | null;
+    summary: string | null;
+  }> | null;
 };
 
 function titleFor(row: ComparableRow): string {
@@ -47,10 +52,21 @@ function entitySet(summary: StructuredSummary | null): Set<string> {
 
 function numericTotals(
   summary: StructuredSummary | null,
+  profileData?: Record<string, unknown> | null,
 ): Record<string, number> {
   const out: Record<string, number> = {};
+
+  if (profileData) {
+    for (const [key, raw] of Object.entries(profileData)) {
+      if (typeof raw === "number" && Number.isFinite(raw)) {
+        out[key] = raw;
+      }
+    }
+  }
+
   if (!summary?.mainTotals) return out;
   for (const [key, raw] of Object.entries(summary.mainTotals)) {
+    if (out[key] != null) continue;
     const num =
       typeof raw === "number"
         ? raw
@@ -60,6 +76,14 @@ function numericTotals(
     if (!Number.isNaN(num)) out[key] = num;
   }
   return out;
+}
+
+function profileConfidence(row: ComparableRow): number {
+  const profile = row.document_profiles?.[0];
+  if (profile?.extraction_confidence != null) {
+    return profile.extraction_confidence;
+  }
+  return row.structured_summary?.confidence ?? 0;
 }
 
 /**
@@ -76,7 +100,7 @@ export async function compareLatestDocuments(params: {
   let query = supabase
     .from("document_processing")
     .select(
-      "id, report_id, document_id, detected_document_type, detected_period, structured_summary, processed_at, reports(id, title, period), documents(id, supplier, invoice_number, document_type)",
+      "id, report_id, document_id, detected_document_type, detected_period, structured_summary, processed_at, reports(id, title, period), documents(id, supplier, invoice_number, document_type), document_profiles(structured_data, extraction_confidence, summary)",
     )
     .eq("company_id", params.companyId)
     .eq("status", "completed")
@@ -134,8 +158,11 @@ export async function compareLatestDocuments(params: {
     };
   }
 
-  const curTotals = numericTotals(current.structured_summary);
-  const prevTotals = numericTotals(previous.structured_summary);
+  const curProfile = current.document_profiles?.[0]?.structured_data ?? null;
+  const prevProfile = previous.document_profiles?.[0]?.structured_data ?? null;
+
+  const curTotals = numericTotals(current.structured_summary, curProfile);
+  const prevTotals = numericTotals(previous.structured_summary, prevProfile);
   const keys = new Set([
     ...Object.keys(curTotals),
     ...Object.keys(prevTotals),
@@ -183,8 +210,8 @@ export async function compareLatestDocuments(params: {
   }
 
   const confidenceOk =
-    (current.structured_summary?.confidence ?? 0) >= 0.35 &&
-    (previous.structured_summary?.confidence ?? 0) >= 0.35;
+    profileConfidence(current) >= 0.35 &&
+    profileConfidence(previous) >= 0.35;
 
   if (!confidenceOk && !highlights.length) {
     return {

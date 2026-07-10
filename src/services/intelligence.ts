@@ -3,6 +3,7 @@ import type {
   DocumentProcessingStatus,
   StructuredSummary,
 } from "@/lib/intelligence/types";
+import type { DocumentProfileRow } from "@/lib/intelligence/profiles/types";
 import { createClient } from "@/lib/supabase/server";
 
 export type DocumentProcessingRow = {
@@ -56,6 +57,32 @@ export async function getProcessingByReportIds(
   return map;
 }
 
+export async function getProfilesByReportIds(
+  reportIds: string[],
+): Promise<Map<string, DocumentProfileRow>> {
+  const map = new Map<string, DocumentProfileRow>();
+  if (!reportIds.length) return map;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("document_profiles")
+    .select("*")
+    .in("report_id", reportIds);
+
+  if (error) {
+    console.error("[intelligence] getProfilesByReportIds", error.message);
+    return map;
+  }
+
+  for (const row of data ?? []) {
+    if (row.report_id) {
+      map.set(row.report_id, row as DocumentProfileRow);
+    }
+  }
+
+  return map;
+}
+
 export async function getProcessingByReportId(
   reportId: string,
 ): Promise<DocumentProcessingRow | null> {
@@ -96,6 +123,114 @@ export async function getCompletedProcessingForCompany(companyId: string) {
   return data ?? [];
 }
 
+export async function getProfilesForCompanySuggestions(companyId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("document_profiles")
+    .select(
+      "document_type, period, summary, structured_data, extraction_confidence, report_id, reports(title, category)",
+    )
+    .eq("company_id", companyId)
+    .order("upload_date", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    console.error("[intelligence] getProfilesForCompanySuggestions", error.message);
+    return [];
+  }
+
+  return data ?? [];
+}
+
+export function buildSuggestedQuestionsFromProfiles(
+  profiles: Array<{
+    document_type: DetectedDocumentType | null;
+    period?: string | null;
+    structured_data?: Record<string, unknown> | null;
+  }>,
+): string[] {
+  if (!profiles.length) {
+    return [
+      "¿Qué documentos tengo analizados?",
+      "Resumime el último reporte disponible.",
+    ];
+  }
+
+  const types = new Set(
+    profiles.map((p) => p.document_type).filter(Boolean),
+  );
+  const suggestions: string[] = [];
+
+  if (types.has("payroll") || types.has("homebase_export")) {
+    suggestions.push(
+      "What is the payroll total?",
+      "How many employees?",
+      "How many overtime hours?",
+      "Compare payroll with previous week.",
+    );
+  }
+
+  if (types.has("accounts_receivable") || types.has("custom_aging")) {
+    suggestions.push(
+      "Total receivables",
+      "How many customers are in receivables?",
+      "How many invoices?",
+      "Compare with previous report",
+    );
+  }
+
+  if (types.has("accounts_payable")) {
+    suggestions.push(
+      "Total payables",
+      "How many vendors?",
+      "Compare this AP aging with the previous report.",
+    );
+  }
+
+  if (types.has("profit_and_loss") || types.has("quickbooks_report")) {
+    suggestions.push(
+      "What is revenue?",
+      "What are expenses?",
+      "What is net income?",
+      "Summarize this financial report.",
+    );
+  }
+
+  if (types.has("balance_sheet")) {
+    suggestions.push(
+      "What are total assets?",
+      "What are liabilities?",
+      "What is equity?",
+    );
+  }
+
+  if (types.has("bank_reconciliation")) {
+    suggestions.push(
+      "What is the reconciliation difference?",
+      "Compare with previous reconciliation.",
+    );
+  }
+
+  if (types.has("bank_statement") || types.has("statement")) {
+    suggestions.push(
+      "What is the closing balance?",
+      "Compare with previous statement.",
+    );
+  }
+
+  if (profiles.length >= 2) {
+    suggestions.push(
+      "What changed since the previous upload?",
+      "Compare the last two reports.",
+    );
+  }
+
+  suggestions.push("Summarize this report.");
+
+  return [...new Set(suggestions)].slice(0, 10);
+}
+
+/** @deprecated Use buildSuggestedQuestionsFromProfiles */
 export function buildSuggestedQuestions(
   docs: Array<{
     detected_document_type: DetectedDocumentType | null;
@@ -104,71 +239,11 @@ export function buildSuggestedQuestions(
     reports?: { title?: string } | null;
   }>,
 ): string[] {
-  if (!docs.length) {
-    return [
-      "¿Qué documentos tengo analizados?",
-      "Resumime el último reporte disponible.",
-    ];
-  }
-
-  const types = new Set(
-    docs.map((d) => d.detected_document_type).filter(Boolean),
+  return buildSuggestedQuestionsFromProfiles(
+    docs.map((d) => ({
+      document_type: d.detected_document_type,
+      period: d.detected_period,
+      structured_data: d.structured_summary?.mainTotals ?? null,
+    })),
   );
-  const suggestions: string[] = [];
-
-  if (types.has("accounts_receivable") || types.has("custom_aging")) {
-    suggestions.push(
-      "How much is currently outstanding?",
-      "Which customers owe more than 60 days?",
-      "Which invoices expire this week?",
-      "Compare this aging with last week's.",
-      "Which customers owe the most?",
-    );
-  }
-
-  if (types.has("accounts_payable")) {
-    suggestions.push(
-      "Which vendors represent the largest payments?",
-      "What invoices should be paid first?",
-      "Compare this AP aging with the previous report.",
-    );
-  }
-
-  if (types.has("payroll") || types.has("homebase_export")) {
-    suggestions.push(
-      "How much payroll did I pay this month?",
-      "Who worked the most overtime?",
-      "Compare payroll with previous week.",
-      "Summarize this payroll.",
-    );
-  }
-
-  if (types.has("profit_and_loss") || types.has("balance_sheet")) {
-    suggestions.push(
-      "Summarize this financial report.",
-      "What changed compared to the previous report?",
-    );
-  }
-
-  if (types.has("invoice") || types.has("purchase_order")) {
-    suggestions.push(
-      "Resumime esta factura.",
-      "¿Cuál es el monto y la fecha de vencimiento?",
-    );
-  }
-
-  // Always include comparison / change prompts when ≥2 docs
-  if (docs.length >= 2) {
-    suggestions.push(
-      "What changed since the previous upload?",
-      "What trends appear across the latest documents?",
-    );
-  }
-
-  suggestions.push(
-    "Resumime este reporte.",
-    "¿Qué información relevante debería revisar?",
-  );
-
-  return [...new Set(suggestions)].slice(0, 10);
 }

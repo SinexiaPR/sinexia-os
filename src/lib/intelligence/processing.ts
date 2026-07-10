@@ -2,13 +2,23 @@ import {
   INTELLIGENCE_LIMITS,
   INTELLIGENCE_PROMPT_VERSION,
 } from "@/lib/intelligence/constants";
-import { classifyDocument } from "@/lib/intelligence/classification";
+import {
+  classifyDocument,
+  detectDocumentTypeHeuristic,
+} from "@/lib/intelligence/classification";
 import { embedChunks } from "@/lib/intelligence/embeddings";
 import {
   extractDocument,
   getFileExtension,
   isAnalyzableFilename,
 } from "@/lib/intelligence/extraction";
+import {
+  profileToStructuredSummary,
+  runSpecializedExtractor,
+} from "@/lib/intelligence/extractors";
+import { upsertDocumentProfile } from "@/lib/intelligence/profiles/store";
+import { REPORT_CATEGORY_TO_TYPE } from "@/lib/intelligence/profiles/types";
+import type { DetectedDocumentType } from "@/lib/intelligence/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REPORTS_BUCKET } from "@/lib/constants/reports";
 import { logServerError } from "@/lib/errors/action-error";
@@ -18,6 +28,27 @@ const DOCUMENTS_BUCKET = "documents";
 
 function logProcessing(event: string, meta: Record<string, unknown>) {
   console.info(`[sinexia-intelligence] ${event}`, meta);
+}
+
+const STRUCTURED_TYPES = new Set<DetectedDocumentType>([
+  "payroll",
+  "homebase_export",
+  "accounts_receivable",
+  "accounts_payable",
+  "custom_aging",
+  "profit_and_loss",
+  "balance_sheet",
+  "quickbooks_report",
+  "bank_reconciliation",
+  "bank_statement",
+  "statement",
+]);
+
+function shouldSkipEmbeddings(
+  documentType: DetectedDocumentType,
+  profileConfidence: number,
+): boolean {
+  return profileConfidence >= 0.35 && STRUCTURED_TYPES.has(documentType);
 }
 
 function parseReportDate(value: string | null | undefined): string | null {
@@ -40,6 +71,7 @@ async function runPipeline(params: {
   filename: string;
   titleHint: string;
   fallbackPeriod: string | null;
+  reportCategory?: string | null;
   sourceMeta: { reportId?: string; documentId?: string };
 }): Promise<{ ok: boolean; status?: string; error?: string }> {
   const {
@@ -51,6 +83,7 @@ async function runPipeline(params: {
     filename,
     titleHint,
     fallbackPeriod,
+    reportCategory,
     sourceMeta,
   } = params;
 
@@ -137,45 +170,99 @@ async function runPipeline(params: {
       return { ok: true, status: "requires_ocr" };
     }
 
-    const classification = await classifyDocument({
-      filename: `${titleHint}.${fileFormat}`,
-      extractedText: extraction.text,
+    const uploadDate = new Date().toISOString();
+    const heuristicType =
+      (reportCategory && REPORT_CATEGORY_TO_TYPE[reportCategory]) ||
+      detectDocumentTypeHeuristic(filename, extraction.text);
+
+    const profile = runSpecializedExtractor({
+      documentType: heuristicType,
+      extraction,
+      filename,
+      titleHint,
+      fallbackPeriod,
+      uploadDate,
+      reportCategory,
     });
 
+    const skipGptClassification =
+      Boolean(reportCategory) || profile.confidence >= 0.35;
+
+    const classification = skipGptClassification
+      ? {
+          summary: profileToStructuredSummary(profile, heuristicType),
+          model: null,
+          tokenUsage: 0,
+        }
+      : await classifyDocument({
+          filename: `${titleHint}.${fileFormat}`,
+          extractedText: extraction.text,
+        });
+
     const detectedPeriod =
-      classification.summary.reportPeriod || fallbackPeriod || null;
+      profile.period ||
+      classification.summary.reportPeriod ||
+      fallbackPeriod ||
+      null;
     const reportDate = parseReportDate(
       classification.summary.documentDate ?? detectedPeriod,
     );
 
-    const { chunks: embeddedChunks, tokenUsage: embedTokens } =
-      await embedChunks(extraction.chunks);
+    const skipEmbeddings = shouldSkipEmbeddings(
+      profile.documentType,
+      profile.confidence,
+    );
+
+    let embedTokens = 0;
+    let embeddedChunks: Awaited<ReturnType<typeof embedChunks>>["chunks"] = [];
 
     await admin
       .from("document_chunks")
       .delete()
       .eq("document_processing_id", processingId);
 
-    if (embeddedChunks.length) {
-      const rows = embeddedChunks.map((chunk, index) => ({
-        document_processing_id: processingId,
-        company_id: companyId,
-        content: chunk.content,
-        page_number: chunk.pageNumber,
-        sheet_name: chunk.sheetName,
-        row_reference: chunk.rowReference,
-        chunk_index: index,
-        embedding: chunk.embedding,
-      }));
+    if (!skipEmbeddings) {
+      const embedded = await embedChunks(extraction.chunks);
+      embeddedChunks = embedded.chunks;
+      embedTokens = embedded.tokenUsage ?? 0;
 
-      const { error: chunkError } = await admin
-        .from("document_chunks")
-        .insert(rows);
+      if (embeddedChunks.length) {
+        const rows = embeddedChunks.map((chunk, index) => ({
+          document_processing_id: processingId,
+          company_id: companyId,
+          content: chunk.content,
+          page_number: chunk.pageNumber,
+          sheet_name: chunk.sheetName,
+          row_reference: chunk.rowReference,
+          chunk_index: index,
+          embedding: chunk.embedding,
+        }));
 
-      if (chunkError) {
-        throw new Error(`Chunk insert failed: ${chunkError.message}`);
+        const { error: chunkError } = await admin
+          .from("document_chunks")
+          .insert(rows);
+
+        if (chunkError) {
+          throw new Error(`Chunk insert failed: ${chunkError.message}`);
+        }
       }
     }
+
+    await upsertDocumentProfile({
+      admin,
+      processingId,
+      companyId,
+      reportId: sourceMeta.reportId ?? null,
+      documentId: sourceMeta.documentId ?? null,
+      profile: {
+        ...profile,
+        period: detectedPeriod,
+        structuredData: {
+          ...profile.structuredData,
+          period: detectedPeriod,
+        },
+      },
+    });
 
     const totalTokens =
       (classification.tokenUsage ?? 0) + (embedTokens ?? 0);
@@ -184,7 +271,7 @@ async function runPipeline(params: {
       .from("document_processing")
       .update({
         status: "completed",
-        detected_document_type: classification.summary.documentType,
+        detected_document_type: profile.documentType ?? classification.summary.documentType,
         detected_period: detectedPeriod,
         report_date: reportDate,
         currency: classification.summary.currency,
@@ -351,6 +438,7 @@ export async function processReportDocument(options: {
     filename,
     titleHint: report.title,
     fallbackPeriod: report.period,
+    reportCategory: report.category,
     sourceMeta: { reportId },
   });
 }

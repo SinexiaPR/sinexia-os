@@ -8,11 +8,13 @@ import {
 import { ReportCategoryDisplay } from "@/components/reports/report-category-display";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { getSignedReportFileUrl } from "@/services/reports";
+import type { DocumentProfileRow } from "@/lib/intelligence/profiles/types";
 import type { ReportWithCompany } from "@/types";
 
 type AdminReportsListProps = {
   reports: ReportWithCompany[];
   processingByReportId: Map<string, AdminProcessingInfo>;
+  profilesByReportId?: Map<string, DocumentProfileRow>;
 };
 
 function formatDate(date: string) {
@@ -26,9 +28,11 @@ function formatDate(date: string) {
 async function AdminReportRow({
   report,
   processing,
+  profile,
 }: {
   report: ReportWithCompany;
   processing: AdminProcessingInfo | null;
+  profile: DocumentProfileRow | null;
 }) {
   const signedUrl = await getSignedReportFileUrl(report.file_url);
 
@@ -59,6 +63,7 @@ async function AdminReportRow({
           <AdminReportIntelligence
             reportId={report.id}
             processing={processing}
+            profile={profile}
           />
         </div>
 
@@ -85,6 +90,7 @@ async function AdminReportRow({
 export async function AdminReportsList({
   reports,
   processingByReportId,
+  profilesByReportId,
 }: AdminReportsListProps) {
   if (reports.length === 0) {
     return (
@@ -103,6 +109,7 @@ export async function AdminReportsList({
           key={report.id}
           report={report}
           processing={processingByReportId.get(report.id) ?? null}
+          profile={profilesByReportId?.get(report.id) ?? null}
         />
       ))}
     </div>

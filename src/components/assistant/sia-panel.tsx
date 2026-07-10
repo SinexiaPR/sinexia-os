@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import {
   askSinexIA,
   getSinexIASuggestions,
+  getSinexIADocumentHistory,
 } from "@/actions/sinexia-chat";
 import { assistantConfig } from "@/config/assistant";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,16 @@ type FilterOption = {
   period: string;
 };
 
+type HistoryEntry = {
+  id: string;
+  title: string;
+  documentType: string | null;
+  period: string | null;
+  summary: string | null;
+  reportId: string | null;
+  uploadDate: string | null;
+};
+
 type SinexIAPanelProps = {
   reports: FilterOption[];
 };
@@ -53,11 +64,17 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
   const [reportId, setReportId] = useState(initialReportId);
   const [category, setCategory] = useState("");
   const [period, setPeriod] = useState("");
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
     void getSinexIASuggestions().then((res) => {
       if (res.suggestions?.length) {
         setSuggestions(res.suggestions);
+      }
+    });
+    void getSinexIADocumentHistory().then((res) => {
+      if (res.history?.length) {
+        setHistory(res.history);
       }
     });
   }, []);
@@ -168,6 +185,50 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
             </select>
           </label>
         </div>
+
+        {history.length > 0 ? (
+          <div className="space-y-2 border-t border-border/60 pt-4">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Document History
+            </p>
+            <ul className="space-y-2">
+              {history.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">
+                      {item.title}
+                    </span>
+                    {item.period ? (
+                      <span className="text-xs text-muted-foreground">
+                        {item.period}
+                      </span>
+                    ) : null}
+                  </div>
+                  {item.summary ? (
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {item.summary}
+                    </p>
+                  ) : null}
+                  {item.reportId ? (
+                    <button
+                      type="button"
+                      className="mt-2 text-xs text-primary hover:underline"
+                      onClick={() => {
+                        setReportId(item.reportId!);
+                        if (item.period) setPeriod(item.period);
+                      }}
+                    >
+                      Preguntar sobre este documento
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           {suggestions.map((prompt) => (
