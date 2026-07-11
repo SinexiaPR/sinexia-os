@@ -52,11 +52,18 @@ export type CompanyWithStats = Company & {
 export const PENDING_STATUSES: DocumentStatus[] = ["received", "reviewing"];
 
 export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
-  received: "Received",
-  reviewing: "Reviewing",
-  processed: "Processed",
-  rejected: "Rejected",
+  received: "Pendiente",
+  reviewing: "En revisión",
+  processed: "Procesado",
+  rejected: "Falta información",
 };
+
+export const DOCUMENT_STATUS_OPTIONS: DocumentStatus[] = [
+  "received",
+  "reviewing",
+  "processed",
+  "rejected",
+];
 
 export const DOCUMENT_TYPE_OPTIONS = [
   "Invoice",

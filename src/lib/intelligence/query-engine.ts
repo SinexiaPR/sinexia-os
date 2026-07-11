@@ -1,5 +1,6 @@
 import { compareLatestDocuments } from "@/lib/intelligence/comparison";
 import {
+  buildQuickBooksARAnalyticalSummary,
   isQuickBooksARProfile,
   type QuickBooksARCustomer,
   type QuickBooksARProfile,
@@ -10,6 +11,7 @@ import {
   type QueryIntent,
 } from "@/lib/intelligence/intents";
 import { getProfilesForCompany } from "@/lib/intelligence/profiles/store";
+import type { PayrollEmployeeSummary } from "@/lib/intelligence/profiles/types";
 import type { SourceReference } from "@/lib/intelligence/types";
 
 type StructuredAnswer = {
@@ -76,6 +78,18 @@ function readField(
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function readPayrollEmployees(
+  data: Record<string, unknown>,
+): PayrollEmployeeSummary[] {
+  if (!Array.isArray(data.employees)) return [];
+  return data.employees.filter(
+    (entry): entry is PayrollEmployeeSummary =>
+      typeof entry === "object" &&
+      entry != null &&
+      typeof (entry as PayrollEmployeeSummary).name === "string",
+  );
+}
+
 function answerQuickBooksAR(
   intent: QueryIntent,
   data: QuickBooksARProfile,
@@ -84,11 +98,11 @@ function answerQuickBooksAR(
 
   switch (intent) {
     case "receivable_total":
-      return `Total receivable: ${formatMoney(data.total_receivable ?? data.grand_total)}.`;
+      return `El total pendiente por cobrar es ${formatMoney(data.total_receivable ?? data.grand_total)}.`;
     case "customer_count":
-      return formatCount(data.customer_count ?? customers.length, "Customers");
+      return formatCount(data.customer_count ?? customers.length, "Clientes");
     case "invoice_count_receivable":
-      return formatCount(data.invoice_count, "Invoices");
+      return formatCount(data.invoice_count, "Facturas");
     case "top_debtors": {
       if (!customers.length) {
         return "No customer balances were extracted from this receivable report.";
@@ -128,16 +142,41 @@ function answerFromProfileData(
   }
 
   switch (intent) {
-    case "payroll_total":
-      return `Total de nómina: ${formatMoney(readField(data, "total_payroll"))}.`;
+    case "payroll_total": {
+      const totalPayroll = readField(data, "total_payroll");
+      if (totalPayroll == null) {
+        return "No hay monto de nómina en el archivo cargado (solo horas/propinas).";
+      }
+      return `Total de nómina: ${formatMoney(totalPayroll)}.`;
+    }
     case "employee_count":
       return formatCount(readField(data, "employee_count"), "Empleados");
+    case "most_hours_worked": {
+      const employees = readPayrollEmployees(data);
+      if (!employees.length) return null;
+      const ranked = [...employees].sort(
+        (a, b) => (b.total_hours ?? 0) - (a.total_hours ?? 0),
+      );
+      const top = ranked[0];
+      if (!top?.total_hours) {
+        return "No hay horas registradas por empleado en este archivo.";
+      }
+      const lines = ranked
+        .slice(0, 5)
+        .map(
+          (employee, index) =>
+            `${index + 1}. ${employee.name}: ${employee.total_hours?.toLocaleString("en-US") ?? 0} horas`,
+        );
+      return `Quién trabajó más horas:\n${lines.join("\n")}`;
+    }
+    case "total_hours":
+      return formatCount(readField(data, "total_hours"), "Horas totales");
     case "overtime_hours":
       return formatCount(readField(data, "overtime_hours"), "Horas extra");
     case "total_tips":
       return `Propinas: ${formatMoney(readField(data, "total_tips"))}.`;
     case "receivable_total":
-      return `Total por cobrar: ${formatMoney(readField(data, "total_receivable"))}.`;
+      return `El total pendiente por cobrar es ${formatMoney(readField(data, "total_receivable"))}.`;
     case "customer_count":
       return formatCount(readField(data, "customer_count"), "Clientes");
     case "invoice_count_receivable":
@@ -251,9 +290,43 @@ export async function answerFromStructuredQuery(params: {
         reportId: params.reportId,
         period: params.period,
       });
-      const preferred =
-        profiles.find((p) => p.document_type === "payroll") ?? profiles[0];
-      const latest = preferred;
+      const arPreferred =
+        /cuentas?\s*por\s*cobrar|receivable|cobrar|aging|balance\s*detail/i.test(
+          params.question,
+        );
+      const payrollPreferred =
+        (/n[oó]mina|payroll/i.test(params.question) ||
+          profiles.some((p) => p.document_type === "payroll")) &&
+        !arPreferred;
+
+      if (arPreferred) {
+        const arProfile = profiles.find(
+          (profile) =>
+            profile.document_type === "accounts_receivable" &&
+            isQuickBooksARProfile(
+              (profile.structured_data ?? {}) as Record<string, unknown>,
+            ),
+        );
+        if (
+          arProfile &&
+          (arProfile.extraction_confidence ?? 0) >= 0.35
+        ) {
+          const message = buildQuickBooksARAnalyticalSummary(
+            arProfile.structured_data as unknown as QuickBooksARProfile,
+          );
+          return {
+            answered: true,
+            message,
+            sources: profileSources(profiles),
+            intent,
+          };
+        }
+      }
+
+      const latest = payrollPreferred
+        ? profiles.find((p) => p.document_type === "payroll") ?? profiles[0]
+        : profiles.find((p) => p.document_type === "accounts_receivable") ??
+          profiles[0];
       if (
         latest?.summary &&
         (latest.extraction_confidence ?? 0) >= 0.35
@@ -395,6 +468,8 @@ export async function answerFromStructuredQuery(params: {
   const payrollIntents = new Set([
     "payroll_total",
     "employee_count",
+    "most_hours_worked",
+    "total_hours",
     "overtime_hours",
     "total_tips",
   ]);

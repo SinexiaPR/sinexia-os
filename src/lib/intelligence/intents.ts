@@ -1,6 +1,8 @@
 export type QueryIntent =
   | "payroll_total"
   | "employee_count"
+  | "most_hours_worked"
+  | "total_hours"
   | "overtime_hours"
   | "total_tips"
   | "receivable_total"
@@ -33,8 +35,18 @@ const PAYROLL_TOTAL = [
 ];
 const EMPLOYEE_COUNT = [
   /how\s*many\s*employees?/i,
-  /cu[aá]ntos?\s*empleados?/i,
+  /cu[aá]ntos?\s*empleados?\s*(aparecen|hay|tiene|tiene\s*la\s*n[oó]mina|en\s*(la\s*)?(n[oó]mina|planilla|hoja|archivo|reporte))?/i,
   /employee\s*count/i,
+];
+const MOST_HOURS = [
+  /qui[eé]n\s*trabaj[oó]\s*m[aá]s\s*horas?/i,
+  /who\s*worked\s*(the\s*)?most\s*hours?/i,
+  /empleado\s*con\s*m[aá]s\s*horas?/i,
+];
+const TOTAL_HOURS = [
+  /cu[aá]ntas?\s*horas?\s*(totales?|hay|trabajadas?|en\s*(la\s*)?(n[oó]mina|planilla|archivo))?/i,
+  /total\s*hours?/i,
+  /horas?\s*totales?/i,
 ];
 const OVERTIME = [/overtime/i, /horas?\s*extra/i];
 const TIPS = [/tips?/i, /propinas?/i];
@@ -44,6 +56,7 @@ const RECEIVABLE_TOTAL = [
   /cuentas?\s*por\s*cobrar/i,
   /outstanding/i,
   /total\s*por\s*cobrar/i,
+  /cu[aá]nto\s*me\s*deben?/i,
   /what\s*is\s*my\s*receivable/i,
   /grand\s*total/i,
 ];
@@ -114,6 +127,7 @@ const SUMMARY = [
   /describ/i,
   /explain/i,
   /explic/i,
+  /analiz[aá]me/i,
 ];
 const REASONING = [
   /pattern/i,
@@ -146,6 +160,8 @@ export function detectQueryIntent(question: string): QueryIntent {
 
   if (matchesAny(q, PAYROLL_TOTAL)) return "payroll_total";
   if (matchesAny(q, EMPLOYEE_COUNT)) return "employee_count";
+  if (matchesAny(q, MOST_HOURS)) return "most_hours_worked";
+  if (matchesAny(q, TOTAL_HOURS)) return "total_hours";
   if (matchesAny(q, OVERTIME)) return "overtime_hours";
   if (matchesAny(q, TIPS)) return "total_tips";
 

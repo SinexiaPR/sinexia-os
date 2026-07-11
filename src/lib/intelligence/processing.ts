@@ -8,10 +8,9 @@ import {
 } from "@/lib/intelligence/classification";
 import { embedChunks } from "@/lib/intelligence/embeddings";
 import {
-  extractDocument,
   getFileExtension,
   isAnalyzableFilename,
-} from "@/lib/intelligence/extraction";
+} from "@/lib/intelligence/extraction/utils";
 import {
   profileToStructuredSummary,
   runSpecializedExtractor,
@@ -496,6 +495,9 @@ async function runPipeline(params: {
       }
     }
 
+    const { extractDocument } = await import(
+      "@/lib/intelligence/extraction/extract-document"
+    );
     const extraction = await extractDocument(buffer, filename);
 
     logSpreadsheetStep(
@@ -545,6 +547,10 @@ async function runPipeline(params: {
     }
 
     if (extraction.requiresOcr) {
+      const ocrMessage =
+        fileFormat === "pdf"
+          ? "Este PDF no contiene texto extraíble y requiere OCR para ser analizado por SinexIA."
+          : "Este documento requiere OCR para ser analizado por SinexIA.";
       await admin
         .from("document_processing")
         .update({
@@ -553,12 +559,14 @@ async function runPipeline(params: {
           original_filename: filename,
           structured_summary: {
             warnings: [
-              "Documento sin texto extraíble. Se requiere OCR (pendiente).",
+              fileFormat === "pdf"
+                ? "PDF sin texto extraíble. Se requiere OCR (pendiente)."
+                : "Documento sin texto extraíble. Se requiere OCR (pendiente).",
             ],
             briefSummary: "Requiere OCR",
             confidence: 0,
           },
-          processing_error: "Este documento requiere OCR para ser analizado por SinexIA.",
+          processing_error: ocrMessage,
           processed_at: new Date().toISOString(),
           prompt_version: INTELLIGENCE_PROMPT_VERSION,
         })
@@ -618,6 +626,31 @@ async function runPipeline(params: {
       },
       fileFormat,
     );
+
+    if (fileFormat === "pdf" || profile.documentType === "accounts_receivable") {
+      logProcessing("profile_extracted", {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        detectedDocumentType: profile.documentType,
+        customerCount:
+          typeof profile.structuredData.customer_count === "number"
+            ? profile.structuredData.customer_count
+            : null,
+        invoiceCount:
+          typeof profile.structuredData.invoice_count === "number"
+            ? profile.structuredData.invoice_count
+            : null,
+        totalReceivable:
+          typeof profile.structuredData.total_receivable === "number"
+            ? profile.structuredData.total_receivable
+            : null,
+        structuredProfileGenerated,
+        confidence: profile.confidence,
+      });
+    }
 
     const skipGptClassification =
       Boolean(reportCategory) || profile.confidence >= 0.35;
@@ -764,6 +797,19 @@ async function runPipeline(params: {
       chunks: embeddedChunks.length,
       tokens: totalTokens,
       type: classification.summary.documentType,
+      finalStatus: "completed",
+      customerCount:
+        typeof profile.structuredData.customer_count === "number"
+          ? profile.structuredData.customer_count
+          : null,
+      invoiceCount:
+        typeof profile.structuredData.invoice_count === "number"
+          ? profile.structuredData.invoice_count
+          : null,
+      totalReceivable:
+        typeof profile.structuredData.total_receivable === "number"
+          ? profile.structuredData.total_receivable
+          : null,
     });
 
     logSpreadsheetStep(

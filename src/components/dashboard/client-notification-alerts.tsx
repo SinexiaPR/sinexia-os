@@ -4,13 +4,14 @@ import Link from "next/link";
 import { AlertCircle, BarChart3, FileText } from "lucide-react";
 
 import { useUnreadReportsCount } from "@/hooks/use-unread-reports";
+import { useUnviewedDocumentsCount } from "@/hooks/use-viewed-documents";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { cn } from "@/lib/utils";
 
 type ClientNotificationAlertsProps = {
   profileId: string;
-  pendingCount: number;
-  receivedCount: number;
+  documentIds: string[];
+  viewedDocumentIds: string[];
   reportIds: string[];
   viewedReportIds: string[];
   className?: string;
@@ -55,20 +56,24 @@ function AlertCard({
 
 export function ClientNotificationAlerts({
   profileId,
-  pendingCount,
-  receivedCount,
+  documentIds,
+  viewedDocumentIds,
   reportIds,
   viewedReportIds,
   className,
 }: ClientNotificationAlertsProps) {
+  const unviewedDocumentsCount = useUnviewedDocumentsCount(
+    profileId,
+    documentIds,
+    viewedDocumentIds,
+  );
   const unreadReportsCount = useUnreadReportsCount(
     profileId,
     reportIds,
     viewedReportIds,
   );
 
-  const hasAlerts =
-    receivedCount > 0 || pendingCount > 0 || unreadReportsCount > 0;
+  const hasAlerts = unviewedDocumentsCount > 0 || unreadReportsCount > 0;
 
   if (!hasAlerts) {
     return null;
@@ -76,26 +81,13 @@ export function ClientNotificationAlerts({
 
   return (
     <div className={cn("space-y-3", className)}>
-      {receivedCount > 0 ? (
+      {unviewedDocumentsCount > 0 ? (
         <AlertCard
-          title="Documento recibido"
+          title="Documentos sin ver"
           description={
-            receivedCount === 1
-              ? "Sinexia recibió su documento y lo revisará pronto."
-              : `Sinexia recibió ${receivedCount} documentos y los revisará pronto.`
-          }
-          href="/dashboard/inbox"
-          icon={FileText}
-        />
-      ) : null}
-
-      {pendingCount > 0 ? (
-        <AlertCard
-          title="Pendiente de revisión"
-          description={
-            pendingCount === 1
-              ? "Tiene 1 documento en revisión por Sinexia."
-              : `Tiene ${pendingCount} documentos en revisión por Sinexia.`
+            unviewedDocumentsCount === 1
+              ? "Tiene 1 documento en su Inbox que aún no ha abierto."
+              : `Tiene ${unviewedDocumentsCount} documentos en su Inbox que aún no ha abierto.`
           }
           href="/dashboard/inbox"
           icon={FileText}

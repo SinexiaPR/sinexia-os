@@ -1,15 +1,52 @@
 import type { DetectedDocumentType } from "@/lib/intelligence/types";
 
+export type PayrollEmployeeSummary = {
+  name: string;
+  shifts_count: number;
+  total_hours: number | null;
+  overtime_hours: number | null;
+  total_tips: number | null;
+  gross_pay?: number | null;
+  net_pay?: number | null;
+};
+
+export type PayrollExtractionDiagnostics = {
+  unique_employee_count: number;
+  total_hours: number | null;
+  total_tips: number | null;
+  rows_included: number;
+  rows_skipped: number;
+  rows_deduplicated: number;
+  unique_shift_rows: number;
+  sheets_processed: string[];
+  sheets_skipped: string[];
+  sheet_summaries: Array<{
+    sheetName: string;
+    employeeColumn: string | null;
+    detectedHourColumns: string[];
+    includedRows: number;
+    excludedRows: number;
+    rawHoursTotal: number;
+    normalizedHoursTotal: number;
+  }>;
+};
+
 export type PayrollProfile = {
   company: string | null;
+  company_id?: string | null;
+  report_id?: string | null;
   period: string | null;
   employee_count: number | null;
   total_payroll: number | null;
   total_hours: number | null;
   overtime_hours: number | null;
   total_tips: number | null;
+  employees?: PayrollEmployeeSummary[];
+  extraction_diagnostics?: PayrollExtractionDiagnostics;
+  source_format?: "xlsx" | "pdf" | "text" | null;
   source_document: string | null;
   upload_date: string | null;
+  source_system?: string | null;
 };
 
 export type AccountsReceivableProfile = {

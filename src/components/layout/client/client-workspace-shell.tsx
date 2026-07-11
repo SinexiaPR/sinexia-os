@@ -10,7 +10,6 @@ type ClientWorkspaceShellProps = {
   children: ReactNode;
   profile: Profile;
   companyName?: string | null;
-  inboxCount: number;
   notificationUnreadCount: number;
   reportNotifications: ClientReportNotifications;
 };
@@ -19,7 +18,6 @@ export function ClientWorkspaceShell({
   children,
   profile,
   companyName,
-  inboxCount,
   notificationUnreadCount,
   reportNotifications,
 }: ClientWorkspaceShellProps) {
@@ -28,7 +26,6 @@ export function ClientWorkspaceShell({
       <ClientHeader
         profile={profile}
         companyName={companyName}
-        inboxCount={inboxCount}
         notificationUnreadCount={notificationUnreadCount}
         reportNotifications={reportNotifications}
       />
@@ -36,7 +33,6 @@ export function ClientWorkspaceShell({
       <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:py-14">
         <ClientSidebar
           companyName={companyName}
-          inboxCount={inboxCount}
           reportNotifications={reportNotifications}
         />
 

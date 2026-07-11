@@ -6,7 +6,6 @@ import type { ClientReportNotifications } from "@/types/notifications";
 
 type ClientNavProps = {
   companyName?: string | null;
-  inboxCount: number;
   reportNotifications: ClientReportNotifications;
   className?: string;
   onNavigate?: () => void;
@@ -14,7 +13,6 @@ type ClientNavProps = {
 
 export function ClientNav({
   companyName,
-  inboxCount,
   reportNotifications,
   className,
   onNavigate,
@@ -22,7 +20,6 @@ export function ClientNav({
   return (
     <ClientNavLinks
       items={clientNavItems}
-      inboxCount={inboxCount}
       reportNotifications={reportNotifications}
       companyName={companyName}
       className={className}

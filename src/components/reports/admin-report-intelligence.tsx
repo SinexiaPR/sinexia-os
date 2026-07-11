@@ -115,9 +115,10 @@ export function AdminReportIntelligence({
         <p className="text-xs text-red-700">{processing.processing_error}</p>
       ) : null}
 
-      {status === "requires_ocr" ? (
+      {status === "requires_ocr" && !processing?.processing_error ? (
         <p className="text-xs text-amber-800">
-          Este documento requiere OCR para ser analizado por SinexIA.
+          Este PDF no contiene texto extraíble y requiere OCR para ser analizado
+          por SinexIA.
         </p>
       ) : null}
 
@@ -173,9 +174,12 @@ export function AdminReportIntelligence({
                 {Object.entries(profile.structured_data)
                   .filter(
                     ([key]) =>
-                      !["source_document", "customers", "invoices"].includes(
-                        key,
-                      ),
+                      ![
+                        "source_document",
+                        "customers",
+                        "invoices",
+                        "employees",
+                      ].includes(key),
                   )
                   .slice(0, 16)
                   .map(([key, value]) => (
@@ -218,6 +222,62 @@ export function AdminReportIntelligence({
                         </li>
                       ))}
                   </ul>
+                </div>
+              ) : null}
+              {profile.structured_data.extraction_diagnostics ||
+              profile.structured_data.source_format ? (
+                <div className="space-y-1 rounded-md border border-border/60 bg-background/80 p-2">
+                  <p className="text-xs font-medium text-foreground">
+                    Payroll extraction diagnostics
+                  </p>
+                  <dl className="grid gap-1 text-xs sm:grid-cols-2">
+                    {(
+                      [
+                        ["source_format", "Source format"],
+                        ["employee_count", "Employees"],
+                        ["total_hours", "Total hours"],
+                        ["overtime_hours", "Overtime"],
+                        ["total_tips", "Total tips"],
+                        ["total_payroll", "Payroll total"],
+                      ] as const
+                    ).map(([key, label]) => {
+                      const value = profile.structured_data[key];
+                      if (value == null || value === "") return null;
+                      return (
+                        <div key={key} className="flex gap-2">
+                          <dt className="text-muted-foreground">{label}:</dt>
+                          <dd className="font-medium text-foreground">
+                            {String(value)}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                    {(
+                      [
+                        ["rows_included", "Rows included"],
+                        ["rows_skipped", "Rows skipped"],
+                        ["rows_deduplicated", "Rows deduplicated"],
+                        ["unique_shift_rows", "Unique shifts"],
+                        ["sheets_processed", "Sheets used"],
+                        ["sheets_skipped", "Sheets skipped"],
+                      ] as const
+                    ).map(([key, label]) => {
+                      const diagnostics = profile.structured_data
+                        .extraction_diagnostics as Record<string, unknown> | undefined;
+                      const value = diagnostics?.[key];
+                      if (value == null || value === "") return null;
+                      return (
+                        <div key={key} className="flex gap-2">
+                          <dt className="text-muted-foreground">{label}:</dt>
+                          <dd className="font-medium text-foreground">
+                            {Array.isArray(value)
+                              ? value.join(", ")
+                              : String(value)}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
                 </div>
               ) : null}
             </div>

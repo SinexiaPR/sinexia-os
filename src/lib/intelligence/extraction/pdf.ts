@@ -1,3 +1,5 @@
+import "server-only";
+
 import { INTELLIGENCE_LIMITS } from "@/lib/intelligence/constants";
 import type { ExtractedChunk, ExtractionResult } from "@/lib/intelligence/types";
 

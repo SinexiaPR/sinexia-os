@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   fetchNotifications,
   markAllNotificationsRead,
-  markNotificationRead,
+  openNotification,
 } from "@/actions/notifications";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,30 +64,54 @@ export function NotificationBell({
   }, [open, loadNotifications]);
 
   function handleNotificationClick(notification: PortalNotification) {
+    const previousUnread = unreadCount;
+    const previousItems = items;
+
     startTransition(async () => {
       if (!notification.read) {
-        await markNotificationRead(notification.id);
-        setUnreadCount((c) => Math.max(0, c - 1));
+        setUnreadCount((count) => Math.max(0, count - 1));
         setItems((prev) =>
-          prev.map((n) =>
-            n.id === notification.id ? { ...n, read: true } : n,
+          prev.map((item) =>
+            item.id === notification.id ? { ...item, read: true } : item,
           ),
         );
       }
+
+      const result = await openNotification({
+        notificationId: notification.id,
+        reportId: notification.reportId,
+        documentId: notification.documentId,
+      });
+
+      if (result.error) {
+        setUnreadCount(previousUnread);
+        setItems(previousItems);
+        setError(result.error);
+        return;
+      }
+
       setOpen(false);
+      router.refresh();
       router.push(notification.href);
     });
   }
 
   function handleMarkAllRead() {
+    const previousUnread = unreadCount;
+    const previousItems = items;
+
     startTransition(async () => {
+      setUnreadCount(0);
+      setItems((prev) => prev.map((item) => ({ ...item, read: true })));
+
       const result = await markAllNotificationsRead();
       if (result.error) {
+        setUnreadCount(previousUnread);
+        setItems(previousItems);
         setError(result.error);
         return;
       }
-      setUnreadCount(0);
-      setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+
       router.refresh();
     });
   }

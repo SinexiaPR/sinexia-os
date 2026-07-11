@@ -34,7 +34,6 @@ import type { Profile } from "@/types";
 type ClientHeaderProps = {
   profile: Profile;
   companyName?: string | null;
-  inboxCount: number;
   notificationUnreadCount: number;
   reportNotifications: ClientReportNotifications;
   className?: string;
@@ -53,7 +52,6 @@ function getInitials(profile: Profile) {
 export function ClientHeader({
   profile,
   companyName,
-  inboxCount,
   notificationUnreadCount,
   reportNotifications,
   className,
@@ -88,7 +86,6 @@ export function ClientHeader({
             </SheetHeader>
             <ClientNav
               companyName={companyName}
-              inboxCount={inboxCount}
               reportNotifications={reportNotifications}
               onNavigate={() => setMobileNavOpen(false)}
               className="flex-1"

@@ -4,28 +4,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
-import { markReportViewed } from "@/actions/notifications";
+import { markDocumentViewed } from "@/actions/notifications";
 import { cn } from "@/lib/utils";
 
-type ReportViewLinkProps = {
-  reportId: string;
+type DocumentViewLinkProps = {
+  documentId: string;
   href: string;
   children: React.ReactNode;
   className?: string;
-  download?: boolean;
   onViewed?: () => void;
-  onError?: (message: string) => void;
 };
 
-export function ReportViewLink({
-  reportId,
+export function DocumentViewLink({
+  documentId,
   href,
   children,
   className,
-  download,
   onViewed,
-  onError,
-}: ReportViewLinkProps) {
+}: DocumentViewLinkProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -33,31 +29,23 @@ export function ReportViewLink({
     event.preventDefault();
 
     startTransition(async () => {
-      const result = await markReportViewed(reportId);
-      if (result.error) {
-        onError?.(result.error);
-        return;
-      }
-
       onViewed?.();
-      window.dispatchEvent(new Event("sinexia:report-viewed"));
-      router.refresh();
-
-      if (download) {
-        window.open(href, "_blank", "noopener,noreferrer");
+      const result = await markDocumentViewed(documentId);
+      if (result.error) {
+        console.error(result.error);
         return;
       }
 
-      router.push(href);
+      router.refresh();
+      window.open(href, "_blank", "noopener,noreferrer");
     });
   }
 
   return (
     <Link
       href={href}
-      target={download ? "_blank" : undefined}
-      rel={download ? "noopener noreferrer" : undefined}
-      download={download || undefined}
+      target="_blank"
+      rel="noopener noreferrer"
       onClick={handleClick}
       className={cn(className, isPending && "opacity-70")}
       aria-busy={isPending}

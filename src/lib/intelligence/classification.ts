@@ -7,6 +7,7 @@ import {
   isOpenAIConfigured,
 } from "@/lib/intelligence/providers/openai";
 import { ALL_DETECTED_TYPES } from "@/lib/intelligence/constants";
+import { isLikelyPayrollDocument } from "@/lib/intelligence/extractors/payroll-detect";
 import type {
   DetectedDocumentType,
   StructuredSummary,
@@ -83,6 +84,16 @@ const KEYWORD_HINTS: Array<{
 ];
 
 function heuristicClassify(text: string, filename: string): DetectedDocumentType {
+  if (
+    isLikelyPayrollDocument({
+      filename,
+      titleHint: filename,
+      text,
+    })
+  ) {
+    return "payroll";
+  }
+
   const haystack = `${filename}\n${text}`.slice(0, 8000);
   for (const hint of KEYWORD_HINTS) {
     if (hint.patterns.some((p) => p.test(haystack))) {

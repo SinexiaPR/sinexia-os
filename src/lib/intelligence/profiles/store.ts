@@ -56,7 +56,11 @@ export async function upsertDocumentProfile(params: {
     document_id: documentId ?? null,
     document_type: profile.documentType,
     period: profile.period,
-    structured_data: profile.structuredData,
+    structured_data: {
+      ...profile.structuredData,
+      company_id: companyId,
+      report_id: reportId ?? null,
+    },
     summary: profile.summary,
     extraction_confidence: profile.confidence,
     source_document:

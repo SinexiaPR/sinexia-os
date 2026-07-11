@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { NavBadge } from "@/components/ui/nav-badge";
 import { useUnreadReportsCount } from "@/hooks/use-unread-reports";
+import { useUnviewedDocumentsCount } from "@/hooks/use-viewed-documents";
 import type { NavBadgeKey, NavItem } from "@/config/navigation";
 import type { ClientReportNotifications, NavBadgeCounts } from "@/types/notifications";
 import { cn } from "@/lib/utils";
@@ -68,7 +69,6 @@ export function NavLinkWithBadge({
 
 type ClientNavLinksProps = {
   items: NavItem[];
-  inboxCount: number;
   reportNotifications: ClientReportNotifications;
   companyName?: string | null;
   className?: string;
@@ -77,7 +77,6 @@ type ClientNavLinksProps = {
 
 export function ClientNavLinks({
   items,
-  inboxCount,
   reportNotifications,
   companyName,
   className,
@@ -88,6 +87,11 @@ export function ClientNavLinks({
     reportNotifications.profileId,
     reportNotifications.reportIds,
     reportNotifications.viewedReportIds,
+  );
+  const unviewedDocumentsCount = useUnviewedDocumentsCount(
+    reportNotifications.profileId,
+    reportNotifications.documentIds,
+    reportNotifications.viewedDocumentIds,
   );
 
   return (
@@ -113,7 +117,7 @@ export function ClientNavLinks({
             key={item.href}
             item={item}
             isActive={isActive}
-            inboxCount={inboxCount}
+            inboxCount={unviewedDocumentsCount}
             reportsCount={unreadReportsCount}
             onNavigate={onNavigate}
             activeClassName="bg-foreground text-background shadow-sm"

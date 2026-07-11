@@ -11,14 +11,18 @@ import {
   getCompaniesWithStats,
   getRecentDocuments,
 } from "@/services/documents";
+import { getViewedDocumentIds } from "@/services/notifications";
+import { requireAuth } from "@/lib/auth/session";
 
 export async function AdminDashboard() {
-  const [companies, pendingCount, recentDocuments, recentActivity] =
+  const profile = await requireAuth();
+  const [companies, pendingCount, recentDocuments, recentActivity, viewedDocumentIds] =
     await Promise.all([
       getCompaniesWithStats(),
       countPendingDocuments(),
       getRecentDocuments(6),
       getAdminRecentActivity(8),
+      getViewedDocumentIds(profile.id),
     ]);
 
   const totalItems = companies.reduce((sum, c) => sum + c.total_documents, 0);
@@ -87,6 +91,9 @@ export async function AdminDashboard() {
             documents={recentDocuments}
             title="Recent Inbox uploads"
             showCompany
+            viewedDocumentIds={viewedDocumentIds}
+            profileId={profile.id}
+            isAdmin
             viewAllHref="/dashboard/inbox"
             emptyMessage="No items in any Inbox yet."
           />

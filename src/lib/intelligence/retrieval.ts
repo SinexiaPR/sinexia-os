@@ -507,9 +507,14 @@ async function getScopedReportNotice(
   const title = report?.title ?? row.original_filename ?? "Documento seleccionado";
 
   if (row.status === "requires_ocr") {
+    const filename = row.original_filename ?? "";
+    const ocrMessage =
+      row.processing_error ??
+      (/\.pdf$/i.test(filename)
+        ? "Este PDF no contiene texto extraíble y requiere OCR para ser analizado por SinexIA."
+        : "Este documento requiere OCR para ser analizado por SinexIA.");
     return {
-      message:
-        "Este documento requiere OCR para ser analizado por SinexIA.",
+      message: ocrMessage,
       sources: [
         {
           reportId: filters.reportId,
