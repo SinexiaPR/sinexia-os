@@ -4,9 +4,13 @@ import { DocumentStatusBadge } from "@/components/dashboard/document-status-badg
 import { DocumentStatusSelect } from "@/components/dashboard/document-status-select";
 import { DocumentViewLink } from "@/components/dashboard/document-view-link";
 import { DocumentViewedIndicator } from "@/components/dashboard/document-viewed-indicator";
-import { addLocalViewedDocument, useIsDocumentViewed } from "@/hooks/use-viewed-documents";
+import {
+  addLocalViewedDocument,
+  useIsDocumentViewed,
+} from "@/hooks/use-viewed-documents";
 import type { DocumentWithCompany } from "@/types";
 import { cn } from "@/lib/utils";
+import { getDocumentDisplayType } from "@/lib/documents/upload-metadata";
 
 type DocumentRowClientProps = {
   document: DocumentWithCompany;
@@ -17,13 +21,6 @@ type DocumentRowClientProps = {
   isAdmin?: boolean;
   className?: string;
 };
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-}
 
 function formatDate(date: string | null) {
   if (!date) return "—";
@@ -53,35 +50,49 @@ export function DocumentRowClient({
     addLocalViewedDocument(profileId, document.id);
   }
 
+  const fileName = document.file_url.split("/").pop() ?? "Document";
+  const displayType = getDocumentDisplayType(document);
+
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 border-b border-border/60 py-5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
+        "border-border/60 flex flex-col gap-3 border-b py-5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
         !isViewed &&
-          "rounded-xl border border-red-500/15 bg-red-500/[0.03] px-3 -mx-1 sm:px-4",
+          "-mx-1 rounded-xl border border-red-500/15 bg-red-500/[0.03] px-3 sm:px-4",
         className,
       )}
     >
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium text-foreground">{document.supplier}</p>
+          <p className="text-foreground font-medium">{displayType}</p>
+          {document.priority === "urgent" ? (
+            <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-600/15 ring-inset">
+              Urgent
+            </span>
+          ) : (
+            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium">
+              Routine
+            </span>
+          )}
           <DocumentStatusBadge status={document.status} />
           <DocumentViewedIndicator isViewed={isViewed} />
         </div>
-        <p className="text-sm text-muted-foreground">
-          Invoice {document.invoice_number} · {document.document_type}
-        </p>
+        <p className="text-muted-foreground text-sm">{fileName}</p>
         {showCompany && document.company ? (
-          <p className="text-sm text-muted-foreground">{document.company.name}</p>
+          <p className="text-muted-foreground text-sm">
+            {document.company.name}
+          </p>
+        ) : null}
+        {isAdmin && document.comment ? (
+          <p className="text-foreground/80 max-w-2xl text-sm">
+            {document.comment}
+          </p>
         ) : null}
       </div>
 
       <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-        <p className="font-medium text-foreground">
-          {formatCurrency(document.amount)}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {formatDate(document.invoice_date)}
+        <p className="text-muted-foreground text-sm">
+          {formatDate(document.created_at)}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin ? (
@@ -95,7 +106,7 @@ export function DocumentRowClient({
               documentId={document.id}
               href={signedUrl}
               onViewed={markLocalViewed}
-              className="text-sm font-medium text-primary hover:underline"
+              className="text-primary text-sm font-medium hover:underline"
             >
               Ver archivo
             </DocumentViewLink>

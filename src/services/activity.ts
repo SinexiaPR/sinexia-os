@@ -1,11 +1,10 @@
 import { getRecentDocuments } from "@/services/documents";
 import { getRecentReports } from "@/services/reports";
 import { DOCUMENT_STATUS_LABELS } from "@/types";
+import { getDocumentDisplayType } from "@/lib/documents/upload-metadata";
 
 export type AdminActivityKind =
-  | "document_received"
-  | "document_processed"
-  | "report_published";
+  "document_received" | "document_processed" | "report_published";
 
 export type AdminActivityItem = {
   id: string;
@@ -26,7 +25,7 @@ function documentActivity(
       id: `doc-processed-${doc.id}`,
       kind: "document_processed",
       title: "Document processed",
-      description: `${doc.supplier} · ${companyName}`,
+      description: `${getDocumentDisplayType(doc)} · ${companyName}`,
       timestamp: doc.created_at,
       href: "/dashboard/inbox",
     };
@@ -36,7 +35,7 @@ function documentActivity(
     id: `doc-received-${doc.id}`,
     kind: "document_received",
     title: "New document received",
-    description: `${doc.supplier} · ${companyName} · ${DOCUMENT_STATUS_LABELS[doc.status]}`,
+    description: `${getDocumentDisplayType(doc)} · ${companyName} · ${DOCUMENT_STATUS_LABELS[doc.status]}`,
     timestamp: doc.created_at,
     href: "/dashboard/inbox",
   };

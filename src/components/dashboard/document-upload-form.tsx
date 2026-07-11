@@ -4,14 +4,15 @@ import { Camera, FileUp, X } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
 
 import { uploadDocument } from "@/actions/documents";
-import {
-  CAMERA_ACCEPT,
-  UPLOAD_ACCEPT,
-} from "@/lib/constants/upload";
+import { CAMERA_ACCEPT, UPLOAD_ACCEPT } from "@/lib/constants/upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DOCUMENT_TYPE_OPTIONS } from "@/types";
+import {
+  CLIENT_DOCUMENT_TYPES,
+  DOCUMENT_COMMENT_MAX_LENGTH,
+  DOCUMENT_TYPE_DESCRIPTION_MAX_LENGTH,
+} from "@/lib/documents/upload-metadata";
 import { cn } from "@/lib/utils";
 
 const initialState: { error?: string; success?: boolean } = {};
@@ -44,6 +45,7 @@ export function DocumentUploadForm() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const [state, formAction, isPending] = useActionState(
@@ -52,6 +54,7 @@ export function DocumentUploadForm() {
       if (result.success) {
         formRef.current?.reset();
         setSelectedFile(null);
+        setDocumentType("");
         clearFileInput(submissionInputRef.current);
         clearFileInput(cameraInputRef.current);
         clearFileInput(fileInputRef.current);
@@ -103,10 +106,92 @@ export function DocumentUploadForm() {
         onChange={() => undefined}
       />
 
-      {/* Mobile-first: file picker first */}
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="document_type">Tipo de documento</Label>
+          <select
+            id="document_type"
+            name="document_type"
+            required
+            disabled={isPending}
+            value={documentType}
+            onChange={(event) => setDocumentType(event.target.value)}
+            className={selectClassName}
+          >
+            <option value="">Seleccionar</option>
+            {CLIENT_DOCUMENT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {documentType === "Other" ? (
+          <div className="space-y-2">
+            <Label htmlFor="document_type_description">
+              Descripción breve{" "}
+              <span className="text-muted-foreground">(opcional)</span>
+            </Label>
+            <Input
+              id="document_type_description"
+              name="document_type_description"
+              maxLength={DOCUMENT_TYPE_DESCRIPTION_MAX_LENGTH}
+              disabled={isPending}
+              className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
+            />
+          </div>
+        ) : null}
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Prioridad</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="border-border bg-muted/20 flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm">
+              <input
+                type="radio"
+                name="priority"
+                value="routine"
+                defaultChecked
+                required
+                disabled={isPending}
+              />
+              Rutina
+            </label>
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/[0.03] px-4 py-3 text-sm text-red-700">
+              <input
+                type="radio"
+                name="priority"
+                value="urgent"
+                required
+                disabled={isPending}
+                className="accent-red-600"
+              />
+              Urgente
+            </label>
+          </div>
+        </fieldset>
+
+        <div className="space-y-2">
+          <Label htmlFor="comment">
+            Comentario <span className="text-muted-foreground">(opcional)</span>
+          </Label>
+          <textarea
+            id="comment"
+            name="comment"
+            maxLength={DOCUMENT_COMMENT_MAX_LENGTH}
+            rows={4}
+            disabled={isPending}
+            placeholder="Información útil para el equipo de Sinexia."
+            className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 flex w-full resize-y rounded-xl border bg-transparent px-3 py-3 text-base shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50 sm:text-sm"
+          />
+          <p className="text-muted-foreground text-xs">
+            Máximo 500 caracteres.
+          </p>
+        </div>
+      </div>
+
       <div className="space-y-3">
         <Label className="text-base sm:text-sm">Archivo</Label>
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Button
             type="button"
@@ -115,10 +200,8 @@ export function DocumentUploadForm() {
             onClick={() => cameraInputRef.current?.click()}
             className="h-14 justify-center gap-2 rounded-xl text-base sm:h-12 sm:text-sm"
           >
-            <Camera className="size-5 shrink-0" />
-            Tomar foto
+            <Camera className="size-5 shrink-0" /> Tomar foto
           </Button>
-
           <Button
             type="button"
             variant="outline"
@@ -126,11 +209,9 @@ export function DocumentUploadForm() {
             onClick={() => fileInputRef.current?.click()}
             className="h-14 justify-center gap-2 rounded-xl text-base sm:h-12 sm:text-sm"
           >
-            <FileUp className="size-5 shrink-0" />
-            Elegir archivo
+            <FileUp className="size-5 shrink-0" /> Elegir archivo
           </Button>
         </div>
-
         <input
           ref={cameraInputRef}
           type="file"
@@ -138,29 +219,23 @@ export function DocumentUploadForm() {
           capture="environment"
           className="sr-only"
           disabled={isPending}
-          onChange={(event) =>
-            handleFileSelect(event.target.files?.[0])
-          }
+          onChange={(event) => handleFileSelect(event.target.files?.[0])}
         />
-
         <input
           ref={fileInputRef}
           type="file"
           accept={UPLOAD_ACCEPT}
           className="sr-only"
           disabled={isPending}
-          onChange={(event) =>
-            handleFileSelect(event.target.files?.[0])
-          }
+          onChange={(event) => handleFileSelect(event.target.files?.[0])}
         />
-
         {selectedFile ? (
-          <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-4">
+          <div className="border-border/80 bg-muted/40 flex items-start gap-3 rounded-xl border p-4">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">
+              <p className="text-foreground truncate text-sm font-medium">
                 {selectedFile.name}
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="text-muted-foreground mt-0.5 text-xs">
                 {formatFileSize(selectedFile.size)}
               </p>
             </div>
@@ -168,99 +243,17 @@ export function DocumentUploadForm() {
               type="button"
               onClick={clearFile}
               disabled={isPending}
-              className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+              className="text-muted-foreground hover:bg-background hover:text-foreground rounded-lg p-1.5 transition-colors"
               aria-label="Quitar archivo"
             >
               <X className="size-4" />
             </button>
           </div>
         ) : (
-          <p className="text-xs leading-relaxed text-muted-foreground">
+          <p className="text-muted-foreground text-xs leading-relaxed">
             Foto con cámara, imagen de galería, PDF, Word o Excel. Máximo 50 MB.
           </p>
         )}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="supplier">Proveedor</Label>
-          <Input
-            id="supplier"
-            name="supplier"
-            required
-            disabled={isPending}
-            className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
-            autoComplete="organization"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="invoice_number">Número de factura</Label>
-          <Input
-            id="invoice_number"
-            name="invoice_number"
-            required
-            disabled={isPending}
-            className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="invoice_date">Fecha de factura</Label>
-          <Input
-            id="invoice_date"
-            name="invoice_date"
-            type="date"
-            required
-            disabled={isPending}
-            className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="due_date">Fecha de vencimiento</Label>
-          <Input
-            id="due_date"
-            name="due_date"
-            type="date"
-            disabled={isPending}
-            className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="amount">Monto</Label>
-          <Input
-            id="amount"
-            name="amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            required
-            disabled={isPending}
-            className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="document_type">Tipo de documento</Label>
-          <select
-            id="document_type"
-            name="document_type"
-            required
-            disabled={isPending}
-            className={selectClassName}
-          >
-            <option value="">Seleccionar</option>
-            {DOCUMENT_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {localError ? (

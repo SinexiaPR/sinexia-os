@@ -1,12 +1,10 @@
 import type { ReportCategory } from "@/lib/constants/reports";
+import type { DocumentPriority } from "@/lib/documents/upload-metadata";
 
 export type UserRole = "admin" | "client";
 
 export type DocumentStatus =
-  | "received"
-  | "reviewing"
-  | "processed"
-  | "rejected";
+  "received" | "reviewing" | "processed" | "rejected";
 
 export type Company = {
   id: string;
@@ -35,6 +33,9 @@ export type Document = {
   due_date: string | null;
   amount: number;
   document_type: string;
+  document_type_description: string | null;
+  priority: DocumentPriority;
+  comment: string | null;
   file_url: string;
   status: DocumentStatus;
   created_at: string;
@@ -64,16 +65,6 @@ export const DOCUMENT_STATUS_OPTIONS: DocumentStatus[] = [
   "processed",
   "rejected",
 ];
-
-export const DOCUMENT_TYPE_OPTIONS = [
-  "Invoice",
-  "Receipt",
-  "Credit Note",
-  "Statement",
-  "Other",
-] as const;
-
-export type DocumentType = (typeof DOCUMENT_TYPE_OPTIONS)[number];
 
 export type { ReportCategory } from "@/lib/constants/reports";
 
