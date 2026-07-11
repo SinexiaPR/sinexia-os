@@ -16,9 +16,9 @@ const TABLE_HEADER =
 const REPEATED_HEADER =
   /^(date|transaction\s*type|num|no\.?|due\s*date|open\s*balance|amount|balance)/i;
 
-const CUSTOMER_TOTAL = /^Total for\s+(.+?)\s+\$?\s*([\d,]+\.\d{2})\s*$/i;
-
-const GRAND_TOTAL = /^TOTAL\s+\$?\s*([\d,]+\.\d{2})\s*$/i;
+type MutableCustomer = QuickBooksARCustomer & {
+  balanceFromSubtotal?: boolean;
+};
 
 function parseDateToken(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -37,6 +37,53 @@ function parseDateToken(raw: string | null | undefined): string | null {
   return trimmed.length <= 32 ? trimmed : null;
 }
 
+function extractMoneyValues(line: string): number[] {
+  const values: number[] = [];
+  for (const match of line.matchAll(/\$?\s*([\d,]+\.\d{2})/g)) {
+    const parsed = parseMoney(match[1]);
+    if (parsed != null) values.push(parsed);
+  }
+  return values;
+}
+
+/** QuickBooks detail rows: AMOUNT, OPEN BALANCE, running BALANCE (last). */
+function splitInvoiceMoneyColumns(monies: number[]): {
+  amount: number | null;
+  open_balance: number | null;
+  running_balance: number | null;
+} {
+  if (!monies.length) {
+    return { amount: null, open_balance: null, running_balance: null };
+  }
+  if (monies.length >= 3) {
+    return {
+      amount: monies[monies.length - 3] ?? null,
+      open_balance: monies[monies.length - 2] ?? null,
+      running_balance: monies[monies.length - 1] ?? null,
+    };
+  }
+  if (monies.length === 2) {
+    return {
+      amount: monies[0] ?? null,
+      open_balance: monies[1] ?? null,
+      running_balance: null,
+    };
+  }
+  return {
+    amount: null,
+    open_balance: monies[0] ?? null,
+    running_balance: null,
+  };
+}
+
+/** Subtotal / TOTAL rows may repeat the same value in every money column — take one. */
+function pickAuthoritativeMoney(monies: number[]): number | null {
+  if (!monies.length) return null;
+  const unique = [...new Set(monies.map((value) => Number(value.toFixed(2))))];
+  if (unique.length === 1) return unique[0] ?? null;
+  return monies[monies.length - 1] ?? null;
+}
+
 function isSkipLine(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) return true;
@@ -50,24 +97,26 @@ function parseInvoiceLine(line: string): QuickBooksARInvoice | null {
   const trimmed = line.trim();
   if (!/\binvoice\b/i.test(trimmed) || /^total/i.test(trimmed)) return null;
 
-  const moneyMatch = trimmed.match(/\$?\s*([\d,]+\.\d{2})\s*$/);
-  if (!moneyMatch) return null;
-  const open_balance = parseMoney(moneyMatch[1]);
-  if (open_balance == null) return null;
-
   const dates = [...trimmed.matchAll(/(\d{1,2}\/\d{1,2}\/\d{2,4})/g)].map(
     (match) => match[1],
   );
   if (!dates.length) return null;
 
+  const monies = extractMoneyValues(trimmed);
+  const { amount, open_balance, running_balance } = splitInvoiceMoneyColumns(
+    monies,
+  );
+  if (open_balance == null) return null;
+
   const invoiceMatch = trimmed.match(/\bInvoice\s+(\S+)/i);
-  const invoice_number = invoiceMatch?.[1] ?? null;
 
   return {
-    invoice_number,
+    invoice_number: invoiceMatch?.[1] ?? null,
     invoice_date: parseDateToken(dates[0] ?? null),
     due_date: parseDateToken(dates[1] ?? null),
+    amount,
     open_balance,
+    running_balance,
     current: null,
     days_1_30: null,
     days_31_60: null,
@@ -76,34 +125,94 @@ function parseInvoiceLine(line: string): QuickBooksARInvoice | null {
   };
 }
 
+function parseCustomerSubtotalLine(
+  line: string,
+): { name: string; total: number } | null {
+  const match = line.match(/^Total for\s+(.+)$/i);
+  if (!match) return null;
+
+  const rest = match[1].trim();
+  const monies = extractMoneyValues(rest);
+  const total = pickAuthoritativeMoney(monies);
+  if (total == null) return null;
+
+  const firstMoneyIdx = rest.search(/\$?\s*[\d,]+\.\d{2}/);
+  const name =
+    firstMoneyIdx > 0 ? rest.slice(0, firstMoneyIdx).trim() : rest.trim();
+  if (!name) return null;
+
+  return { name, total };
+}
+
+function parseGrandTotalLine(line: string): number | null {
+  if (!/^TOTAL\b/i.test(line.trim()) || /^Total for/i.test(line)) return null;
+  return pickAuthoritativeMoney(extractMoneyValues(line));
+}
+
 function looksLikeCustomerLine(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed || isSkipLine(trimmed)) return false;
   if (TABLE_HEADER.test(trimmed) || REPEATED_HEADER.test(trimmed)) return false;
   if (/^total/i.test(trimmed)) return false;
   if (parseInvoiceLine(trimmed)) return false;
+  if (parseCustomerSubtotalLine(trimmed)) return false;
   if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(trimmed)) return false;
   if (/^\$?\s*[\d,]+\.\d{2}\s*$/.test(trimmed)) return false;
   if (trimmed.length < 2 || trimmed.length > 120) return false;
   return /[A-Za-zÁÉÍÓÚáéíóú]/.test(trimmed);
 }
 
-function finalizeCustomer(customer: QuickBooksARCustomer) {
-  if (customer.balance <= 0 && customer.invoices.length > 0) {
+function finalizeCustomer(customer: MutableCustomer) {
+  customer.invoice_count = customer.invoices.length;
+
+  if (!customer.balanceFromSubtotal && customer.invoices.length > 0) {
     customer.balance = Number(
       customer.invoices
         .reduce((sum, invoice) => sum + (invoice.open_balance ?? 0), 0)
         .toFixed(2),
     );
   }
-  customer.invoice_count = customer.invoices.length;
+
   for (const invoice of customer.invoices) {
-    const candidate = invoice.invoice_date ?? invoice.due_date;
+    const candidate = invoice.due_date ?? invoice.invoice_date;
     if (!candidate) continue;
     if (!customer.oldest_invoice || candidate < customer.oldest_invoice) {
       customer.oldest_invoice = candidate;
     }
   }
+}
+
+export function resolveTotalReceivable(params: {
+  reportGrandTotal: number | null;
+  customers: QuickBooksARCustomer[];
+}): number | null {
+  if (params.reportGrandTotal != null) {
+    return params.reportGrandTotal;
+  }
+
+  const subtotalCustomers = params.customers.filter(
+    (customer) => (customer as MutableCustomer).balanceFromSubtotal,
+  );
+  if (
+    subtotalCustomers.length > 0 &&
+    subtotalCustomers.length === params.customers.length
+  ) {
+    return Number(
+      subtotalCustomers
+        .reduce((sum, customer) => sum + customer.balance, 0)
+        .toFixed(2),
+    );
+  }
+
+  if (params.customers.length) {
+    return Number(
+      params.customers
+        .reduce((sum, customer) => sum + customer.balance, 0)
+        .toFixed(2),
+    );
+  }
+
+  return null;
 }
 
 export function parseCustomerBalanceDetailPdfText(text: string): {
@@ -137,10 +246,10 @@ export function parseCustomerBalanceDetailPdfText(text: string): {
     return null;
   })();
 
-  const customers: QuickBooksARCustomer[] = [];
-  const customerIndex = new Map<string, QuickBooksARCustomer>();
-  let currentCustomer: QuickBooksARCustomer | null = null;
-  let grandTotal: number | null = null;
+  const customers: MutableCustomer[] = [];
+  const customerIndex = new Map<string, MutableCustomer>();
+  let currentCustomer: MutableCustomer | null = null;
+  let reportGrandTotal: number | null = null;
   let passedHeader = false;
 
   for (const line of lines) {
@@ -159,23 +268,22 @@ export function parseCustomerBalanceDetailPdfText(text: string): {
 
     if (!passedHeader) continue;
 
-    const grandMatch = line.match(GRAND_TOTAL);
-    if (grandMatch) {
-      grandTotal = parseMoney(grandMatch[1]);
+    const grandTotal = parseGrandTotalLine(line);
+    if (grandTotal != null) {
+      reportGrandTotal = grandTotal;
       currentCustomer = null;
       continue;
     }
 
-    const customerTotalMatch = line.match(CUSTOMER_TOTAL);
-    if (customerTotalMatch) {
-      const name = customerTotalMatch[1].trim();
-      const total = parseMoney(customerTotalMatch[2]);
-      let customer = customerIndex.get(name.toLowerCase());
+    const customerSubtotal = parseCustomerSubtotalLine(line);
+    if (customerSubtotal) {
+      let customer = customerIndex.get(customerSubtotal.name.toLowerCase());
       if (!customer) {
         customer = {
-          name,
+          name: customerSubtotal.name,
           invoice_count: 0,
-          balance: total ?? 0,
+          balance: Number(customerSubtotal.total.toFixed(2)),
+          balanceFromSubtotal: true,
           oldest_invoice: null,
           current: null,
           days_1_30: null,
@@ -184,10 +292,11 @@ export function parseCustomerBalanceDetailPdfText(text: string): {
           days_90_plus: null,
           invoices: [],
         };
-        customerIndex.set(name.toLowerCase(), customer);
+        customerIndex.set(customerSubtotal.name.toLowerCase(), customer);
         customers.push(customer);
-      } else if (total != null) {
-        customer.balance = total;
+      } else {
+        customer.balance = Number(customerSubtotal.total.toFixed(2));
+        customer.balanceFromSubtotal = true;
       }
       currentCustomer = customer;
       continue;
@@ -211,6 +320,7 @@ export function parseCustomerBalanceDetailPdfText(text: string): {
         name: line,
         invoice_count: 0,
         balance: 0,
+        balanceFromSubtotal: false,
         oldest_invoice: null,
         current: null,
         days_1_30: null,
@@ -228,16 +338,16 @@ export function parseCustomerBalanceDetailPdfText(text: string): {
     .filter((customer) => customer.name && !/^total/i.test(customer.name))
     .map((customer) => {
       finalizeCustomer(customer);
-      return customer;
+      const { balanceFromSubtotal: _flag, ...publicCustomer } = customer;
+      return publicCustomer;
     })
     .filter((customer) => customer.invoice_count > 0 || customer.balance > 0)
     .sort((a, b) => b.balance - a.balance);
 
-  if (grandTotal == null && parsedCustomers.length) {
-    grandTotal = Number(
-      parsedCustomers.reduce((sum, customer) => sum + customer.balance, 0).toFixed(2),
-    );
-  }
+  const grandTotal = resolveTotalReceivable({
+    reportGrandTotal,
+    customers: parsedCustomers,
+  });
 
   return { customers: parsedCustomers, grandTotal };
 }
@@ -245,11 +355,8 @@ export function parseCustomerBalanceDetailPdfText(text: string): {
 export function extractGrandTotalFromPdfText(text: string): number | null {
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i] ?? "";
-    if (/^TOTAL\b/i.test(line) && !/^Total for/i.test(line)) {
-      const match = line.match(/\$?\s*([\d,]+\.\d{2})\s*$/);
-      if (match) return parseMoney(match[1]);
-    }
+    const total = parseGrandTotalLine(lines[i] ?? "");
+    if (total != null) return total;
   }
 
   return (

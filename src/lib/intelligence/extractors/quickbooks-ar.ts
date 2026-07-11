@@ -1,4 +1,4 @@
-import { parseMoney, confidenceFromFields, buildSummary } from "@/lib/intelligence/extractors/base";
+import { parseMoney, confidenceFromFields } from "@/lib/intelligence/extractors/base";
 import {
   extractGrandTotalFromPdfText,
   parseCustomerBalanceDetailPdfText,
@@ -20,7 +20,9 @@ export type QuickBooksARInvoice = {
   invoice_number: string | null;
   invoice_date: string | null;
   due_date: string | null;
+  amount: number | null;
   open_balance: number | null;
+  running_balance: number | null;
   current: number | null;
   days_1_30: number | null;
   days_31_60: number | null;
@@ -378,7 +380,9 @@ function buildCustomersFromTable(
       invoice_number: looksLikeInvoice ? invoice : null,
       invoice_date: parseDateToken(cell(row, map.invoiceDate)),
       due_date: parseDateToken(cell(row, map.dueDate)),
+      amount: null,
       open_balance: moneyAt(row, map.openBalance),
+      running_balance: null,
       current: moneyAt(row, map.current),
       days_1_30: moneyAt(row, map.d1_30),
       days_31_60: moneyAt(row, map.d31_60),
@@ -507,6 +511,79 @@ function parseExcelBuffer(buffer: Buffer): {
   }
 }
 
+export function buildQuickBooksARAnalyticalSummary(
+  profile: Pick<
+    QuickBooksARProfile,
+    | "total_receivable"
+    | "grand_total"
+    | "customer_count"
+    | "invoice_count"
+    | "customers"
+    | "source_document"
+    | "report_date"
+    | "period"
+  >,
+): string {
+  const total = profile.total_receivable ?? profile.grand_total;
+  const customers = profile.customers ?? [];
+  const lines: string[] = [];
+
+  if (total != null) {
+    lines.push(
+      `Total pendiente por cobrar: $${total.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}.`,
+    );
+  }
+
+  if (profile.customer_count != null) {
+    lines.push(`${profile.customer_count} clientes con saldo.`);
+  }
+  if (profile.invoice_count != null) {
+    lines.push(`${profile.invoice_count} facturas abiertas.`);
+  }
+
+  if (customers.length) {
+    lines.push("Mayores saldos:");
+    for (const [index, customer] of customers.slice(0, 5).entries()) {
+      lines.push(
+        `${index + 1}. ${customer.name}: $${customer.balance.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}${customer.invoice_count ? ` (${customer.invoice_count} facturas)` : ""}`,
+      );
+    }
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  let overdueCount = 0;
+  for (const customer of customers) {
+    for (const invoice of customer.invoices ?? []) {
+      if (invoice.due_date && invoice.due_date < today) {
+        overdueCount += 1;
+      }
+    }
+  }
+
+  if (overdueCount > 0) {
+    lines.push(`${overdueCount} factura(s) con vencimiento pasado.`);
+  } else if (customers.some((customer) => customer.invoices?.length)) {
+    lines.push("No se detectaron facturas vencidas en el detalle extraído.");
+  }
+
+  const source =
+    profile.source_document ??
+    profile.period ??
+    profile.report_date ??
+    null;
+  if (source) {
+    lines.push(`Fuente: ${source}.`);
+  }
+
+  return lines.join("\n");
+}
+
 export function extractQuickBooksARProfile(
   extraction: ExtractionResult,
   params: ExtractorParams & { buffer?: Buffer | null },
@@ -523,37 +600,53 @@ export function extractQuickBooksARProfile(
   }
 
   const isSpreadsheet = /\.xlsx?$/i.test(params.filename);
-  let tables = params.buffer && isSpreadsheet ? parseExcelBuffer(params.buffer) : [];
-  if (!tables.length) {
-    tables = parsePipeRows(text);
-  }
+  const isPdf = /\.pdf$/i.test(params.filename);
+  const isBalanceDetail =
+    variant === "customer_balance_detail" ||
+    /customer\s*balance\s*detail/i.test(text);
 
   let customers: QuickBooksARCustomer[] = [];
   let grandTotal: number | null = null;
 
-  for (const table of tables) {
-    const parsed = buildCustomersFromTable(table.headers, table.rows);
-    if (parsed.customers.length > customers.length) {
-      customers = parsed.customers;
-      grandTotal = parsed.grandTotal;
-    }
-  }
-
-  if (
-    !customers.length &&
-    (variant === "customer_balance_detail" ||
-      /customer\s*balance\s*detail/i.test(text))
-  ) {
+  if (isPdf && isBalanceDetail) {
     const pdfParsed = parseCustomerBalanceDetailPdfText(text);
-    if (pdfParsed.customers.length) {
-      customers = pdfParsed.customers;
-      grandTotal = pdfParsed.grandTotal;
+    customers = pdfParsed.customers;
+    grandTotal = pdfParsed.grandTotal;
+    if (customers.length) {
       logQuickBooksAR("qb_ar_pdf_table_parsed", {
         variant,
         customerCount: customers.length,
-        invoiceCount: customers.reduce((sum, c) => sum + c.invoice_count, 0),
+        invoiceCount: customers.reduce((sum, customer) => sum + customer.invoice_count, 0),
         totalReceivable: grandTotal,
       });
+    }
+  } else {
+    let tables =
+      params.buffer && isSpreadsheet ? parseExcelBuffer(params.buffer) : [];
+    if (!tables.length) {
+      tables = parsePipeRows(text);
+    }
+
+    for (const table of tables) {
+      const parsed = buildCustomersFromTable(table.headers, table.rows);
+      if (parsed.customers.length > customers.length) {
+        customers = parsed.customers;
+        grandTotal = parsed.grandTotal;
+      }
+    }
+
+    if (!customers.length && isBalanceDetail) {
+      const pdfParsed = parseCustomerBalanceDetailPdfText(text);
+      if (pdfParsed.customers.length) {
+        customers = pdfParsed.customers;
+        grandTotal = pdfParsed.grandTotal;
+        logQuickBooksAR("qb_ar_pdf_table_parsed", {
+          variant,
+          customerCount: customers.length,
+          invoiceCount: customers.reduce((sum, customer) => sum + customer.invoice_count, 0),
+          totalReceivable: grandTotal,
+        });
+      }
     }
   }
 
@@ -611,16 +704,16 @@ export function extractQuickBooksARProfile(
     original_filename: params.filename,
   };
 
-  const top = customers[0];
-  const summary = buildSummary([
-    total_receivable != null
-      ? `Total receivable: $${total_receivable.toLocaleString()}`
-      : null,
-    customer_count != null ? `${customer_count} customers` : null,
-    invoice_count != null ? `${invoice_count} invoices` : null,
-    top ? `Top: ${top.name} ($${top.balance.toLocaleString()})` : null,
-    report_date ? `As of ${report_date}` : period,
-  ]);
+  const summary = buildQuickBooksARAnalyticalSummary({
+    total_receivable,
+    grand_total: grandTotal,
+    customer_count,
+    invoice_count,
+    customers,
+    source_document: params.titleHint,
+    report_date,
+    period,
+  });
 
   const confidence = confidenceFromFields([
     total_receivable,

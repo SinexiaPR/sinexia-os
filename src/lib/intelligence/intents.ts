@@ -56,6 +56,7 @@ const RECEIVABLE_TOTAL = [
   /cuentas?\s*por\s*cobrar/i,
   /outstanding/i,
   /total\s*por\s*cobrar/i,
+  /cu[aá]nto\s*me\s*deben?/i,
   /what\s*is\s*my\s*receivable/i,
   /grand\s*total/i,
 ];
@@ -126,6 +127,7 @@ const SUMMARY = [
   /describ/i,
   /explain/i,
   /explic/i,
+  /analiz[aá]me/i,
 ];
 const REASONING = [
   /pattern/i,

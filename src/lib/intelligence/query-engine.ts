@@ -1,5 +1,6 @@
 import { compareLatestDocuments } from "@/lib/intelligence/comparison";
 import {
+  buildQuickBooksARAnalyticalSummary,
   isQuickBooksARProfile,
   type QuickBooksARCustomer,
   type QuickBooksARProfile,
@@ -97,11 +98,11 @@ function answerQuickBooksAR(
 
   switch (intent) {
     case "receivable_total":
-      return `Total receivable: ${formatMoney(data.total_receivable ?? data.grand_total)}.`;
+      return `El total pendiente por cobrar es ${formatMoney(data.total_receivable ?? data.grand_total)}.`;
     case "customer_count":
-      return formatCount(data.customer_count ?? customers.length, "Customers");
+      return formatCount(data.customer_count ?? customers.length, "Clientes");
     case "invoice_count_receivable":
-      return formatCount(data.invoice_count, "Invoices");
+      return formatCount(data.invoice_count, "Facturas");
     case "top_debtors": {
       if (!customers.length) {
         return "No customer balances were extracted from this receivable report.";
@@ -175,7 +176,7 @@ function answerFromProfileData(
     case "total_tips":
       return `Propinas: ${formatMoney(readField(data, "total_tips"))}.`;
     case "receivable_total":
-      return `Total por cobrar: ${formatMoney(readField(data, "total_receivable"))}.`;
+      return `El total pendiente por cobrar es ${formatMoney(readField(data, "total_receivable"))}.`;
     case "customer_count":
       return formatCount(readField(data, "customer_count"), "Clientes");
     case "invoice_count_receivable":
@@ -289,12 +290,43 @@ export async function answerFromStructuredQuery(params: {
         reportId: params.reportId,
         period: params.period,
       });
+      const arPreferred =
+        /cuentas?\s*por\s*cobrar|receivable|cobrar|aging|balance\s*detail/i.test(
+          params.question,
+        );
       const payrollPreferred =
-        /n[oó]mina|payroll/i.test(params.question) ||
-        profiles.some((p) => p.document_type === "payroll");
+        (/n[oó]mina|payroll/i.test(params.question) ||
+          profiles.some((p) => p.document_type === "payroll")) &&
+        !arPreferred;
+
+      if (arPreferred) {
+        const arProfile = profiles.find(
+          (profile) =>
+            profile.document_type === "accounts_receivable" &&
+            isQuickBooksARProfile(
+              (profile.structured_data ?? {}) as Record<string, unknown>,
+            ),
+        );
+        if (
+          arProfile &&
+          (arProfile.extraction_confidence ?? 0) >= 0.35
+        ) {
+          const message = buildQuickBooksARAnalyticalSummary(
+            arProfile.structured_data as unknown as QuickBooksARProfile,
+          );
+          return {
+            answered: true,
+            message,
+            sources: profileSources(profiles),
+            intent,
+          };
+        }
+      }
+
       const latest = payrollPreferred
         ? profiles.find((p) => p.document_type === "payroll") ?? profiles[0]
-        : profiles[0];
+        : profiles.find((p) => p.document_type === "accounts_receivable") ??
+          profiles[0];
       if (
         latest?.summary &&
         (latest.extraction_confidence ?? 0) >= 0.35
