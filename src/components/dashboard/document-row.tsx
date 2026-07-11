@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { DocumentViewLink } from "@/components/dashboard/document-view-link";
 import { Badge } from "@/components/ui/badge";
 import { getSignedFileUrl } from "@/services/documents";
 import { DOCUMENT_STATUS_LABELS, type DocumentWithCompany } from "@/types";
@@ -64,14 +63,13 @@ export async function DocumentRow({
           {formatDate(document.invoice_date)}
         </p>
         {signedUrl ? (
-          <Link
+          <DocumentViewLink
+            documentId={document.id}
             href={signedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-sm font-medium text-primary hover:underline"
           >
             View file
-          </Link>
+          </DocumentViewLink>
         ) : null}
       </div>
     </div>

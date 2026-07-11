@@ -1,4 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  ADMIN_INBOX_KINDS,
+  markEntityNotificationsRead,
+  upsertNotificationReads,
+} from "@/lib/notifications/read-state";
 import type { UserRole } from "@/types";
 
 export type PortalNotification = {
@@ -78,6 +83,39 @@ export async function countUnreadNotifications(params: {
     limit: 50,
   });
   return items.filter((n) => !n.read).length;
+}
+
+export async function countUnreadAdminInboxNotifications(params: {
+  userId: string;
+}): Promise<number> {
+  const items = await getNotificationsForUser({
+    userId: params.userId,
+    role: "admin",
+    limit: 50,
+  });
+  return items.filter((n) => !n.read && ADMIN_INBOX_KINDS.has(n.kind)).length;
+}
+
+export async function markNotificationsReadForEntity(params: {
+  userId: string;
+  role: UserRole;
+  companyId?: string | null;
+  reportId?: string | null;
+  documentId?: string | null;
+}): Promise<{ error: string | null; markedCount: number }> {
+  const supabase = await createClient();
+  return markEntityNotificationsRead({
+    supabase,
+    ...params,
+  });
+}
+
+export async function markSingleNotificationRead(params: {
+  userId: string;
+  notificationId: string;
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  return upsertNotificationReads(supabase, params.userId, [params.notificationId]);
 }
 
 export async function getViewedReportIds(userId: string): Promise<string[]> {

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { AdminIntegrityCheck } from "@/components/reports/admin-integrity-check";
 import { AdminReportForm } from "@/components/reports/admin-report-form";
 import { AdminReportsList } from "@/components/reports/admin-reports-list";
 import { ClientReportCard } from "@/components/reports/client-report-card";
+import { ReportsViewHandler } from "@/components/reports/reports-view-handler";
 import { ContactSinexiaCard } from "@/components/contact/contact-sinexia-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
@@ -91,6 +93,9 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-8 pb-6 sm:space-y-10">
+      <Suspense fallback={null}>
+        <ReportsViewHandler profileId={profile.id} />
+      </Suspense>
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Reportes

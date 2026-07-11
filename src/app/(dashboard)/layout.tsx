@@ -2,11 +2,11 @@ import { AdminWorkspaceShell } from "@/components/layout/admin/admin-workspace-s
 import { ClientWorkspaceShell } from "@/components/layout/client/client-workspace-shell";
 import { requireAuth } from "@/lib/auth/session";
 import {
-  countPendingDocuments,
   countPendingDocumentsForCompany,
   getCompanyById,
 } from "@/services/documents";
 import {
+  countUnreadAdminInboxNotifications,
   countUnreadNotifications,
   getViewedReportIds,
 } from "@/services/notifications";
@@ -31,7 +31,9 @@ export default async function DashboardLayout({
   });
 
   if (profile.role === "admin") {
-    const inboxCount = await countPendingDocuments();
+    const inboxCount = await countUnreadAdminInboxNotifications({
+      userId: profile.id,
+    });
 
     return (
       <AdminWorkspaceShell
