@@ -1,5 +1,13 @@
 import type { DetectedDocumentType } from "@/lib/intelligence/types";
 
+export type PayrollEmployeeSummary = {
+  name: string;
+  shifts_count: number;
+  total_hours: number | null;
+  overtime_hours: number | null;
+  total_tips: number | null;
+};
+
 export type PayrollProfile = {
   company: string | null;
   period: string | null;
@@ -8,6 +16,7 @@ export type PayrollProfile = {
   total_hours: number | null;
   overtime_hours: number | null;
   total_tips: number | null;
+  employees?: PayrollEmployeeSummary[];
   source_document: string | null;
   upload_date: string | null;
 };

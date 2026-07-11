@@ -8,10 +8,9 @@ import {
 } from "@/lib/intelligence/classification";
 import { embedChunks } from "@/lib/intelligence/embeddings";
 import {
-  extractDocument,
   getFileExtension,
   isAnalyzableFilename,
-} from "@/lib/intelligence/extraction";
+} from "@/lib/intelligence/extraction/utils";
 import {
   profileToStructuredSummary,
   runSpecializedExtractor,
@@ -496,6 +495,9 @@ async function runPipeline(params: {
       }
     }
 
+    const { extractDocument } = await import(
+      "@/lib/intelligence/extraction/extract-document"
+    );
     const extraction = await extractDocument(buffer, filename);
 
     logSpreadsheetStep(

@@ -9,7 +9,7 @@ import {
 } from "@/lib/constants/upload";
 import { requireClient } from "@/lib/auth/session";
 import { scheduleInboxDocumentProcessing } from "@/lib/intelligence/processing";
-import { isAnalyzableFilename } from "@/lib/intelligence/extraction";
+import { isAnalyzableFilename } from "@/lib/intelligence/extraction/utils";
 import { createClient } from "@/lib/supabase/server";
 import { DOCUMENT_TYPE_OPTIONS } from "@/types";
 

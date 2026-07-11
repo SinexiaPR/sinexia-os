@@ -10,6 +10,7 @@ import {
   type QueryIntent,
 } from "@/lib/intelligence/intents";
 import { getProfilesForCompany } from "@/lib/intelligence/profiles/store";
+import type { PayrollEmployeeSummary } from "@/lib/intelligence/profiles/types";
 import type { SourceReference } from "@/lib/intelligence/types";
 
 type StructuredAnswer = {
@@ -76,6 +77,18 @@ function readField(
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function readPayrollEmployees(
+  data: Record<string, unknown>,
+): PayrollEmployeeSummary[] {
+  if (!Array.isArray(data.employees)) return [];
+  return data.employees.filter(
+    (entry): entry is PayrollEmployeeSummary =>
+      typeof entry === "object" &&
+      entry != null &&
+      typeof (entry as PayrollEmployeeSummary).name === "string",
+  );
+}
+
 function answerQuickBooksAR(
   intent: QueryIntent,
   data: QuickBooksARProfile,
@@ -128,10 +141,33 @@ function answerFromProfileData(
   }
 
   switch (intent) {
-    case "payroll_total":
-      return `Total de nómina: ${formatMoney(readField(data, "total_payroll"))}.`;
+    case "payroll_total": {
+      const totalPayroll = readField(data, "total_payroll");
+      if (totalPayroll == null) {
+        return "No hay monto de nómina en el archivo cargado (solo horas/propinas).";
+      }
+      return `Total de nómina: ${formatMoney(totalPayroll)}.`;
+    }
     case "employee_count":
       return formatCount(readField(data, "employee_count"), "Empleados");
+    case "most_hours_worked": {
+      const employees = readPayrollEmployees(data);
+      if (!employees.length) return null;
+      const ranked = [...employees].sort(
+        (a, b) => (b.total_hours ?? 0) - (a.total_hours ?? 0),
+      );
+      const top = ranked[0];
+      if (!top?.total_hours) {
+        return "No hay horas registradas por empleado en este archivo.";
+      }
+      const lines = ranked
+        .slice(0, 5)
+        .map(
+          (employee, index) =>
+            `${index + 1}. ${employee.name}: ${employee.total_hours?.toLocaleString("en-US") ?? 0} horas`,
+        );
+      return `Quién trabajó más horas:\n${lines.join("\n")}`;
+    }
     case "overtime_hours":
       return formatCount(readField(data, "overtime_hours"), "Horas extra");
     case "total_tips":
@@ -395,6 +431,7 @@ export async function answerFromStructuredQuery(params: {
   const payrollIntents = new Set([
     "payroll_total",
     "employee_count",
+    "most_hours_worked",
     "overtime_hours",
     "total_tips",
   ]);
