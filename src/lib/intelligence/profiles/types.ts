@@ -8,6 +8,27 @@ export type PayrollEmployeeSummary = {
   total_tips: number | null;
 };
 
+export type PayrollExtractionDiagnostics = {
+  unique_employee_count: number;
+  total_hours: number | null;
+  total_tips: number | null;
+  rows_included: number;
+  rows_skipped: number;
+  rows_deduplicated: number;
+  unique_shift_rows: number;
+  sheets_processed: string[];
+  sheets_skipped: string[];
+  sheet_summaries: Array<{
+    sheetName: string;
+    employeeColumn: string | null;
+    detectedHourColumns: string[];
+    includedRows: number;
+    excludedRows: number;
+    rawHoursTotal: number;
+    normalizedHoursTotal: number;
+  }>;
+};
+
 export type PayrollProfile = {
   company: string | null;
   period: string | null;
@@ -17,6 +38,7 @@ export type PayrollProfile = {
   overtime_hours: number | null;
   total_tips: number | null;
   employees?: PayrollEmployeeSummary[];
+  extraction_diagnostics?: PayrollExtractionDiagnostics;
   source_document: string | null;
   upload_date: string | null;
 };

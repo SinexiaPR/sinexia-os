@@ -173,9 +173,12 @@ export function AdminReportIntelligence({
                 {Object.entries(profile.structured_data)
                   .filter(
                     ([key]) =>
-                      !["source_document", "customers", "invoices"].includes(
-                        key,
-                      ),
+                      ![
+                        "source_document",
+                        "customers",
+                        "invoices",
+                        "employees",
+                      ].includes(key),
                   )
                   .slice(0, 16)
                   .map(([key, value]) => (
@@ -218,6 +221,44 @@ export function AdminReportIntelligence({
                         </li>
                       ))}
                   </ul>
+                </div>
+              ) : null}
+              {profile.structured_data.extraction_diagnostics ? (
+                <div className="space-y-1 rounded-md border border-border/60 bg-background/80 p-2">
+                  <p className="text-xs font-medium text-foreground">
+                    Payroll extraction diagnostics
+                  </p>
+                  <dl className="grid gap-1 text-xs sm:grid-cols-2">
+                    {(
+                      [
+                        ["unique_employee_count", "Employees"],
+                        ["total_hours", "Total hours"],
+                        ["total_tips", "Total tips"],
+                        ["rows_included", "Rows included"],
+                        ["rows_skipped", "Rows skipped"],
+                        ["rows_deduplicated", "Rows deduplicated"],
+                        ["unique_shift_rows", "Unique shifts"],
+                        ["sheets_processed", "Sheets used"],
+                        ["sheets_skipped", "Sheets skipped"],
+                      ] as const
+                    ).map(([key, label]) => {
+                      const diagnostics = profile.structured_data
+                        .extraction_diagnostics as Record<string, unknown>;
+                      const value = diagnostics[key];
+                      return (
+                        <div key={key} className="flex gap-2">
+                          <dt className="text-muted-foreground">{label}:</dt>
+                          <dd className="font-medium text-foreground">
+                            {Array.isArray(value)
+                              ? value.join(", ")
+                              : value == null
+                                ? "—"
+                                : String(value)}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
                 </div>
               ) : null}
             </div>

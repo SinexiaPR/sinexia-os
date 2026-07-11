@@ -1,22 +1,173 @@
-import { extractPayrollFromExcelBuffer } from "@/lib/intelligence/extractors/payroll-excel";
-import { detectQueryIntent } from "@/lib/intelligence/intents";
+import {
+  computeClockPairHours,
+  extractPayrollFromExcelBuffer,
+  normalizeWorkedHoursValue,
+} from "@/lib/intelligence/extractors/payroll-excel";
 import XLSX from "xlsx";
 
-function buildSampleWorkbook(): Buffer {
-  const rows = [
-    [
-      "Fecha",
-      "Turno",
-      "Empleado",
-      "Área Día",
-      "Horas",
-      "Tip Café Manual",
-      "Tip Turno",
-      "Total Horas Turno",
-      "Tip Proporcional Calc",
-      "Tips Total",
-      "Notas",
-    ],
+function assert(condition: boolean, message: string) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function buildDailySheetRows(
+  rows: unknown[][],
+  sheetName = "Carga Diaria",
+): Buffer {
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+  return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+}
+
+function buildWorkbookWithSheets(
+  sheets: Array<{ name: string; rows: unknown[][] }>,
+): Buffer {
+  const workbook = XLSX.utils.book_new();
+  for (const sheetDef of sheets) {
+    const sheet = XLSX.utils.aoa_to_sheet(sheetDef.rows);
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetDef.name);
+  }
+  return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+}
+
+const HEADERS = [
+  "Fecha",
+  "Turno",
+  "Empleado",
+  "Área Día",
+  "Horas",
+  "Tip Café Manual",
+  "Tip Turno",
+  "Total Horas Turno",
+  "Tip Proporcional Calc",
+  "Tips Total",
+  "Notas",
+];
+
+function runHourHelperTests() {
+  assert(normalizeWorkedHoursValue(8.5) === 8.5, "decimal hours stay 8.5");
+  assert(
+    Math.abs((normalizeWorkedHoursValue(0.354166) ?? 0) - 8.5) < 0.01,
+    "excel duration converts to ~8.5",
+  );
+  assert(
+    computeClockPairHours("08:00", "17:00", 1) === 8,
+    "clock pair with 1-hour break equals 8",
+  );
+}
+
+function runRepeatedEmployeeTest() {
+  const buffer = buildDailySheetRows([
+    HEADERS,
+    ["2026-07-01", "AM", "GARCIA, MARIA", "Salon", 8, 0, 0, 8, 0, 0, ""],
+    ["2026-07-02", "PM", "GARCIA, MARIA", "Salon", 6, 0, 0, 6, 0, 0, ""],
+  ]);
+  const profile = extractPayrollFromExcelBuffer(buffer, {
+    titleHint: "test",
+    fallbackPeriod: "2026-07",
+    uploadDate: new Date().toISOString(),
+  });
+  assert(profile?.structuredData.employee_count === 1, "one unique employee");
+  assert(profile?.structuredData.total_hours === 14, "hours summed across days");
+}
+
+function runDuplicateShiftTest() {
+  const duplicateRow = [
+    "2026-07-01",
+    "AM",
+    "GARCIA, MARIA",
+    "Salon",
+    8,
+    0,
+    0,
+    8,
+    0,
+    0,
+    "",
+  ];
+  const buffer = buildDailySheetRows([HEADERS, duplicateRow, duplicateRow]);
+  const profile = extractPayrollFromExcelBuffer(buffer, {
+    titleHint: "test",
+    fallbackPeriod: "2026-07",
+    uploadDate: new Date().toISOString(),
+  });
+  const diagnostics = profile?.structuredData.extraction_diagnostics as
+    | { rows_deduplicated?: number; total_hours?: number }
+    | undefined;
+  assert((diagnostics?.rows_deduplicated ?? 0) >= 1, "duplicate shift skipped");
+  assert(profile?.structuredData.total_hours === 8, "duplicate row not double-counted");
+}
+
+function runDetailVsWeeklyTotalTest() {
+  const buffer = buildDailySheetRows([
+    HEADERS,
+    ["2026-07-01", "AM", "GARCIA, MARIA", "Salon", 8, 0, 0, 8, 0, 0, ""],
+    ["2026-07-02", "PM", "GARCIA, MARIA", "Salon", 6, 0, 0, 6, 0, 0, ""],
+    ["", "", "GARCIA, MARIA", "Salon", 14, 0, 0, 14, 0, 0, "weekly total row"],
+  ]);
+  const profile = extractPayrollFromExcelBuffer(buffer, {
+    titleHint: "test",
+    fallbackPeriod: "2026-07",
+    uploadDate: new Date().toISOString(),
+  });
+  assert(
+    profile?.structuredData.total_hours === 14,
+    "weekly total row without date is excluded",
+  );
+}
+
+function runMultipleSheetsDuplicateTest() {
+  const row = [
+    "2026-07-01",
+    "AM",
+    "GARCIA, MARIA",
+    "Salon",
+    8,
+    0,
+    0,
+    8,
+    0,
+    0,
+    "",
+  ];
+  const buffer = buildWorkbookWithSheets([
+    { name: "Carga Diaria", rows: [HEADERS, row] },
+    { name: "Resumen", rows: [HEADERS, row] },
+  ]);
+  const profile = extractPayrollFromExcelBuffer(buffer, {
+    titleHint: "test",
+    fallbackPeriod: "2026-07",
+    uploadDate: new Date().toISOString(),
+  });
+  const diagnostics = profile?.structuredData.extraction_diagnostics as
+    | { sheets_processed?: string[]; total_hours?: number }
+    | undefined;
+  assert(
+    (diagnostics?.sheets_processed ?? []).length === 1,
+    "summary duplicate sheet skipped when detail exists",
+  );
+  assert(profile?.structuredData.total_hours === 8, "hours not doubled across sheets");
+}
+
+function runTotalsExcludedTest() {
+  const buffer = buildDailySheetRows([
+    HEADERS,
+    ["2026-07-01", "AM", "GARCIA, MARIA", "Salon", 8, 0, 0, 8, 0, 0, ""],
+    ["TOTAL", "", "", "", 8, "", "", "", "", 0, ""],
+  ]);
+  const profile = extractPayrollFromExcelBuffer(buffer, {
+    titleHint: "test",
+    fallbackPeriod: "2026-07",
+    uploadDate: new Date().toISOString(),
+  });
+  assert(profile?.structuredData.total_hours === 8, "TOTAL row excluded");
+}
+
+function runSampleWorkbookTest() {
+  const buffer = buildDailySheetRows([
+    HEADERS,
     [
       "2026-07-01",
       "AM",
@@ -85,19 +236,6 @@ function buildSampleWorkbook(): Buffer {
     ],
     ["TOTAL", "", "", "", 34.5, "", "", "", "", 83.5, ""],
     [
-      "Fecha",
-      "Turno",
-      "Empleado",
-      "Área Día",
-      "Horas",
-      "Tip Café Manual",
-      "Tip Turno",
-      "Total Horas Turno",
-      "Tip Proporcional Calc",
-      "Tips Total",
-      "Notas",
-    ],
-    [
       "2026-07-05",
       "AM",
       "RODRIGUEZ, PEDRO",
@@ -110,67 +248,31 @@ function buildSampleWorkbook(): Buffer {
       5,
       "formula error",
     ],
-  ];
+  ]);
 
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, "Carga Diaria");
-  return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
-}
-
-async function main() {
-  const buffer = buildSampleWorkbook();
   const profile = extractPayrollFromExcelBuffer(buffer, {
     titleHint: "Carga Diaria Julio",
     fallbackPeriod: "2026-07",
     uploadDate: new Date().toISOString(),
   });
 
-  if (!profile) {
-    console.error("FAIL: profile is null");
-    process.exit(1);
-  }
-
-  const data = profile.structuredData;
-  console.log("employee_count:", data.employee_count);
-  console.log("total_payroll:", data.total_payroll);
-  console.log("total_hours:", data.total_hours);
-  console.log("total_tips:", data.total_tips);
-  console.log("employees:", JSON.stringify(data.employees, null, 2));
-  console.log("summary:", profile.summary);
-
-  if (data.employee_count !== 3) {
-    console.error(`FAIL: expected 3 employees, got ${data.employee_count}`);
-    process.exit(1);
-  }
-
-  const adalberto = (data.employees as Array<{ name: string; shifts_count: number; total_hours: number | null }>).find(
-    (e) => e.name.includes("ADALBERTO"),
+  assert(profile?.structuredData.employee_count === 3, "sample workbook employees");
+  assert(profile?.structuredData.total_hours === 34.5, "sample workbook hours");
+  assert(
+    profile?.structuredData.total_payroll == null,
+    "sample workbook has no payroll amount",
   );
-  if (!adalberto || adalberto.shifts_count !== 2 || adalberto.total_hours !== 14) {
-    console.error("FAIL: ADALBERTO shifts/hours", adalberto);
-    process.exit(1);
-  }
-
-  if (data.total_payroll != null) {
-    console.error("FAIL: total_payroll should be null for hours/tips sheet");
-    process.exit(1);
-  }
-
-  const countIntent = detectQueryIntent("¿Cuántos empleados aparecen?");
-  const hoursIntent = detectQueryIntent("¿Quién trabajó más horas?");
-  console.log("intents:", countIntent, hoursIntent);
-
-  const mockAnswerCount = profile.summary;
-  const topEmployee = (data.employees as Array<{ name: string; total_hours: number | null }>)
-    .slice()
-    .sort((a, b) => (b.total_hours ?? 0) - (a.total_hours ?? 0))[0];
-  console.log("expected top hours:", topEmployee?.name, topEmployee?.total_hours);
-
-  console.log("PASS");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+function main() {
+  runHourHelperTests();
+  runRepeatedEmployeeTest();
+  runDuplicateShiftTest();
+  runDetailVsWeeklyTotalTest();
+  runMultipleSheetsDuplicateTest();
+  runTotalsExcludedTest();
+  runSampleWorkbookTest();
+  console.log("ALL PAYROLL HOUR TESTS PASS");
+}
+
+main();
