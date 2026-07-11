@@ -1,6 +1,14 @@
 import { parseMoney, confidenceFromFields, buildSummary } from "@/lib/intelligence/extractors/base";
+import {
+  extractGrandTotalFromPdfText,
+  parseCustomerBalanceDetailPdfText,
+} from "@/lib/intelligence/extractors/quickbooks-ar-pdf";
 import type { ExtractionProfileResult } from "@/lib/intelligence/profiles/types";
 import type { ExtractionResult } from "@/lib/intelligence/types";
+
+function logQuickBooksAR(event: string, meta: Record<string, unknown>) {
+  console.info(`[sinexia-qb-ar] ${event}`, meta);
+}
 
 export type QuickBooksARVariant =
   | "customer_balance_detail"
@@ -505,9 +513,17 @@ export function extractQuickBooksARProfile(
 ): ExtractionProfileResult | null {
   const text = extraction.text;
   const variant = detectQuickBooksAR(text, params.filename, params.titleHint);
-  if (!variant) return null;
+  if (!variant) {
+    logQuickBooksAR("qb_ar_skipped", {
+      reason: "no_variant_detected",
+      extractedTextLength: text.length,
+      filename: params.filename,
+    });
+    return null;
+  }
 
-  let tables = params.buffer ? parseExcelBuffer(params.buffer) : [];
+  const isSpreadsheet = /\.xlsx?$/i.test(params.filename);
+  let tables = params.buffer && isSpreadsheet ? parseExcelBuffer(params.buffer) : [];
   if (!tables.length) {
     tables = parsePipeRows(text);
   }
@@ -523,15 +539,35 @@ export function extractQuickBooksARProfile(
     }
   }
 
+  if (
+    !customers.length &&
+    (variant === "customer_balance_detail" ||
+      /customer\s*balance\s*detail/i.test(text))
+  ) {
+    const pdfParsed = parseCustomerBalanceDetailPdfText(text);
+    if (pdfParsed.customers.length) {
+      customers = pdfParsed.customers;
+      grandTotal = pdfParsed.grandTotal;
+      logQuickBooksAR("qb_ar_pdf_table_parsed", {
+        variant,
+        customerCount: customers.length,
+        invoiceCount: customers.reduce((sum, c) => sum + c.invoice_count, 0),
+        totalReceivable: grandTotal,
+      });
+    }
+  }
+
   // Fallback: labeled totals only
   if (!customers.length) {
-    const total =
-      parseMoney(
-        text.match(
-          /(?:total\s*(?:for\s*all\s*customers|receivable|open\s*balance)|grand\s*total)[^\n\d]{0,20}([\d,.]+(?:\.\d{2})?)/i,
-        )?.[1] ?? null,
-      ) ?? null;
-    if (total == null) return null;
+    const total = extractGrandTotalFromPdfText(text);
+    if (total == null) {
+      logQuickBooksAR("qb_ar_parse_failed", {
+        variant,
+        extractedTextLength: text.length,
+        filename: params.filename,
+      });
+      return null;
+    }
     grandTotal = total;
   }
 
@@ -595,6 +631,17 @@ export function extractQuickBooksARProfile(
     company,
     report_date ?? period,
   ]);
+
+  logQuickBooksAR("qb_ar_profile_completed", {
+    variant,
+    extractedTextLength: text.length,
+    detectedDocumentType: "accounts_receivable",
+    customerCount: customer_count,
+    invoiceCount: invoice_count,
+    totalReceivable: total_receivable,
+    structuredProfileGenerated: customers.length > 0 || total_receivable != null,
+    confidence: Math.max(confidence, customers.length ? 0.7 : 0.4),
+  });
 
   return {
     documentType: "accounts_receivable",

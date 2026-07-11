@@ -627,6 +627,31 @@ async function runPipeline(params: {
       fileFormat,
     );
 
+    if (fileFormat === "pdf" || profile.documentType === "accounts_receivable") {
+      logProcessing("profile_extracted", {
+        reportId: sourceMeta.reportId ?? null,
+        processingId,
+        companyId,
+        fileExtension: fileFormat,
+        extractedTextLength: extraction.text.length,
+        detectedDocumentType: profile.documentType,
+        customerCount:
+          typeof profile.structuredData.customer_count === "number"
+            ? profile.structuredData.customer_count
+            : null,
+        invoiceCount:
+          typeof profile.structuredData.invoice_count === "number"
+            ? profile.structuredData.invoice_count
+            : null,
+        totalReceivable:
+          typeof profile.structuredData.total_receivable === "number"
+            ? profile.structuredData.total_receivable
+            : null,
+        structuredProfileGenerated,
+        confidence: profile.confidence,
+      });
+    }
+
     const skipGptClassification =
       Boolean(reportCategory) || profile.confidence >= 0.35;
 
@@ -772,6 +797,19 @@ async function runPipeline(params: {
       chunks: embeddedChunks.length,
       tokens: totalTokens,
       type: classification.summary.documentType,
+      finalStatus: "completed",
+      customerCount:
+        typeof profile.structuredData.customer_count === "number"
+          ? profile.structuredData.customer_count
+          : null,
+      invoiceCount:
+        typeof profile.structuredData.invoice_count === "number"
+          ? profile.structuredData.invoice_count
+          : null,
+      totalReceivable:
+        typeof profile.structuredData.total_receivable === "number"
+          ? profile.structuredData.total_receivable
+          : null,
     });
 
     logSpreadsheetStep(
