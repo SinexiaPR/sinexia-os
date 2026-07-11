@@ -10,6 +10,9 @@ type DocumentListProps = {
   emptyMessage?: string;
   showCompany?: boolean;
   viewAllHref?: string;
+  viewedDocumentIds: string[];
+  profileId: string;
+  isAdmin?: boolean;
 };
 
 export function DocumentList({
@@ -18,6 +21,9 @@ export function DocumentList({
   emptyMessage = "No items yet.",
   showCompany = false,
   viewAllHref,
+  viewedDocumentIds,
+  profileId,
+  isAdmin = false,
 }: DocumentListProps) {
   return (
     <SurfaceCard padding="md">
@@ -44,6 +50,9 @@ export function DocumentList({
               key={document.id}
               document={document}
               showCompany={showCompany}
+              viewedDocumentIds={viewedDocumentIds}
+              profileId={profileId}
+              isAdmin={isAdmin}
             />
           ))}
         </div>

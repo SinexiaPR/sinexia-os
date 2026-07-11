@@ -7,11 +7,15 @@ import {
   resolveUploadContentType,
   UPLOAD_MAX_BYTES,
 } from "@/lib/constants/upload";
-import { requireClient } from "@/lib/auth/session";
+import { requireAdmin, requireClient } from "@/lib/auth/session";
 import { scheduleInboxDocumentProcessing } from "@/lib/intelligence/processing";
 import { isAnalyzableFilename } from "@/lib/intelligence/extraction/utils";
 import { createClient } from "@/lib/supabase/server";
-import { DOCUMENT_TYPE_OPTIONS } from "@/types";
+import {
+  DOCUMENT_STATUS_OPTIONS,
+  DOCUMENT_TYPE_OPTIONS,
+  type DocumentStatus,
+} from "@/types";
 
 export async function uploadDocument(formData: FormData) {
   const profile = await requireClient();
@@ -112,5 +116,34 @@ export async function uploadDocument(formData: FormData) {
   revalidatePath("/dashboard/inbox");
   revalidatePath("/dashboard/sia");
 
+  return { success: true };
+}
+
+export async function updateDocumentStatus(
+  documentId: string,
+  status: DocumentStatus,
+) {
+  await requireAdmin();
+  if (!documentId) {
+    return { error: "Documento no válido." };
+  }
+
+  if (!DOCUMENT_STATUS_OPTIONS.includes(status)) {
+    return { error: "Estado no válido." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("documents")
+    .update({ status })
+    .eq("id", documentId);
+
+  if (error) {
+    console.error("[documents] updateDocumentStatus", error.message);
+    return { error: "No se pudo actualizar el estado del documento." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/inbox");
   return { success: true };
 }

@@ -61,6 +61,12 @@ export type ReportViewRow = {
   viewed_at: string;
 };
 
+export type DocumentViewRow = {
+  user_id: string;
+  document_id: string;
+  viewed_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -328,6 +334,19 @@ export type Database = {
         Update: {
           user_id?: string;
           report_id?: string;
+          viewed_at?: string;
+        };
+      };
+      document_views: {
+        Row: DocumentViewRow;
+        Insert: {
+          user_id: string;
+          document_id: string;
+          viewed_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          document_id?: string;
           viewed_at?: string;
         };
       };

@@ -168,6 +168,19 @@ export async function markDocumentViewed(documentId: string) {
     }
   }
 
+  const { error } = await supabase.from("document_views").upsert(
+    {
+      user_id: profile.id,
+      document_id: documentId,
+      viewed_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,document_id" },
+  );
+
+  if (error) {
+    return { error: "No se pudo registrar la visita al documento." };
+  }
+
   const related = await markNotificationsReadForEntity({
     userId: profile.id,
     role: profile.role,

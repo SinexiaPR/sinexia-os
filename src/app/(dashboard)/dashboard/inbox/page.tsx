@@ -9,6 +9,7 @@ import {
   getAllDocuments,
   getDocumentsForCompany,
 } from "@/services/documents";
+import { getViewedDocumentIds } from "@/services/notifications";
 
 export const metadata: Metadata = {
   title: "Inbox",
@@ -23,6 +24,8 @@ export default async function InboxPage() {
       : profile.company_id
         ? await getDocumentsForCompany(profile.company_id)
         : [];
+
+  const viewedDocumentIds = await getViewedDocumentIds(profile.id);
 
   const isClient = profile.role === "client";
 
@@ -66,6 +69,9 @@ export default async function InboxPage() {
         documents={items}
         title={isClient ? "Su Inbox" : "All Inbox items"}
         showCompany={profile.role === "admin"}
+        viewedDocumentIds={viewedDocumentIds}
+        profileId={profile.id}
+        isAdmin={profile.role === "admin"}
         emptyMessage={
           isClient
             ? "Su Inbox está vacío. Envíe su primer documento arriba."

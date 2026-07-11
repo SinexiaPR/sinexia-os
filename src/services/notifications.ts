@@ -133,6 +133,40 @@ export async function getViewedReportIds(userId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.report_id);
 }
 
+export async function getViewedDocumentIds(userId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("document_views")
+    .select("document_id")
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[notifications] getViewedDocumentIds", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row) => row.document_id);
+}
+
+export async function countUnviewedDocumentsForUser(params: {
+  userId: string;
+  companyId: string;
+}): Promise<number> {
+  const supabase = await createClient();
+
+  const { data: documents, error: documentsError } = await supabase
+    .from("documents")
+    .select("id")
+    .eq("company_id", params.companyId);
+
+  if (documentsError || !documents?.length) return 0;
+
+  const viewed = await getViewedDocumentIds(params.userId);
+  const viewedSet = new Set(viewed);
+
+  return documents.filter((doc) => !viewedSet.has(doc.id)).length;
+}
+
 export async function countUnreadReportsForUser(params: {
   userId: string;
   companyId: string;

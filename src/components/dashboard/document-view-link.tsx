@@ -12,6 +12,7 @@ type DocumentViewLinkProps = {
   href: string;
   children: React.ReactNode;
   className?: string;
+  onViewed?: () => void;
 };
 
 export function DocumentViewLink({
@@ -19,6 +20,7 @@ export function DocumentViewLink({
   href,
   children,
   className,
+  onViewed,
 }: DocumentViewLinkProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -27,6 +29,7 @@ export function DocumentViewLink({
     event.preventDefault();
 
     startTransition(async () => {
+      onViewed?.();
       const result = await markDocumentViewed(documentId);
       if (result.error) {
         console.error(result.error);
