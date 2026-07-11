@@ -1,4 +1,8 @@
+import { INTELLIGENCE_LIMITS } from "@/lib/intelligence/constants";
+import { getFileExtension } from "@/lib/intelligence/extraction/utils";
 import { extractPayrollFromExcelBuffer } from "@/lib/intelligence/extractors/payroll-excel";
+import { extractPayrollFromPdfText } from "@/lib/intelligence/extractors/payroll-pdf";
+import { isLikelyPayrollDocument } from "@/lib/intelligence/extractors/payroll-detect";
 import {
   extractAccountsPayableProfile,
   extractAccountsReceivableProfile,
@@ -42,6 +46,68 @@ export function resolveExtractorType(
   return documentType;
 }
 
+function buildPayrollSignals(params: RunSpecializedExtractorParams) {
+  return {
+    reportCategory: params.reportCategory,
+    titleHint: params.titleHint,
+    filename: params.filename,
+    text: params.extraction.text,
+  };
+}
+
+function shouldTryPayrollExtraction(
+  params: RunSpecializedExtractorParams,
+  resolvedType: DetectedDocumentType,
+): boolean {
+  return (
+    resolvedType === "payroll" ||
+    resolvedType === "homebase_export" ||
+    isLikelyPayrollDocument(buildPayrollSignals(params))
+  );
+}
+
+function tryPayrollExtraction(
+  params: RunSpecializedExtractorParams,
+  base: {
+    filename: string;
+    titleHint: string;
+    fallbackPeriod: string | null;
+    uploadDate: string;
+  },
+): ExtractionProfileResult | null {
+  const ext = getFileExtension(params.filename);
+
+  if (params.buffer && (ext === "xlsx" || ext === "xls")) {
+    const excelPayroll = extractPayrollFromExcelBuffer(params.buffer, base);
+    if (excelPayroll) {
+      return excelPayroll;
+    }
+  }
+
+  if (
+    ext === "pdf" &&
+    !params.extraction.requiresOcr &&
+    params.extraction.text.length >= INTELLIGENCE_LIMITS.minUsableTextChars
+  ) {
+    const pdfPayroll = extractPayrollFromPdfText(params.extraction.text, base);
+    if (pdfPayroll) {
+      return pdfPayroll;
+    }
+  }
+
+  if (
+    params.extraction.text.length >= INTELLIGENCE_LIMITS.minUsableTextChars &&
+    isLikelyPayrollDocument(buildPayrollSignals(params))
+  ) {
+    const textPayroll = extractPayrollFromPdfText(params.extraction.text, base);
+    if (textPayroll) {
+      return textPayroll;
+    }
+  }
+
+  return null;
+}
+
 export function runSpecializedExtractor(
   params: RunSpecializedExtractorParams,
 ): ExtractionProfileResult {
@@ -79,17 +145,17 @@ export function runSpecializedExtractor(
     params.reportCategory,
   );
 
+  if (shouldTryPayrollExtraction(params, type)) {
+    const payroll = tryPayrollExtraction(params, base);
+    if (payroll) {
+      return payroll;
+    }
+  }
+
   switch (type) {
     case "payroll":
-    case "homebase_export": {
-      if (params.buffer) {
-        const excelPayroll = extractPayrollFromExcelBuffer(params.buffer, base);
-        if (excelPayroll) {
-          return excelPayroll;
-        }
-      }
+    case "homebase_export":
       return extractPayrollProfile(params.extraction, base);
-    }
     case "accounts_receivable":
     case "custom_aging":
       return extractAccountsReceivableProfile(params.extraction, base);

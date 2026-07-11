@@ -6,6 +6,8 @@ export type PayrollEmployeeSummary = {
   total_hours: number | null;
   overtime_hours: number | null;
   total_tips: number | null;
+  gross_pay?: number | null;
+  net_pay?: number | null;
 };
 
 export type PayrollExtractionDiagnostics = {
@@ -31,6 +33,8 @@ export type PayrollExtractionDiagnostics = {
 
 export type PayrollProfile = {
   company: string | null;
+  company_id?: string | null;
+  report_id?: string | null;
   period: string | null;
   employee_count: number | null;
   total_payroll: number | null;
@@ -39,8 +43,10 @@ export type PayrollProfile = {
   total_tips: number | null;
   employees?: PayrollEmployeeSummary[];
   extraction_diagnostics?: PayrollExtractionDiagnostics;
+  source_format?: "xlsx" | "pdf" | "text" | null;
   source_document: string | null;
   upload_date: string | null;
+  source_system?: string | null;
 };
 
 export type AccountsReceivableProfile = {

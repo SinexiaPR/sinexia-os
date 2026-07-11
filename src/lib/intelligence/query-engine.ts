@@ -168,6 +168,8 @@ function answerFromProfileData(
         );
       return `Quién trabajó más horas:\n${lines.join("\n")}`;
     }
+    case "total_hours":
+      return formatCount(readField(data, "total_hours"), "Horas totales");
     case "overtime_hours":
       return formatCount(readField(data, "overtime_hours"), "Horas extra");
     case "total_tips":
@@ -287,9 +289,12 @@ export async function answerFromStructuredQuery(params: {
         reportId: params.reportId,
         period: params.period,
       });
-      const preferred =
-        profiles.find((p) => p.document_type === "payroll") ?? profiles[0];
-      const latest = preferred;
+      const payrollPreferred =
+        /n[oó]mina|payroll/i.test(params.question) ||
+        profiles.some((p) => p.document_type === "payroll");
+      const latest = payrollPreferred
+        ? profiles.find((p) => p.document_type === "payroll") ?? profiles[0]
+        : profiles[0];
       if (
         latest?.summary &&
         (latest.extraction_confidence ?? 0) >= 0.35
@@ -432,6 +437,7 @@ export async function answerFromStructuredQuery(params: {
     "payroll_total",
     "employee_count",
     "most_hours_worked",
+    "total_hours",
     "overtime_hours",
     "total_tips",
   ]);

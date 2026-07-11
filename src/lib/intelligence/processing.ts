@@ -547,6 +547,10 @@ async function runPipeline(params: {
     }
 
     if (extraction.requiresOcr) {
+      const ocrMessage =
+        fileFormat === "pdf"
+          ? "Este PDF no contiene texto extraíble y requiere OCR para ser analizado por SinexIA."
+          : "Este documento requiere OCR para ser analizado por SinexIA.";
       await admin
         .from("document_processing")
         .update({
@@ -555,12 +559,14 @@ async function runPipeline(params: {
           original_filename: filename,
           structured_summary: {
             warnings: [
-              "Documento sin texto extraíble. Se requiere OCR (pendiente).",
+              fileFormat === "pdf"
+                ? "PDF sin texto extraíble. Se requiere OCR (pendiente)."
+                : "Documento sin texto extraíble. Se requiere OCR (pendiente).",
             ],
             briefSummary: "Requiere OCR",
             confidence: 0,
           },
-          processing_error: "Este documento requiere OCR para ser analizado por SinexIA.",
+          processing_error: ocrMessage,
           processed_at: new Date().toISOString(),
           prompt_version: INTELLIGENCE_PROMPT_VERSION,
         })

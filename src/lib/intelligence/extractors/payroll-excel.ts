@@ -1,8 +1,4 @@
-import {
-  buildSummary,
-  confidenceFromFields,
-  parseMoney,
-} from "@/lib/intelligence/extractors/base";
+import { parseMoney } from "@/lib/intelligence/extractors/base";
 import {
   buildShiftFingerprint,
   classifySheetTier,
@@ -13,6 +9,17 @@ import {
   type SheetTier,
 } from "@/lib/intelligence/extractors/payroll-hours";
 import type { ExtractionProfileResult } from "@/lib/intelligence/profiles/types";
+import type { PayrollExtractionDiagnostics } from "@/lib/intelligence/profiles/types";
+import {
+  applyPayrollShift,
+  buildPayrollProfileResult,
+  finalizePayrollEmployees,
+  isSkipPayrollEmployeeName,
+  normalizePayrollEmployeeKey,
+  PAYROLL_FORMULA_ERROR,
+  PAYROLL_SKIP_NAME,
+  type PayrollEmployeeAccumulator,
+} from "@/lib/intelligence/extractors/payroll-shared";
 
 type SheetColumns = {
   headerIdx: number;
@@ -24,15 +31,6 @@ type SheetColumns = {
   tipsCol: number | null;
   payrollCol: number | null;
   headers: string[];
-};
-
-type EmployeeAccumulator = {
-  name: string;
-  shifts_count: number;
-  total_hours: number;
-  overtime_hours: number;
-  total_tips: number;
-  payroll_sum: number;
 };
 
 type ParsedShift = {
@@ -56,31 +54,6 @@ type SheetProcessResult = {
   shifts: ParsedShift[];
 };
 
-type PayrollDiagnostics = {
-  unique_employee_count: number;
-  total_hours: number | null;
-  total_tips: number | null;
-  rows_included: number;
-  rows_skipped: number;
-  rows_deduplicated: number;
-  unique_shift_rows: number;
-  sheets_processed: string[];
-  sheets_skipped: string[];
-  sheet_summaries: Array<{
-    sheetName: string;
-    employeeColumn: string | null;
-    detectedHourColumns: string[];
-    includedRows: number;
-    excludedRows: number;
-    rawHoursTotal: number;
-    normalizedHoursTotal: number;
-  }>;
-};
-
-const SKIP_NAME =
-  /^(total|subtotal|grand\s*total|suma|totales?|headers?|empleado|employee|nombre|name|staff|worker|trabajador|associate)$/i;
-const FORMULA_ERROR = /^#(NAME\?|REF!|VALUE!|DIV\/0!|N\/A|NULL!|NUM!)/i;
-
 function logPayroll(event: string, meta: Record<string, unknown>) {
   console.info(`[sinexia-payroll] ${event}`, meta);
 }
@@ -94,13 +67,13 @@ function cellStr(value: unknown): string {
 }
 
 function normalizeEmployeeKey(name: string): string {
-  return name.trim().replace(/\s+/g, " ").toLowerCase();
+  return normalizePayrollEmployeeKey(name);
 }
 
 function parseNumericCell(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const raw = cellStr(value);
-  if (!raw || FORMULA_ERROR.test(raw)) return null;
+  if (!raw || PAYROLL_FORMULA_ERROR.test(raw)) return null;
   return parseMoney(raw);
 }
 
@@ -222,10 +195,7 @@ function rowLooksLikeRepeatedHeader(row: unknown[], columns: SheetColumns): bool
 }
 
 function isSkipEmployeeName(name: string): boolean {
-  if (!name) return true;
-  if (FORMULA_ERROR.test(name)) return true;
-  if (SKIP_NAME.test(name)) return true;
-  return false;
+  return isSkipPayrollEmployeeName(name);
 }
 
 function isSummaryDataRow(row: unknown[], columns: SheetColumns): boolean {
@@ -235,7 +205,7 @@ function isSummaryDataRow(row: unknown[], columns: SheetColumns): boolean {
   }
 
   const name = cellStr(row[columns.employeeCol]);
-  if (SKIP_NAME.test(name)) return true;
+  if (PAYROLL_SKIP_NAME.test(name)) return true;
 
   return false;
 }
@@ -415,33 +385,6 @@ function parseSheetShifts(params: {
   };
 }
 
-function applyShiftToEmployee(
-  employees: Map<string, EmployeeAccumulator>,
-  shift: ParsedShift,
-) {
-  const existing = employees.get(shift.employeeKey);
-
-  if (existing) {
-    existing.shifts_count += 1;
-    if (shift.hours != null) existing.total_hours += shift.hours;
-    if (shift.overtime != null) existing.overtime_hours += shift.overtime;
-    if (shift.tips != null) existing.total_tips += shift.tips;
-    if (shift.payroll != null && shift.payroll > 0) {
-      existing.payroll_sum += shift.payroll;
-    }
-    return;
-  }
-
-  employees.set(shift.employeeKey, {
-    name: shift.displayName,
-    shifts_count: 1,
-    total_hours: shift.hours ?? 0,
-    overtime_hours: shift.overtime ?? 0,
-    total_tips: shift.tips ?? 0,
-    payroll_sum: shift.payroll != null && shift.payroll > 0 ? shift.payroll : 0,
-  });
-}
-
 export function extractPayrollFromExcelBuffer(
   buffer: Buffer,
   params: {
@@ -494,7 +437,7 @@ export function extractPayrollFromExcelBuffer(
           );
 
     const seenFingerprints = new Set<string>();
-    const employees = new Map<string, EmployeeAccumulator>();
+    const employees = new Map<string, PayrollEmployeeAccumulator>();
     let rowsIncluded = 0;
     let rowsSkipped = 0;
     let rowsDeduplicated = 0;
@@ -524,7 +467,17 @@ export function extractPayrollFromExcelBuffer(
 
         seenFingerprints.add(shift.fingerprint);
         rowsIncluded += 1;
-        applyShiftToEmployee(employees, shift);
+        applyPayrollShift(employees, {
+          employeeKey: shift.employeeKey,
+          displayName: shift.displayName,
+          hours: shift.hours,
+          overtime: shift.overtime,
+          tips: shift.tips,
+          grossPay: null,
+          netPay: null,
+          payroll: shift.payroll,
+          fingerprint: shift.fingerprint,
+        });
       }
 
       const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
@@ -536,7 +489,7 @@ export function extractPayrollFromExcelBuffer(
       for (let i = result.columns.headerIdx + 1; i < matrix.length; i++) {
         const row = matrix[i] ?? [];
         const name = cellStr(row[result.columns.employeeCol]);
-        if (!name || !SKIP_NAME.test(name)) continue;
+        if (!name || !PAYROLL_SKIP_NAME.test(name)) continue;
         const payrollValue =
           result.columns.payrollCol != null
             ? parseNumericCell(row[result.columns.payrollCol])
@@ -545,33 +498,14 @@ export function extractPayrollFromExcelBuffer(
       }
     }
 
-    const employeeSummaries = Array.from(employees.values()).map((employee) => ({
-      name: employee.name,
-      shifts_count: employee.shifts_count,
-      total_hours:
-        employee.total_hours > 0
-          ? Number(employee.total_hours.toFixed(2))
-          : null,
-      overtime_hours:
-        employee.overtime_hours > 0
-          ? Number(employee.overtime_hours.toFixed(2))
-          : null,
-      total_tips:
-        employee.total_tips > 0
-          ? Number(employee.total_tips.toFixed(2))
-          : null,
-    }));
-
+    const employeeSummaries = finalizePayrollEmployees(employees);
     const employeeCount = employeeSummaries.length;
     const totalHours = employeeSummaries.reduce(
       (sum, employee) => sum + (employee.total_hours ?? 0),
       0,
     );
-    const totalOvertime = employeeSummaries.reduce(
-      (sum, employee) => sum + (employee.overtime_hours ?? 0),
-      0,
-    );
-    const totalTips = employeeSummaries.reduce(
+
+    const totalTipsSum = employeeSummaries.reduce(
       (sum, employee) => sum + (employee.total_tips ?? 0),
       0,
     );
@@ -596,24 +530,10 @@ export function extractPayrollFromExcelBuffer(
       return null;
     }
 
-    let totalPayroll: number | null = null;
-    if (hasPayrollColumn) {
-      const payrollSum = employeeSummaries.reduce((sum, employee) => {
-        const acc = employees.get(normalizeEmployeeKey(employee.name));
-        return sum + (acc?.payroll_sum ?? 0);
-      }, 0);
-      totalPayroll =
-        labeledPayrollTotal != null
-          ? labeledPayrollTotal
-          : payrollSum > 0
-            ? Number(payrollSum.toFixed(2))
-            : null;
-    }
-
-    const diagnostics: PayrollDiagnostics = {
+    const diagnostics: PayrollExtractionDiagnostics = {
       unique_employee_count: employeeCount,
       total_hours: totalHours > 0 ? Number(totalHours.toFixed(2)) : null,
-      total_tips: totalTips > 0 ? Number(totalTips.toFixed(2)) : null,
+      total_tips: totalTipsSum > 0 ? Number(totalTipsSum.toFixed(2)) : null,
       rows_included: rowsIncluded,
       rows_skipped: rowsSkipped,
       rows_deduplicated: rowsDeduplicated,
@@ -639,55 +559,25 @@ export function extractPayrollFromExcelBuffer(
         })),
     };
 
-    const structuredData: Record<string, unknown> = {
-      company: null,
+    const result = buildPayrollProfileResult({
+      employees: employeeSummaries,
+      accumulators: employees,
       period: params.fallbackPeriod,
-      employee_count: employeeCount || null,
-      total_payroll: totalPayroll,
-      total_hours: totalHours > 0 ? Number(totalHours.toFixed(2)) : null,
-      overtime_hours:
-        totalOvertime > 0 ? Number(totalOvertime.toFixed(2)) : null,
-      total_tips: totalTips > 0 ? Number(totalTips.toFixed(2)) : null,
-      employees: employeeSummaries.sort((a, b) =>
-        a.name.localeCompare(b.name, "es"),
-      ),
-      extraction_diagnostics: diagnostics,
-      source_document: params.titleHint,
-      upload_date: params.uploadDate,
-      source_system: "payroll_excel",
-    };
-
-    const summaryParts: Array<string | null> = [
-      employeeCount ? `${employeeCount} empleados` : null,
-      totalHours > 0 ? `${Number(totalHours.toFixed(2))} horas totales` : null,
-      totalTips > 0
-        ? `Propinas: $${totalTips.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-        : null,
-      totalPayroll != null
-        ? `Nómina total: $${totalPayroll.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-        : hasHoursOrTips
-          ? "Sin monto de nómina en el archivo (solo horas/propinas)"
-          : null,
-    ];
-
-    const result: ExtractionProfileResult = {
-      documentType: "payroll",
-      period: params.fallbackPeriod,
-      structuredData,
-      summary: buildSummary(summaryParts),
-      confidence: confidenceFromFields([
-        employeeCount,
-        totalPayroll,
-        totalHours > 0 ? totalHours : null,
-        totalTips > 0 ? totalTips : null,
-      ]),
-    };
+      titleHint: params.titleHint,
+      uploadDate: params.uploadDate,
+      sourceFormat: "xlsx",
+      sourceSystem: "payroll_excel",
+      hasPayrollColumn,
+      hasHoursOrTips,
+      labeledPayrollTotal,
+      extractionDiagnostics: diagnostics,
+    });
 
     logPayroll("payroll_profile_completed", {
       employeeCount,
-      totalPayroll,
-      totalHours: structuredData.total_hours,
-      totalTips: structuredData.total_tips,
+      totalPayroll: result.structuredData.total_payroll,
+      totalHours: result.structuredData.total_hours,
+      totalTips: result.structuredData.total_tips,
       employeeSample: employeeSummaries.slice(0, 5).map((employee) => employee.name),
     });
 
