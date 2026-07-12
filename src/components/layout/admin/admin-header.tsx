@@ -118,8 +118,6 @@ export function AdminHeader({
           <DropdownMenuItem asChild>
             <Link href="/dashboard/profile">Perfil</Link>
           </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <SignOutControl variant="menu" />
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
