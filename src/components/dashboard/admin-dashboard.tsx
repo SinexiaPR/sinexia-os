@@ -10,6 +10,10 @@ import {
 } from "@/services/documents";
 import { getViewedDocumentIds } from "@/services/notifications";
 import { requireAuth } from "@/lib/auth/session";
+import {
+  getAdminFirstName,
+  getTodayItemsForAdmin,
+} from "@/lib/calendar/dashboard-summary";
 import { getCalendarDashboard } from "@/services/calendar";
 
 function operationalDate() {
@@ -23,12 +27,13 @@ function operationalDate() {
 
 export async function AdminDashboard() {
   const profile = await requireAuth();
+  const today = operationalDate();
   const [companies, recentDocuments, viewedDocumentIds, calendar] =
     await Promise.all([
       getCompaniesWithStats(),
       getRecentDocuments(6),
       getViewedDocumentIds(profile.id),
-      getCalendarDashboard(operationalDate()),
+      getCalendarDashboard(today),
     ]);
 
   return (
@@ -41,7 +46,8 @@ export async function AdminDashboard() {
 
       <CalendarDashboardWidget
         items={calendar.items}
-        dueToday={calendar.dueToday}
+        adminName={getAdminFirstName(profile.full_name, profile.email)}
+        todayItems={getTodayItemsForAdmin(calendar.dueToday, profile.id, today)}
         upcoming={calendar.upcoming}
         overdue={calendar.overdue}
       />
