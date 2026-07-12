@@ -1,4 +1,5 @@
 import { DocumentList } from "@/components/dashboard/document-list";
+import { CalendarDashboardWidget } from "@/components/calendar/calendar-dashboard-widget";
 import {
   PendingMetricCard,
   RecentActivityFeed,
@@ -13,17 +14,34 @@ import {
 } from "@/services/documents";
 import { getViewedDocumentIds } from "@/services/notifications";
 import { requireAuth } from "@/lib/auth/session";
+import { getCalendarDashboard } from "@/services/calendar";
+
+function operationalDate() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Puerto_Rico",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 export async function AdminDashboard() {
   const profile = await requireAuth();
-  const [companies, pendingCount, recentDocuments, recentActivity, viewedDocumentIds] =
-    await Promise.all([
-      getCompaniesWithStats(),
-      countPendingDocuments(),
-      getRecentDocuments(6),
-      getAdminRecentActivity(8),
-      getViewedDocumentIds(profile.id),
-    ]);
+  const [
+    companies,
+    pendingCount,
+    recentDocuments,
+    recentActivity,
+    viewedDocumentIds,
+    calendar,
+  ] = await Promise.all([
+    getCompaniesWithStats(),
+    countPendingDocuments(),
+    getRecentDocuments(6),
+    getAdminRecentActivity(8),
+    getViewedDocumentIds(profile.id),
+    getCalendarDashboard(operationalDate()),
+  ]);
 
   const totalItems = companies.reduce((sum, c) => sum + c.total_documents, 0);
 
@@ -55,6 +73,14 @@ export async function AdminDashboard() {
 
       <RecentActivityFeed items={recentActivity} />
 
+      <CalendarDashboardWidget
+        items={calendar.items}
+        dueToday={calendar.dueToday}
+        upcoming={calendar.upcoming}
+        overdue={calendar.overdue}
+        completedThisWeek={calendar.completedThisWeek}
+      />
+
       <div className="grid gap-8 lg:grid-cols-5">
         <SurfaceCard className="lg:col-span-2" padding="md">
           <h2 className="text-base font-semibold tracking-tight">Companies</h2>
@@ -62,11 +88,11 @@ export async function AdminDashboard() {
             {companies.map((company) => (
               <div
                 key={company.id}
-                className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-4"
+                className="border-border/70 flex items-center justify-between rounded-xl border px-4 py-4"
               >
                 <div>
-                  <p className="font-medium text-foreground">{company.name}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-foreground font-medium">{company.name}</p>
+                  <p className="text-muted-foreground text-sm">
                     {company.total_documents} in Inbox
                   </p>
                 </div>
@@ -79,7 +105,7 @@ export async function AdminDashboard() {
                       {company.pending_count}
                     </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">pending</p>
+                  <p className="text-muted-foreground text-xs">pending</p>
                 </div>
               </div>
             ))}

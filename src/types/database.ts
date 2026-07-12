@@ -43,6 +43,8 @@ export type PortalNotificationRow = {
   company_id: string | null;
   report_id: string | null;
   document_id: string | null;
+  target_user_id: string | null;
+  calendar_item_id: string | null;
   title: string;
   description: string;
   href: string;
@@ -301,6 +303,8 @@ export type Database = {
           company_id?: string | null;
           report_id?: string | null;
           document_id?: string | null;
+          target_user_id?: string | null;
+          calendar_item_id?: string | null;
           title: string;
           description: string;
           href: string;
@@ -314,10 +318,128 @@ export type Database = {
           company_id?: string | null;
           report_id?: string | null;
           document_id?: string | null;
+          target_user_id?: string | null;
+          calendar_item_id?: string | null;
           title?: string;
           description?: string;
           href?: string;
           created_at?: string;
+        };
+      };
+      calendar_items: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          item_type: "task" | "activity" | "reminder" | "internal_message";
+          company_id: string | null;
+          assigned_to: string | null;
+          created_by: string;
+          updated_by: string;
+          event_date: string;
+          all_day: boolean;
+          start_at: string | null;
+          end_at: string | null;
+          timezone: string;
+          priority: "routine" | "important" | "urgent";
+          status: "pending" | "in_progress" | "completed" | "cancelled";
+          recurrence_rule: Json | null;
+          recurrence_until: string | null;
+          recurrence_parent_id: string | null;
+          completed_at: string | null;
+          external_provider: string | null;
+          external_event_id: string | null;
+          last_synced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          item_type: "task" | "activity" | "reminder" | "internal_message";
+          company_id?: string | null;
+          assigned_to?: string | null;
+          created_by: string;
+          updated_by: string;
+          event_date: string;
+          all_day?: boolean;
+          start_at?: string | null;
+          end_at?: string | null;
+          timezone?: string;
+          priority?: "routine" | "important" | "urgent";
+          status?: "pending" | "in_progress" | "completed" | "cancelled";
+          recurrence_rule?: Json | null;
+          recurrence_until?: string | null;
+          recurrence_parent_id?: string | null;
+          completed_at?: string | null;
+          external_provider?: string | null;
+          external_event_id?: string | null;
+          last_synced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["calendar_items"]["Insert"]
+        >;
+      };
+      calendar_item_comments: {
+        Row: {
+          id: string;
+          calendar_item_id: string;
+          user_id: string;
+          content: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          calendar_item_id: string;
+          user_id: string;
+          content: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: { content?: string; updated_at?: string };
+      };
+      calendar_item_occurrence_status: {
+        Row: {
+          id: string;
+          calendar_item_id: string;
+          occurrence_date: string;
+          status: "pending" | "in_progress" | "completed" | "cancelled" | null;
+          title: string | null;
+          description: string | null;
+          start_at: string | null;
+          end_at: string | null;
+          completed_at: string | null;
+          updated_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          calendar_item_id: string;
+          occurrence_date: string;
+          status?: "pending" | "in_progress" | "completed" | "cancelled" | null;
+          title?: string | null;
+          description?: string | null;
+          start_at?: string | null;
+          end_at?: string | null;
+          completed_at?: string | null;
+          updated_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: "pending" | "in_progress" | "completed" | "cancelled" | null;
+          title?: string | null;
+          description?: string | null;
+          start_at?: string | null;
+          end_at?: string | null;
+          completed_at?: string | null;
+          updated_by?: string;
+          updated_at?: string;
         };
       };
       notification_reads: {
