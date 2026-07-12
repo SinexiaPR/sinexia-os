@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test:document-upload": "tsx scripts/test-document-upload.ts",
+    "test:calendar": "tsx scripts/test-calendar.ts",
     "seed:users": "tsx scripts/seed-users.ts"
   },
   "dependencies": {
