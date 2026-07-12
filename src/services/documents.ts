@@ -148,6 +148,37 @@ export async function getAllDocuments(
 
   const { data, error } = await query;
 
+  if (
+    error &&
+    (error.code === "42703" ||
+      error.code === "PGRST204" ||
+      error.message.includes("priority"))
+  ) {
+    let legacyQuery = supabase
+      .from("documents")
+      .select("*, company:companies(id, name)")
+      .order("created_at", { ascending: false });
+
+    if (filters.company)
+      legacyQuery = legacyQuery.eq("company_id", filters.company);
+    if (filters.documentType)
+      legacyQuery = legacyQuery.eq("document_type", filters.documentType);
+    if (filters.status) legacyQuery = legacyQuery.eq("status", filters.status);
+    if (filters.uploadDate) {
+      const start = `${filters.uploadDate}T00:00:00.000Z`;
+      const endDate = new Date(start);
+      endDate.setUTCDate(endDate.getUTCDate() + 1);
+      legacyQuery = legacyQuery
+        .gte("created_at", start)
+        .lt("created_at", endDate.toISOString());
+    }
+
+    const { data: legacyData, error: legacyError } = await legacyQuery;
+
+    if (legacyError) throw legacyError;
+    return (legacyData ?? []) as DocumentWithCompany[];
+  }
+
   if (error) {
     throw error;
   }

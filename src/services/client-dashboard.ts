@@ -197,9 +197,7 @@ export async function getClientRecentActivity(
   const [documentsRes, reportsRes, processingRes] = await Promise.all([
     supabase
       .from("documents")
-      .select(
-        "id, supplier, document_type, document_type_description, status, created_at",
-      )
+      .select("id, supplier, document_type, status, created_at")
       .eq("company_id", companyId)
       .order("created_at", { ascending: false })
       .limit(fetchLimit),
