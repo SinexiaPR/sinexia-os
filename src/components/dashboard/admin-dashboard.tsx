@@ -1,19 +1,19 @@
+import Link from "next/link";
+
 import { DocumentList } from "@/components/dashboard/document-list";
 import { CalendarDashboardWidget } from "@/components/calendar/calendar-dashboard-widget";
-import {
-  PendingMetricCard,
-  RecentActivityFeed,
-} from "@/components/dashboard/recent-activity-feed";
 import { PageHeader } from "@/components/layout/page-header";
-import { MetricCard, SurfaceCard } from "@/components/ui/surface-card";
-import { getAdminRecentActivity } from "@/services/activity";
+import { SurfaceCard } from "@/components/ui/surface-card";
 import {
-  countPendingDocuments,
   getCompaniesWithStats,
   getRecentDocuments,
 } from "@/services/documents";
 import { getViewedDocumentIds } from "@/services/notifications";
 import { requireAuth } from "@/lib/auth/session";
+import {
+  getAdminFirstName,
+  getTodayItemsForAdmin,
+} from "@/lib/calendar/dashboard-summary";
 import { getCalendarDashboard } from "@/services/calendar";
 
 function operationalDate() {
@@ -27,73 +27,49 @@ function operationalDate() {
 
 export async function AdminDashboard() {
   const profile = await requireAuth();
-  const [
-    companies,
-    pendingCount,
-    recentDocuments,
-    recentActivity,
-    viewedDocumentIds,
-    calendar,
-  ] = await Promise.all([
-    getCompaniesWithStats(),
-    countPendingDocuments(),
-    getRecentDocuments(6),
-    getAdminRecentActivity(8),
-    getViewedDocumentIds(profile.id),
-    getCalendarDashboard(operationalDate()),
-  ]);
-
-  const totalItems = companies.reduce((sum, c) => sum + c.total_documents, 0);
+  const today = operationalDate();
+  const [companies, recentDocuments, viewedDocumentIds, calendar] =
+    await Promise.all([
+      getCompaniesWithStats(),
+      getRecentDocuments(6),
+      getViewedDocumentIds(profile.id),
+      getCalendarDashboard(today),
+    ]);
 
   return (
     <div className="space-y-12">
       <PageHeader
         eyebrow="Admin workspace"
         title="Dashboard"
-        description="Monitor client companies, pending items, and recent Inbox activity."
+        description="Organiza el trabajo del equipo y revisa los documentos recibidos."
       />
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <PendingMetricCard
-          label="Pending items"
-          value={pendingCount}
-          hint="Received or under review"
-        />
-        <MetricCard
-          label="Companies"
-          value={companies.length}
-          hint="Active client accounts"
-        />
-        <MetricCard
-          label="Total in Inbox"
-          value={totalItems}
-          hint="Across all companies"
-        />
-      </div>
-
-      <RecentActivityFeed items={recentActivity} />
 
       <CalendarDashboardWidget
         items={calendar.items}
-        dueToday={calendar.dueToday}
+        adminName={getAdminFirstName(profile.full_name, profile.email)}
+        todayItems={getTodayItemsForAdmin(calendar.dueToday, profile.id, today)}
         upcoming={calendar.upcoming}
         overdue={calendar.overdue}
-        completedThisWeek={calendar.completedThisWeek}
       />
 
       <div className="grid gap-8 lg:grid-cols-5">
         <SurfaceCard className="lg:col-span-2" padding="md">
-          <h2 className="text-base font-semibold tracking-tight">Companies</h2>
+          <h2 className="text-base font-semibold tracking-tight">Empresas</h2>
           <div className="mt-5 space-y-2">
             {companies.map((company) => (
-              <div
+              <Link
                 key={company.id}
-                className="border-border/70 flex items-center justify-between rounded-xl border px-4 py-4"
+                href={{
+                  pathname: "/dashboard/inbox",
+                  query: { company: company.id },
+                }}
+                className="border-border/70 hover:border-primary/35 hover:bg-muted/35 focus-visible:border-ring focus-visible:ring-ring/50 flex min-h-20 items-center justify-between rounded-xl border px-4 py-4 transition-colors outline-none focus-visible:ring-[3px]"
+                aria-label={`Abrir documentos de ${company.name}`}
               >
                 <div>
                   <p className="text-foreground font-medium">{company.name}</p>
                   <p className="text-muted-foreground text-sm">
-                    {company.total_documents} in Inbox
+                    {company.total_documents} documentos en Inbox
                   </p>
                 </div>
                 <div className="text-right">
@@ -105,9 +81,9 @@ export async function AdminDashboard() {
                       {company.pending_count}
                     </p>
                   </div>
-                  <p className="text-muted-foreground text-xs">pending</p>
+                  <p className="text-muted-foreground text-xs">pendientes</p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </SurfaceCard>
@@ -115,13 +91,14 @@ export async function AdminDashboard() {
         <div className="lg:col-span-3">
           <DocumentList
             documents={recentDocuments}
-            title="Recent Inbox uploads"
+            title="Documentos recibidos recientes"
             showCompany
             viewedDocumentIds={viewedDocumentIds}
             profileId={profile.id}
             isAdmin
             viewAllHref="/dashboard/inbox"
-            emptyMessage="No items in any Inbox yet."
+            viewAllLabel="Ver todos"
+            emptyMessage="Todavía no hay documentos en los Inbox."
           />
         </div>
       </div>

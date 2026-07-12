@@ -6,6 +6,11 @@ import {
   sortCalendarItems,
 } from "../src/lib/calendar/recurrence";
 import type { CalendarItem } from "../src/types/calendar";
+import {
+  getAdminFirstName,
+  getCalendarItemLabel,
+  getTodayItemsForAdmin,
+} from "../src/lib/calendar/dashboard-summary";
 
 assert.equal(
   occursOn("2026-07-13", "2026-07-20", { frequency: "weekly" }),
@@ -85,4 +90,62 @@ assert.deepEqual(
   ["urgent", "important", "upcoming"],
 );
 
-console.log("Calendar recurrence, ordering, and date-only tests passed.");
+const adminItems = getTodayItemsForAdmin(
+  [
+    {
+      ...base,
+      id: "routine",
+      assignedTo: "admin",
+      occurrenceDate: "2026-07-13",
+    },
+    {
+      ...base,
+      id: "urgent-today",
+      assignedTo: null,
+      priority: "urgent",
+      occurrenceDate: "2026-07-13",
+    },
+    {
+      ...base,
+      id: "other-admin",
+      assignedTo: "other",
+      occurrenceDate: "2026-07-13",
+    },
+    {
+      ...base,
+      id: "completed",
+      assignedTo: "admin",
+      status: "completed",
+      occurrenceDate: "2026-07-13",
+    },
+    {
+      ...base,
+      id: "future",
+      assignedTo: "admin",
+      occurrenceDate: "2026-07-14",
+    },
+  ],
+  "admin",
+  "2026-07-13",
+);
+assert.deepEqual(
+  adminItems.map((item) => item.id),
+  ["urgent-today", "routine"],
+);
+assert.equal(getAdminFirstName("María Pérez", "maria@example.com"), "María");
+assert.equal(
+  getCalendarItemLabel({ ...base, title: "Nómina", companyName: "Sibarita" }),
+  "Nómina · Sibarita",
+);
+assert.equal(
+  getCalendarItemLabel({
+    ...base,
+    title: "Nómina Sibarita",
+    companyName: "Sibarita",
+  }),
+  "Nómina Sibarita",
+);
+
+console.log(
+  "Calendar recurrence, personalized summary, ordering, and date-only tests passed.",
+);

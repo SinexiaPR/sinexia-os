@@ -67,11 +67,11 @@ export function DocumentRowClient({
           <p className="text-foreground font-medium">{displayType}</p>
           {document.priority === "urgent" ? (
             <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-600/15 ring-inset">
-              Urgent
+              {isAdmin ? "Urgente" : "Urgent"}
             </span>
           ) : (
             <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium">
-              Routine
+              {isAdmin ? "Rutina" : "Routine"}
             </span>
           )}
           <DocumentStatusBadge status={document.status} />
