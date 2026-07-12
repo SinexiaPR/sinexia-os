@@ -57,13 +57,11 @@ export function CalendarDashboardWidget({
   dueToday,
   upcoming,
   overdue,
-  completedThisWeek,
 }: {
   items: CalendarItem[];
   dueToday: CalendarItem[];
   upcoming: CalendarItem[];
   overdue: CalendarItem[];
-  completedThisWeek: number;
 }) {
   const today = new Date();
   const year = today.getUTCFullYear();
@@ -97,7 +95,7 @@ export function CalendarDashboardWidget({
           </Button>
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <MetricCard
           label="Para hoy"
           value={dueToday.length}
@@ -108,11 +106,6 @@ export function CalendarDashboardWidget({
           value={overdue.length}
           hint="Máximo 5 en el resumen"
           className={overdue.length ? "border-red-200" : ""}
-        />
-        <MetricCard
-          label="Completadas esta semana"
-          value={completedThisWeek}
-          hint="Trabajo finalizado"
         />
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.1fr]">

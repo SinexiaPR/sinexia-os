@@ -10,6 +10,7 @@ type DocumentListProps = {
   emptyMessage?: string;
   showCompany?: boolean;
   viewAllHref?: string;
+  viewAllLabel?: string;
   viewedDocumentIds: string[];
   profileId: string;
   isAdmin?: boolean;
@@ -21,6 +22,7 @@ export function DocumentList({
   emptyMessage = "No items yet.",
   showCompany = false,
   viewAllHref,
+  viewAllLabel = "View all",
   viewedDocumentIds,
   profileId,
   isAdmin = false,
@@ -32,15 +34,15 @@ export function DocumentList({
         {viewAllHref ? (
           <Link
             href={viewAllHref}
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
           >
-            View all
+            {viewAllLabel}
           </Link>
         ) : null}
       </div>
 
       {documents.length === 0 ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">
+        <p className="text-muted-foreground py-12 text-center text-sm">
           {emptyMessage}
         </p>
       ) : (
