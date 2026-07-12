@@ -12,47 +12,40 @@ import { scheduleInboxDocumentProcessing } from "@/lib/intelligence/processing";
 import { isAnalyzableFilename } from "@/lib/intelligence/extraction/utils";
 import { createClient } from "@/lib/supabase/server";
 import {
-  DOCUMENT_STATUS_OPTIONS,
-  DOCUMENT_TYPE_OPTIONS,
-  type DocumentStatus,
-} from "@/types";
+  validateDocumentUploadMetadata,
+  type DocumentPriority,
+} from "@/lib/documents/upload-metadata";
+import { DOCUMENT_STATUS_OPTIONS, type DocumentStatus } from "@/types";
 
-export async function uploadDocument(formData: FormData) {
+export async function uploadDocument(
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean }> {
   const profile = await requireClient();
 
   if (!profile.company_id) {
     return { error: "Su cuenta no está vinculada a una empresa." };
   }
 
-  const supplier = String(formData.get("supplier") ?? "").trim();
-  const invoiceNumber = String(formData.get("invoice_number") ?? "").trim();
-  const invoiceDate = String(formData.get("invoice_date") ?? "").trim();
-  const dueDateRaw = String(formData.get("due_date") ?? "").trim();
-  const amountRaw = String(formData.get("amount") ?? "").trim();
   const documentType = String(formData.get("document_type") ?? "").trim();
+  const priority = String(formData.get("priority") ?? "").trim();
+  const comment = String(formData.get("comment") ?? "").trim();
+  const typeDescription = String(
+    formData.get("document_type_description") ?? "",
+  ).trim();
   const file = formData.get("file");
 
-  if (
-    !supplier ||
-    !invoiceNumber ||
-    !invoiceDate ||
-    !amountRaw ||
-    !documentType
-  ) {
+  if (!documentType || !priority) {
     return { error: "Complete todos los campos obligatorios." };
   }
 
-  if (
-    !DOCUMENT_TYPE_OPTIONS.includes(
-      documentType as (typeof DOCUMENT_TYPE_OPTIONS)[number],
-    )
-  ) {
-    return { error: "Tipo de documento no válido." };
-  }
-
-  const amount = Number(amountRaw);
-  if (Number.isNaN(amount) || amount < 0) {
-    return { error: "El monto debe ser un número válido." };
+  const metadataValidation = validateDocumentUploadMetadata({
+    documentType,
+    priority,
+    comment,
+    typeDescription,
+  });
+  if (metadataValidation.error) {
+    return metadataValidation;
   }
 
   if (!(file instanceof File) || file.size === 0) {
@@ -71,6 +64,7 @@ export async function uploadDocument(formData: FormData) {
 
   const supabase = await createClient();
   const documentId = crypto.randomUUID();
+  const serverDate = new Date().toISOString().slice(0, 10);
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const storagePath = `${profile.company_id}/${documentId}/${sanitizedName}`;
   const contentType = resolveUploadContentType(file);
@@ -92,12 +86,15 @@ export async function uploadDocument(formData: FormData) {
     id: documentId,
     company_id: profile.company_id,
     uploaded_by: profile.id,
-    supplier,
-    invoice_number: invoiceNumber,
-    invoice_date: invoiceDate,
-    due_date: dueDateRaw || null,
-    amount,
+    supplier: documentType,
+    invoice_number: documentId,
+    invoice_date: serverDate,
+    amount: 0,
     document_type: documentType,
+    document_type_description:
+      documentType === "Other" ? typeDescription || null : null,
+    priority: priority as DocumentPriority,
+    comment: comment || null,
     file_url: storagePath,
     status: "received",
   });

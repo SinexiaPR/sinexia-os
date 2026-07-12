@@ -2,6 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import type { Company, CompanyWithStats, DocumentWithCompany } from "@/types";
 import { PENDING_STATUSES } from "@/types";
 
+export type AdminDocumentFiltersValue = {
+  company?: string;
+  documentType?: string;
+  priority?: string;
+  status?: string;
+  uploadDate?: string;
+};
+
 export async function getSignedFileUrl(
   storagePath: string,
   expiresIn = 3600,
@@ -113,13 +121,63 @@ export async function getDocumentsForCompany(
   return (data ?? []) as DocumentWithCompany[];
 }
 
-export async function getAllDocuments(): Promise<DocumentWithCompany[]> {
+export async function getAllDocuments(
+  filters: AdminDocumentFiltersValue = {},
+): Promise<DocumentWithCompany[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("documents")
     .select("*, company:companies(id, name)")
+    .order("priority", { ascending: false })
     .order("created_at", { ascending: false });
+
+  if (filters.company) query = query.eq("company_id", filters.company);
+  if (filters.documentType)
+    query = query.eq("document_type", filters.documentType);
+  if (filters.priority) query = query.eq("priority", filters.priority);
+  if (filters.status) query = query.eq("status", filters.status);
+  if (filters.uploadDate) {
+    const start = `${filters.uploadDate}T00:00:00.000Z`;
+    const endDate = new Date(start);
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+    query = query
+      .gte("created_at", start)
+      .lt("created_at", endDate.toISOString());
+  }
+
+  const { data, error } = await query;
+
+  if (
+    error &&
+    (error.code === "42703" ||
+      error.code === "PGRST204" ||
+      error.message.includes("priority"))
+  ) {
+    let legacyQuery = supabase
+      .from("documents")
+      .select("*, company:companies(id, name)")
+      .order("created_at", { ascending: false });
+
+    if (filters.company)
+      legacyQuery = legacyQuery.eq("company_id", filters.company);
+    if (filters.documentType)
+      legacyQuery = legacyQuery.eq("document_type", filters.documentType);
+    if (filters.status) legacyQuery = legacyQuery.eq("status", filters.status);
+    if (filters.uploadDate) {
+      const start = `${filters.uploadDate}T00:00:00.000Z`;
+      const endDate = new Date(start);
+      endDate.setUTCDate(endDate.getUTCDate() + 1);
+      legacyQuery = legacyQuery
+        .gte("created_at", start)
+        .lt("created_at", endDate.toISOString());
+    }
+
+    const { data: legacyData, error: legacyError } = await legacyQuery;
+
+    if (legacyError) throw legacyError;
+    return (legacyData ?? []) as DocumentWithCompany[];
+  }
 
   if (error) {
     throw error;

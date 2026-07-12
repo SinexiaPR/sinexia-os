@@ -130,6 +130,9 @@ export type Database = {
           due_date: string | null;
           amount: number;
           document_type: string;
+          document_type_description: string | null;
+          priority: "routine" | "urgent";
+          comment: string | null;
           file_url: string;
           status: "received" | "reviewing" | "processed" | "rejected";
           created_at: string;
@@ -144,6 +147,9 @@ export type Database = {
           due_date?: string | null;
           amount: number;
           document_type: string;
+          document_type_description?: string | null;
+          priority?: "routine" | "urgent";
+          comment?: string | null;
           file_url: string;
           status?: "received" | "reviewing" | "processed" | "rejected";
           created_at?: string;
@@ -158,6 +164,9 @@ export type Database = {
           due_date?: string | null;
           amount?: number;
           document_type?: string;
+          document_type_description?: string | null;
+          priority?: "routine" | "urgent";
+          comment?: string | null;
           file_url?: string;
           status?: "received" | "reviewing" | "processed" | "rejected";
           created_at?: string;
@@ -353,4 +362,3 @@ export type Database = {
     };
   };
 };
-

@@ -2,6 +2,7 @@ import { countPendingDocumentsForCompany } from "@/services/documents";
 import { createClient } from "@/lib/supabase/server";
 import type { ReportCategory } from "@/lib/constants/reports";
 import { DOCUMENT_STATUS_LABELS, PENDING_STATUSES } from "@/types";
+import { getDocumentDisplayType } from "@/lib/documents/upload-metadata";
 
 export type ClientDashboardStats = {
   publishedReports: number;
@@ -124,6 +125,7 @@ function documentActivityItem(doc: {
   id: string;
   supplier: string;
   document_type: string;
+  document_type_description?: string | null;
   status: string;
   created_at: string;
 }): ClientActivityItem {
@@ -132,7 +134,7 @@ function documentActivityItem(doc: {
       id: `doc-processed-${doc.id}`,
       kind: "document_processed",
       title: "Documento procesado",
-      description: `${doc.supplier} · ${doc.document_type}`,
+      description: getDocumentDisplayType(doc),
       timestamp: doc.created_at,
       href: "/dashboard/inbox",
     };
@@ -143,7 +145,7 @@ function documentActivityItem(doc: {
       id: `doc-reviewing-${doc.id}`,
       kind: "document_reviewing",
       title: "Documento en revisión",
-      description: `${doc.supplier} · ${DOCUMENT_STATUS_LABELS.reviewing}`,
+      description: `${getDocumentDisplayType(doc)} · ${DOCUMENT_STATUS_LABELS.reviewing}`,
       timestamp: doc.created_at,
       href: "/dashboard/inbox",
     };
@@ -153,7 +155,7 @@ function documentActivityItem(doc: {
     id: `doc-received-${doc.id}`,
     kind: "document_received",
     title: "Documento subido",
-    description: `${doc.supplier} · ${doc.document_type}`,
+    description: getDocumentDisplayType(doc),
     timestamp: doc.created_at,
     href: "/dashboard/inbox",
   };
@@ -222,7 +224,10 @@ export async function getClientRecentActivity(
   if (processingRes.error) throw processingRes.error;
 
   const documentItems = (documentsRes.data ?? [])
-    .filter((doc) => PENDING_STATUSES.includes(doc.status) || doc.status === "processed")
+    .filter(
+      (doc) =>
+        PENDING_STATUSES.includes(doc.status) || doc.status === "processed",
+    )
     .map(documentActivityItem);
 
   const reportItems: ClientActivityItem[] = (reportsRes.data ?? []).map(

@@ -16,13 +16,8 @@ import {
   getCachedGptResponse,
   setCachedGptResponse,
 } from "@/lib/intelligence/gpt-cache";
-import {
-  detectQueryIntent,
-  requiresOpenAI,
-} from "@/lib/intelligence/intents";
-import {
-  answerFromStructuredQuery,
-} from "@/lib/intelligence/query-engine";
+import { detectQueryIntent, requiresOpenAI } from "@/lib/intelligence/intents";
+import { answerFromStructuredQuery } from "@/lib/intelligence/query-engine";
 import { getAvailableTrendSummaries } from "@/lib/intelligence/trends";
 import type { SourceReference } from "@/lib/intelligence/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -218,10 +213,7 @@ export async function retrieveRelevantChunks(
   if (processingId) {
     chunkQuery = chunkQuery.eq("document_processing_id", processingId);
   } else if (allowedProcessingIds) {
-    chunkQuery = chunkQuery.in(
-      "document_processing_id",
-      allowedProcessingIds,
-    );
+    chunkQuery = chunkQuery.in("document_processing_id", allowedProcessingIds);
   }
 
   const { data: chunks } = await chunkQuery;
@@ -269,7 +261,7 @@ async function enrichChunks(
   const { data: processingRows } = await supabase
     .from("document_processing")
     .select(
-      "id, detected_period, report_date, report_id, document_id, reports(id, title, category, period, company_id), documents(id, supplier, invoice_number, document_type)",
+      "id, detected_period, report_date, report_id, document_id, reports(id, title, category, period, company_id), documents(id, document_type, document_type_description, priority, comment)",
     )
     .eq("company_id", companyId)
     .in("id", processingIds);
@@ -286,21 +278,32 @@ async function enrichChunks(
     } | null;
     const document = proc?.documents as unknown as {
       id: string;
-      supplier: string;
-      invoice_number: string;
       document_type: string;
+      document_type_description: string | null;
+      priority: string;
+      comment: string | null;
     } | null;
 
     const title = report?.title
       ? report.title
       : document
-        ? `${document.document_type} · ${document.supplier} ${document.invoice_number}`.trim()
+        ? document.document_type_description
+          ? `${document.document_type} · ${document.document_type_description}`
+          : document.document_type
         : "Documento";
 
     return {
       id: m.id,
       document_processing_id: m.document_processing_id,
-      content: m.content,
+      content: document
+        ? [
+            `Client metadata: type=${document.document_type}; priority=${document.priority}`,
+            document.comment ? `Client comment: ${document.comment}` : null,
+            m.content,
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : m.content,
       page_number: m.page_number,
       sheet_name: m.sheet_name,
       row_reference: m.row_reference,
@@ -337,7 +340,7 @@ async function retrieveFromSummaries(
   const { data: profiles } = await supabase
     .from("document_profiles")
     .select(
-      "id, document_processing_id, report_id, document_id, period, summary, structured_data, document_processing(id, detected_period, report_date, status, reports(id, title, category, period), documents(id, supplier, invoice_number, document_type))",
+      "id, document_processing_id, report_id, document_id, period, summary, structured_data, document_processing(id, detected_period, report_date, status, reports(id, title, category, period), documents(id, document_type, document_type_description, priority, comment))",
     )
     .eq("company_id", filters.companyId)
     .in("document_processing_id", processingIds)
@@ -348,7 +351,7 @@ async function retrieveFromSummaries(
     const { data } = await supabase
       .from("document_processing")
       .select(
-        "id, report_id, document_id, detected_period, report_date, structured_summary, extracted_text, reports(id, title, category, period), documents(id, supplier, invoice_number, document_type)",
+        "id, report_id, document_id, detected_period, report_date, structured_summary, extracted_text, reports(id, title, category, period), documents(id, document_type, document_type_description, priority, comment)",
       )
       .eq("company_id", filters.companyId)
       .eq("status", "completed")
@@ -391,9 +394,10 @@ async function retrieveFromSummaries(
       } | null;
       const document = row.documents as unknown as {
         id: string;
-        supplier: string;
-        invoice_number: string;
         document_type: string;
+        document_type_description: string | null;
+        priority: string;
+        comment: string | null;
       } | null;
       const summary = row.structured_summary as {
         briefSummary?: string;
@@ -402,10 +406,17 @@ async function retrieveFromSummaries(
       return {
         id: row.id,
         document_processing_id: row.id,
-        content:
+        content: [
+          document
+            ? `Client metadata: type=${document.document_type}; priority=${document.priority}`
+            : null,
+          document?.comment ? `Client comment: ${document.comment}` : null,
           summary?.briefSummary ||
-          (row.extracted_text ?? "").slice(0, 1200) ||
-          "Documento analizado sin resumen.",
+            (row.extracted_text ?? "").slice(0, 1200) ||
+            "Documento analizado sin resumen.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
         page_number: null,
         sheet_name: null,
         row_reference: null,
@@ -415,7 +426,9 @@ async function retrieveFromSummaries(
         title: report?.title
           ? report.title
           : document
-            ? `${document.document_type} · ${document.supplier}`
+            ? document.document_type_description
+              ? `${document.document_type} · ${document.document_type_description}`
+              : document.document_type
             : "Documento",
         period: report?.period ?? null,
         detected_period: row.detected_period,
@@ -455,9 +468,10 @@ async function retrieveFromSummaries(
       reports?: { id: string; title: string; category: string; period: string };
       documents?: {
         id: string;
-        supplier: string;
-        invoice_number: string;
         document_type: string;
+        document_type_description: string | null;
+        priority: string;
+        comment: string | null;
       };
     };
     const report = proc.reports;
@@ -466,7 +480,15 @@ async function retrieveFromSummaries(
     return {
       id: row.document_processing_id,
       document_processing_id: row.document_processing_id,
-      content: row.summary ?? "Documento analizado.",
+      content: [
+        document
+          ? `Client metadata: type=${document.document_type}; priority=${document.priority}`
+          : null,
+        document?.comment ? `Client comment: ${document.comment}` : null,
+        row.summary ?? "Documento analizado.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
       page_number: null,
       sheet_name: null,
       row_reference: null,
@@ -476,7 +498,9 @@ async function retrieveFromSummaries(
       title: report?.title
         ? report.title
         : document
-          ? `${document.document_type} · ${document.supplier}`
+          ? document.document_type_description
+            ? `${document.document_type} · ${document.document_type_description}`
+            : document.document_type
           : "Documento",
       period: row.period ?? report?.period ?? null,
       detected_period: proc.detected_period,
@@ -504,7 +528,8 @@ async function getScopedReportNotice(
   if (!row || row.status === "completed") return null;
 
   const report = row.reports as unknown as { title?: string } | null;
-  const title = report?.title ?? row.original_filename ?? "Documento seleccionado";
+  const title =
+    report?.title ?? row.original_filename ?? "Documento seleccionado";
 
   if (row.status === "requires_ocr") {
     const filename = row.original_filename ?? "";
@@ -642,10 +667,7 @@ async function getPendingNotice(
       return {
         reportId: row.report_id ?? undefined,
         documentId: row.document_id ?? undefined,
-        title:
-          report?.title ||
-          row.original_filename ||
-          "Documento en proceso",
+        title: report?.title || row.original_filename || "Documento en proceso",
         period: null,
       };
     }),
@@ -812,8 +834,7 @@ export async function answerWithRetrieval(params: {
     }
 
     return {
-      message:
-        structured.message + formatSourcesAppendix(structured.sources),
+      message: structured.message + formatSourcesAppendix(structured.sources),
       sources: structured.sources,
       model: null,
       tier: "structured",
@@ -823,10 +844,7 @@ export async function answerWithRetrieval(params: {
   const scope = await resolveAllowedProcessingIds(params.filters);
   const { processingId } = scope;
 
-  if (
-    isOpenAIConfigured() &&
-    requiresOpenAI(intent)
-  ) {
+  if (isOpenAIConfigured() && requiresOpenAI(intent)) {
     const cached = await tryGptCache({
       question: params.question,
       filters: params.filters,
@@ -842,11 +860,7 @@ export async function answerWithRetrieval(params: {
     }
   }
 
-  let chunks = await retrieveRelevantChunks(
-    params.question,
-    params.filters,
-    8,
-  );
+  let chunks = await retrieveRelevantChunks(params.question, params.filters, 8);
   let tier: AnswerTier = "chunks";
 
   if (!chunks.length) {
@@ -896,7 +910,10 @@ export async function answerWithRetrieval(params: {
         updated_at: "",
       });
 
-      if (empty.tier === "portal_metadata" && empty.message.includes("No encuentro documentos procesados")) {
+      if (
+        empty.tier === "portal_metadata" &&
+        empty.message.includes("No encuentro documentos procesados")
+      ) {
         return {
           message: `${empty.message}\n\nEstado del portal: ${context.availableReports} reportes publicados, ${context.pendingDocuments} documentos pendientes en Inbox.`,
           sources: [],
@@ -938,9 +955,7 @@ export async function answerWithRetrieval(params: {
     params.filters.reportId
       ? `documento=${params.filters.reportId}`
       : "todos los documentos de la empresa",
-    params.filters.category
-      ? `categoría=${params.filters.category}`
-      : null,
+    params.filters.category ? `categoría=${params.filters.category}` : null,
     params.filters.period ? `periodo=${params.filters.period}` : null,
   ]
     .filter(Boolean)
