@@ -88,6 +88,13 @@ export default async function AdminCompanyCategoryPage({
               Documentos y reportes de esta categoría, aislados por empresa.
             </p>
           </div>
+          {detail.category.slug === "payroll" ? (
+            <Button asChild>
+              <Link href={`/dashboard/payroll?company=${detail.company.id}`}>
+                Empleados, tarifas y nóminas semanales
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </header>
 

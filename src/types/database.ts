@@ -442,6 +442,136 @@ export type Database = {
           updated_at?: string;
         };
       };
+      payroll_employees: {
+        Row: {
+          id: string;
+          company_id: string;
+          first_name: string;
+          last_name: string;
+          normalized_name: string;
+          section: string;
+          compensation_type:
+            "hourly" | "hourly_training" | "fixed_weekly" | null;
+          regular_hourly_rate: number | null;
+          training_hourly_rate: number | null;
+          fixed_weekly_salary: number | null;
+          active: boolean;
+          requires_compensation_review: boolean;
+          internal_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          first_name: string;
+          last_name: string;
+          section: string;
+          compensation_type?:
+            "hourly" | "hourly_training" | "fixed_weekly" | null;
+          regular_hourly_rate?: number | null;
+          training_hourly_rate?: number | null;
+          fixed_weekly_salary?: number | null;
+          active?: boolean;
+          requires_compensation_review?: boolean;
+          internal_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          first_name?: string;
+          last_name?: string;
+          section?: string;
+          compensation_type?:
+            "hourly" | "hourly_training" | "fixed_weekly" | null;
+          regular_hourly_rate?: number | null;
+          training_hourly_rate?: number | null;
+          fixed_weekly_salary?: number | null;
+          active?: boolean;
+          requires_compensation_review?: boolean;
+          internal_note?: string | null;
+          updated_at?: string;
+        };
+      };
+      weekly_payrolls: {
+        Row: {
+          id: string;
+          company_id: string;
+          week_start: string;
+          week_end: string;
+          status: "draft" | "submitted" | "approved";
+          created_by: string;
+          submitted_at: string | null;
+          approved_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          week_start: string;
+          week_end: string;
+          status?: "draft" | "submitted" | "approved";
+          created_by: string;
+          submitted_at?: string | null;
+          approved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: "draft" | "submitted" | "approved";
+          submitted_at?: string | null;
+          approved_at?: string | null;
+          updated_at?: string;
+        };
+      };
+      weekly_payroll_entries: {
+        Row: {
+          id: string;
+          payroll_id: string;
+          employee_id: string;
+          employee_name_snapshot: string;
+          section_snapshot: string;
+          compensation_type_snapshot:
+            "hourly" | "hourly_training" | "fixed_weekly" | null;
+          regular_rate_snapshot: number | null;
+          training_rate_snapshot: number | null;
+          fixed_salary_snapshot: number | null;
+          requires_review_snapshot: boolean;
+          regular_hours: number;
+          training_hours: number;
+          other_payments: number;
+          comment: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          payroll_id: string;
+          employee_id: string;
+          employee_name_snapshot: string;
+          section_snapshot: string;
+          compensation_type_snapshot?:
+            "hourly" | "hourly_training" | "fixed_weekly" | null;
+          regular_rate_snapshot?: number | null;
+          training_rate_snapshot?: number | null;
+          fixed_salary_snapshot?: number | null;
+          requires_review_snapshot?: boolean;
+          regular_hours?: number;
+          training_hours?: number;
+          other_payments?: number;
+          comment?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          regular_hours?: number;
+          training_hours?: number;
+          other_payments?: number;
+          comment?: string | null;
+          updated_at?: string;
+        };
+      };
       notification_reads: {
         Row: NotificationReadRow;
         Insert: {
