@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { AlertTriangle, ArrowLeft, Plus, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, Plus, Save } from "lucide-react";
 
 import {
   approveWeeklyPayroll,
@@ -179,7 +179,23 @@ export function PayrollWorkspace({
                           : "Aprobada"}
                     </p>
                   </div>
-                  <p className="text-xl font-semibold">{money.format(total)}</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-xl font-semibold">
+                      {money.format(total)}
+                    </p>
+                    {selected.status !== "draft" ? (
+                      <Button asChild size="sm" variant="outline">
+                        <a
+                          href={`/api/payroll/${selected.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <FileText className="size-4" />
+                          Ver e imprimir PDF
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               </SurfaceCard>
               <div className="space-y-4">

@@ -10,9 +10,17 @@ const migration = readFileSync(
   "utf8",
 );
 const notificationMigration = readFileSync(
+  resolve("supabase/migrations/20250713040000_payroll_admin_notifications.sql"),
+  "utf8",
+);
+const pdfNotificationMigration = readFileSync(
   resolve(
-    "supabase/migrations/20250713040000_payroll_admin_notifications.sql",
+    "supabase/migrations/20250713050000_payroll_notification_pdf_link.sql",
   ),
+  "utf8",
+);
+const pdfRoute = readFileSync(
+  resolve("src/app/api/payroll/[payrollId]/pdf/route.ts"),
   "utf8",
 );
 const seededRows = [
@@ -46,6 +54,21 @@ assert.match(
   /OLD\.status IS DISTINCT FROM NEW\.status/,
   "notification is emitted only on a status transition",
 );
+assert.match(
+  pdfNotificationMigration,
+  /'\/api\/payroll\/' \|\| NEW\.id::TEXT \|\| '\/pdf'/,
+  "new admin notifications open the submitted payroll PDF",
+);
+assert.match(
+  pdfNotificationMigration,
+  /notification\.company_id = payroll\.company_id/,
+  "existing notification links are updated within the authoritative company",
+);
+assert.match(pdfRoute, /profile\.company_id !== payroll\.company_id/);
+assert.match(pdfRoute, /company\.slug !== "sibarita"/);
+assert.match(pdfRoute, /payroll\.status === "draft"/);
+assert.match(pdfRoute, /"Content-Type": "application\/pdf"/);
+assert.match(pdfRoute, /"Content-Disposition": `inline;/);
 assert.match(
   notificationMigration,
   /'weekly_payroll_submitted:' \|\| NEW\.id::TEXT/,
