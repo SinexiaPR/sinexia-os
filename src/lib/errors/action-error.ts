@@ -40,8 +40,11 @@ export function logServerError(
 ): void {
   console.error(`[${context}]`, {
     message: extractErrorMessage(error),
-    error,
-    ...meta,
+    code:
+      typeof error === "object" && error
+        ? (error as ErrorRecord).code
+        : undefined,
+    context: meta,
   });
 }
 

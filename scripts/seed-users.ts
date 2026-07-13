@@ -8,8 +8,7 @@
  * Usage:
  *   npm run seed:users
  *
- * Default password for all seeded users: Sinexia2026!
- * Change passwords immediately in production.
+ * Requires a non-default SEED_USER_PASSWORD value.
  */
 
 import { resolve } from "node:path";
@@ -19,14 +18,14 @@ import { createClient } from "@supabase/supabase-js";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
-const PASSWORD = process.env.SEED_USER_PASSWORD ?? "Sinexia2026!";
+const PASSWORD = process.env.SEED_USER_PASSWORD;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !serviceRoleKey) {
+if (!supabaseUrl || !serviceRoleKey || !PASSWORD) {
   console.error(
-    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+    "Missing NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or SEED_USER_PASSWORD",
   );
   process.exit(1);
 }
@@ -89,9 +88,7 @@ async function main() {
     throw companiesError;
   }
 
-  const companyBySlug = new Map(
-    (companies ?? []).map((c) => [c.slug, c.id]),
-  );
+  const companyBySlug = new Map((companies ?? []).map((c) => [c.slug, c.id]));
 
   for (const user of USERS) {
     const companyId = user.companySlug
@@ -130,11 +127,28 @@ async function main() {
       continue;
     }
 
+    if (data.user) {
+      const { error: profileError } = await admin
+        .from("profiles")
+        .update({
+          full_name: user.fullName,
+          role: user.role,
+          company_id: user.role === "admin" ? null : companyId,
+        })
+        .eq("id", data.user.id);
+      if (profileError) {
+        console.error(
+          `Failed to provision profile for ${user.email}:`,
+          profileError.message,
+        );
+        continue;
+      }
+    }
+
     console.log(`Created ${user.role}: ${user.email} (${data.user?.id})`);
   }
 
   console.log("\nSeed complete.");
-  console.log(`Default password: ${PASSWORD}`);
 }
 
 main().catch((err) => {

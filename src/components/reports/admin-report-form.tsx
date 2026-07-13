@@ -50,8 +50,6 @@ export function AdminReportForm({
   >(createReport, reportActionInitialState);
 
   useEffect(() => {
-    console.log("[AdminReportForm] action state:", state);
-
     if (!state.success) {
       return;
     }
