@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 type SurfaceCardProps = {
   children: ReactNode;
   className?: string;
+  id?: string;
   padding?: "sm" | "md" | "lg";
 };
 
@@ -17,12 +18,14 @@ const paddingMap = {
 export function SurfaceCard({
   children,
   className,
+  id,
   padding = "md",
 }: SurfaceCardProps) {
   return (
     <div
+      id={id}
       className={cn(
-        "rounded-2xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        "border-border/80 bg-card rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
         paddingMap[padding],
         className,
       )}
@@ -41,16 +44,19 @@ type MetricCardProps = {
 
 export function MetricCard({ label, value, hint, className }: MetricCardProps) {
   return (
-    <SurfaceCard className={cn("flex flex-col justify-between", className)} padding="lg">
-      <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
+    <SurfaceCard
+      className={cn("flex flex-col justify-between", className)}
+      padding="lg"
+    >
+      <p className="text-muted-foreground text-[13px] font-medium tracking-wide uppercase">
         {label}
       </p>
       <div className="mt-6">
-        <p className="text-4xl font-semibold tracking-tight text-foreground tabular-nums">
+        <p className="text-foreground text-4xl font-semibold tracking-tight tabular-nums">
           {value}
         </p>
         {hint ? (
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
             {hint}
           </p>
         ) : null}

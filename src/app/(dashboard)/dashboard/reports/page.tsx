@@ -11,7 +11,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireAuth } from "@/lib/auth/session";
 import { getCompanies } from "@/services/documents";
-import { getProcessingByReportIds, getProfilesByReportIds } from "@/services/intelligence";
+import {
+  getProcessingByReportIds,
+  getProfilesByReportIds,
+} from "@/services/intelligence";
 import { getViewedReportIds } from "@/services/notifications";
 import { getAllReports, getReportsForCompany } from "@/services/reports";
 
@@ -19,13 +22,18 @@ export const metadata: Metadata = {
   title: "Reports",
 };
 
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const profile = await requireAuth();
+  const { company: companyFilter } = await searchParams;
 
   if (profile.role === "admin") {
     const [companies, reports] = await Promise.all([
       getCompanies(),
-      getAllReports(),
+      companyFilter ? getReportsForCompany(companyFilter) : getAllReports(),
     ]);
     const [processingMap, profilesMap] = await Promise.all([
       getProcessingByReportIds(reports.map((r) => r.id)),
@@ -44,13 +52,16 @@ export default async function ReportsPage() {
           <h2 className="text-base font-semibold tracking-tight">
             Publish report
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-sm">
             Select a company, add details, and upload the finished PDF, Excel,
             or CSV. SinexIA processes the file automatically — no manual
             accounting fields required.
           </p>
           <div className="mt-6">
-            <AdminReportForm companies={companies} />
+            <AdminReportForm
+              companies={companies}
+              initialCompanyId={companyFilter}
+            />
           </div>
         </SurfaceCard>
 
@@ -100,19 +111,19 @@ export default async function ReportsPage() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Reportes
         </h1>
-        <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-          Reportes publicados por Sinexia para su empresa. Consulte, descargue
-          y pregunte a SinexIA cuando el análisis esté listo.
+        <p className="text-muted-foreground text-[15px] leading-relaxed sm:text-base">
+          Reportes publicados por Sinexia para su empresa. Consulte, descargue y
+          pregunte a SinexIA cuando el análisis esté listo.
         </p>
       </header>
 
       {reports.length === 0 ? (
         <SurfaceCard padding="lg">
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-base font-medium text-foreground">
+            <p className="text-foreground text-base font-medium">
               Aún no hay reportes
             </p>
-            <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+            <p className="text-muted-foreground mt-2 max-w-sm text-sm leading-relaxed">
               Cuando Sinexia publique reportes para su empresa, aparecerán aquí.
             </p>
           </div>

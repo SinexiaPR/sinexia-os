@@ -53,15 +53,18 @@ export async function AdminDashboard() {
       />
 
       <div className="grid gap-8 lg:grid-cols-5">
-        <SurfaceCard className="lg:col-span-2" padding="md">
+        <SurfaceCard
+          id="empresas"
+          className="scroll-mt-20 lg:col-span-2"
+          padding="md"
+        >
           <h2 className="text-base font-semibold tracking-tight">Empresas</h2>
           <div className="mt-5 space-y-2">
             {companies.map((company) => (
               <Link
                 key={company.id}
                 href={{
-                  pathname: "/dashboard/inbox",
-                  query: { company: company.id },
+                  pathname: `/dashboard/admin/companies/${company.id}`,
                 }}
                 className="border-border/70 hover:border-primary/35 hover:bg-muted/35 focus-visible:border-ring focus-visible:ring-ring/50 flex min-h-20 items-center justify-between rounded-xl border px-4 py-4 transition-colors outline-none focus-visible:ring-[3px]"
                 aria-label={`Abrir documentos de ${company.name}`}
