@@ -9,6 +9,12 @@ const migration = readFileSync(
   resolve("supabase/migrations/20250713010000_sibarita_weekly_payroll.sql"),
   "utf8",
 );
+const notificationMigration = readFileSync(
+  resolve(
+    "supabase/migrations/20250713040000_payroll_admin_notifications.sql",
+  ),
+  "utf8",
+);
 const seededRows = [
   ...migration.matchAll(/\(v_company,'([^']+)','([^']+)'/g),
 ].map((match) => `${match[1]} ${match[2]}`.toLowerCase());
@@ -35,6 +41,31 @@ assert.match(migration, /Juan C','Berrios Santini'.*true/);
 assert.match(migration, /Fernando','Almonte'.*true/);
 assert.match(migration, /Submitted payroll entries are immutable/);
 assert.match(migration, /Weekly payroll is only enabled for Sibarita/);
+assert.match(
+  notificationMigration,
+  /OLD\.status IS DISTINCT FROM NEW\.status/,
+  "notification is emitted only on a status transition",
+);
+assert.match(
+  notificationMigration,
+  /'weekly_payroll_submitted:' \|\| NEW\.id::TEXT/,
+  "notification has a stable per-payroll dedupe key",
+);
+assert.match(
+  notificationMigration,
+  /ON CONFLICT \(dedupe_key\) DO NOTHING/,
+  "notification inserts are idempotent",
+);
+assert.match(
+  notificationMigration,
+  /WHERE payroll\.status = 'submitted'/,
+  "existing submitted payrolls are backfilled",
+);
+assert.match(
+  notificationMigration,
+  /'\/dashboard\/payroll\?company=' \|\| NEW\.company_id::TEXT/,
+  "admin notification links to the submitted company's payroll",
+);
 
 const entry: WeeklyPayrollEntry = {
   id: "e",
