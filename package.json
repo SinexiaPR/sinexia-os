@@ -16,6 +16,8 @@
     "test:calendar": "tsx scripts/test-calendar.ts",
     "test:company-workspace": "tsx scripts/test-company-workspace.ts",
     "test:sibarita-payroll": "tsx scripts/test-sibarita-payroll.ts",
+    "audit:security": "tsx scripts/audit-security.ts",
+    "test:security": "tsx scripts/test-security-hardening.ts",
     "seed:users": "tsx scripts/seed-users.ts"
   },
   "dependencies": {
