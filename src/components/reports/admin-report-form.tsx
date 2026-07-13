@@ -24,6 +24,7 @@ const selectClassName =
 
 type AdminReportFormProps = {
   companies: Company[];
+  initialCompanyId?: string;
 };
 
 function assignFileToInput(input: HTMLInputElement | null, file: File) {
@@ -33,7 +34,10 @@ function assignFileToInput(input: HTMLInputElement | null, file: File) {
   input.files = dataTransfer.files;
 }
 
-export function AdminReportForm({ companies }: AdminReportFormProps) {
+export function AdminReportForm({
+  companies,
+  initialCompanyId,
+}: AdminReportFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const submissionInputRef = useRef<HTMLInputElement>(null);
   const pickerInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +112,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
             required
             disabled={isPending}
             className={selectClassName}
+            defaultValue={initialCompanyId ?? ""}
           >
             <option value="">Select company</option>
             {companies.map((company) => (
@@ -166,7 +171,7 @@ export function AdminReportForm({ companies }: AdminReportFormProps) {
             name="notes"
             rows={3}
             disabled={isPending}
-            className="flex w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:text-sm"
+            className="border-input focus-visible:border-ring focus-visible:ring-ring/50 flex w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50 sm:text-sm"
             placeholder="Optional message visible to the client"
           />
         </div>
