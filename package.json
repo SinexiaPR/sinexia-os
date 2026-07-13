@@ -16,6 +16,7 @@
     "test:calendar": "tsx scripts/test-calendar.ts",
     "test:company-workspace": "tsx scripts/test-company-workspace.ts",
     "test:sibarita-payroll": "tsx scripts/test-sibarita-payroll.ts",
+    "test:weekly-payroll-pdf": "tsx scripts/test-weekly-payroll-pdf.ts",
     "audit:security": "tsx scripts/audit-security.ts",
     "test:security": "tsx scripts/test-security-hardening.ts",
     "seed:users": "tsx scripts/seed-users.ts"
@@ -39,6 +40,7 @@
     "lucide-react": "^0.511.0",
     "next": "^15.3.3",
     "openai": "^6.46.0",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
