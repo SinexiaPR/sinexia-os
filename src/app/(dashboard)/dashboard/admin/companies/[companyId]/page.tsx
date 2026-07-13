@@ -53,6 +53,13 @@ export default async function AdminCompanyPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {company.slug === "sibarita" ? (
+              <Button asChild variant="outline">
+                <Link href={`/dashboard/payroll?company=${company.id}`}>
+                  Nómina semanal
+                </Link>
+              </Button>
+            ) : null}
             <Button asChild variant="outline">
               <Link href={`/dashboard/inbox?company=${company.id}`}>
                 <FileText className="size-4" />
@@ -182,6 +189,13 @@ export default async function AdminCompanyPage({
         <SurfaceCard className="lg:col-span-2">
           <h2 className="text-lg font-semibold">Acceso rápido</h2>
           <div className="mt-4 grid gap-2">
+            {company.slug === "sibarita" ? (
+              <Button asChild variant="outline" className="justify-start">
+                <Link href={`/dashboard/payroll?company=${company.id}`}>
+                  Nómina semanal
+                </Link>
+              </Button>
+            ) : null}
             <Button asChild variant="outline" className="justify-start">
               <Link href={`/dashboard/inbox?company=${company.id}`}>
                 <FileText className="size-4" />
