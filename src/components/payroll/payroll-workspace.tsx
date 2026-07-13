@@ -2,11 +2,19 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { AlertTriangle, ArrowLeft, FileText, Plus, Save } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  FileText,
+  Plus,
+  RotateCcw,
+  Save,
+} from "lucide-react";
 
 import {
   approveWeeklyPayroll,
   createWeeklyPayroll,
+  reopenWeeklyPayroll,
   savePayrollEmployee,
   saveWeeklyPayrollEntries,
   setPayrollEmployeeActive,
@@ -52,6 +60,7 @@ export function PayrollWorkspace({
     PayrollEmployee | "new" | null
   >(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
   const [pending, startTransition] = useTransition();
   const total = useMemo(
     () =>
@@ -354,6 +363,18 @@ export function PayrollWorkspace({
                   </Button>
                 </div>
               ) : null}
+              {isAdmin && selected.status !== "draft" ? (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => setShowReopenDialog(true)}
+                  >
+                    <RotateCcw className="size-4" />
+                    Reabrir nómina
+                  </Button>
+                </div>
+              ) : null}
             </>
           ) : null}
           {payrolls.length > 1 ? (
@@ -453,6 +474,53 @@ export function PayrollWorkspace({
           onClose={() => setEmployeeForm(null)}
           onSave={(input) => run(() => savePayrollEmployee(input))}
         />
+      ) : null}
+      {showReopenDialog && selected ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
+          <SurfaceCard className="w-full max-w-lg rounded-b-none sm:rounded-b-2xl">
+            <h2 className="text-lg font-semibold">Reabrir nómina</h2>
+            <p className="text-muted-foreground mt-2 text-sm">
+              La nómina volverá a borrador y conservará todos sus datos. El
+              motivo quedará registrado en la auditoría.
+            </p>
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const reason = String(
+                  new FormData(event.currentTarget).get("reason") ?? "",
+                );
+                run(() => reopenWeeklyPayroll(company.id, selected.id, reason));
+              }}
+            >
+              <label className="block text-sm">
+                Motivo de la reapertura
+                <textarea
+                  name="reason"
+                  required
+                  minLength={10}
+                  maxLength={500}
+                  rows={4}
+                  placeholder="Ej.: Corregir empleados y pagos de la semana."
+                  className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </label>
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => setShowReopenDialog(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={pending}>
+                  Reabrir para corregir
+                </Button>
+              </div>
+            </form>
+          </SurfaceCard>
+        </div>
       ) : null}
     </div>
   );

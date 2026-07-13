@@ -239,3 +239,43 @@ export async function approveWeeklyPayroll(
   revalidatePath("/dashboard/payroll");
   return { success: true };
 }
+
+const reopenPayrollSchema = z.object({
+  companyId: z.string().uuid(),
+  payrollId: z.string().uuid(),
+  reason: z.string().trim().min(10).max(500),
+});
+
+export async function reopenWeeklyPayroll(
+  companyId: string,
+  payrollId: string,
+  reason: string,
+) {
+  const parsed = reopenPayrollSchema.safeParse({
+    companyId,
+    payrollId,
+    reason,
+  });
+  if (!parsed.success)
+    return { error: "Escribe un motivo de entre 10 y 500 caracteres." };
+
+  const profile = await requireAuth();
+  if (profile.role !== "admin")
+    return { error: "Solo un administrador puede reabrir la nómina." };
+
+  try {
+    await authorizeCompany(parsed.data.companyId);
+  } catch {
+    return { error: "No autorizado." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reopen_weekly_payroll", {
+    p_payroll_id: parsed.data.payrollId,
+    p_reason: parsed.data.reason,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/payroll");
+  return { success: true };
+}

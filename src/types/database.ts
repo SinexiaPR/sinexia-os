@@ -572,6 +572,27 @@ export type Database = {
           updated_at?: string;
         };
       };
+      payroll_reopen_events: {
+        Row: {
+          id: string;
+          payroll_id: string;
+          company_id: string;
+          reopened_by: string;
+          previous_status: "submitted" | "approved";
+          reason: string;
+          reopened_at: string;
+        };
+        Insert: {
+          id?: string;
+          payroll_id: string;
+          company_id: string;
+          reopened_by: string;
+          previous_status: "submitted" | "approved";
+          reason: string;
+          reopened_at?: string;
+        };
+        Update: Record<string, never>;
+      };
       notification_reads: {
         Row: NotificationReadRow;
         Insert: {
