@@ -19,6 +19,12 @@ const pdfNotificationMigration = readFileSync(
   ),
   "utf8",
 );
+const resubmissionNotificationMigration = readFileSync(
+  resolve(
+    "supabase/migrations/20250713070000_payroll_resubmission_notifications.sql",
+  ),
+  "utf8",
+);
 const pdfRoute = readFileSync(
   resolve("src/app/api/payroll/[payrollId]/pdf/route.ts"),
   "utf8",
@@ -53,6 +59,26 @@ assert.match(
   notificationMigration,
   /OLD\.status IS DISTINCT FROM NEW\.status/,
   "notification is emitted only on a status transition",
+);
+assert.match(
+  resubmissionNotificationMigration,
+  /NEW\.id::TEXT \|\| ':'/,
+  "each submission has a distinct per-payroll timestamp key",
+);
+assert.match(
+  resubmissionNotificationMigration,
+  /COALESCE\(NEW\.submitted_at, NEW\.updated_at, now\(\)\)/,
+  "submission timestamp drives notification deduplication",
+);
+assert.match(
+  resubmissionNotificationMigration,
+  /WHERE payroll\.status = 'submitted'/,
+  "already-resubmitted payrolls receive the missing notification",
+);
+assert.match(
+  resubmissionNotificationMigration,
+  /ON CONFLICT \(dedupe_key\) DO NOTHING/,
+  "resubmission notification and backfill remain idempotent",
 );
 assert.match(
   pdfNotificationMigration,
