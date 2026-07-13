@@ -18,6 +18,8 @@
     "test:sibarita-payroll": "tsx scripts/test-sibarita-payroll.ts",
     "test:weekly-payroll-pdf": "tsx scripts/test-weekly-payroll-pdf.ts",
     "test:payroll-reopen": "tsx scripts/test-payroll-reopen.ts",
+    "test:tresbe-payroll": "tsx scripts/test-tresbe-payroll.ts",
+    "test:tresbe-payroll-pdf": "tsx scripts/test-tresbe-payroll-pdf.ts",
     "audit:security": "tsx scripts/audit-security.ts",
     "test:security": "tsx scripts/test-security-hardening.ts",
     "seed:users": "tsx scripts/seed-users.ts"

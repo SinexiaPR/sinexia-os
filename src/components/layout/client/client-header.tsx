@@ -25,7 +25,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { clientNavItems, getPageTitle } from "@/config/navigation";
+import {
+  clientNavItems,
+  getPageTitle,
+  tresbePayrollNavItem,
+} from "@/config/navigation";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 import type { ClientReportNotifications } from "@/types/notifications";
@@ -34,6 +38,7 @@ import type { Profile } from "@/types";
 type ClientHeaderProps = {
   profile: Profile;
   companyName?: string | null;
+  companySlug?: string | null;
   notificationUnreadCount: number;
   reportNotifications: ClientReportNotifications;
   className?: string;
@@ -52,6 +57,7 @@ function getInitials(profile: Profile) {
 export function ClientHeader({
   profile,
   companyName,
+  companySlug,
   notificationUnreadCount,
   reportNotifications,
   className,
@@ -59,14 +65,24 @@ export function ClientHeader({
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = useMemo(
-    () => getPageTitle(pathname, clientNavItems),
-    [pathname],
+    () =>
+      getPageTitle(
+        pathname,
+        companySlug === "tresbe"
+          ? [
+              clientNavItems[0],
+              tresbePayrollNavItem,
+              ...clientNavItems.slice(1),
+            ]
+          : clientNavItems,
+      ),
+    [companySlug, pathname],
   );
 
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md",
+        "border-border/60 bg-background/80 sticky top-0 z-30 border-b backdrop-blur-md",
         className,
       )}
     >
@@ -86,6 +102,7 @@ export function ClientHeader({
             </SheetHeader>
             <ClientNav
               companyName={companyName}
+              companySlug={companySlug}
               reportNotifications={reportNotifications}
               onNavigate={() => setMobileNavOpen(false)}
               className="flex-1"
@@ -99,7 +116,7 @@ export function ClientHeader({
         </div>
 
         <div className="hidden min-w-0 flex-1 md:block">
-          <p className="truncate text-sm font-medium text-muted-foreground">
+          <p className="text-muted-foreground truncate text-sm font-medium">
             {companyName ?? siteConfig.name}
           </p>
         </div>
@@ -108,9 +125,12 @@ export function ClientHeader({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative size-10 rounded-full p-0">
+            <Button
+              variant="ghost"
+              className="relative size-10 rounded-full p-0"
+            >
               <Avatar className="size-9">
-                <AvatarFallback className="bg-muted text-xs font-medium text-foreground">
+                <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
                   {getInitials(profile)}
                 </AvatarFallback>
               </Avatar>
@@ -123,7 +143,7 @@ export function ClientHeader({
                   {profile.full_name ?? profile.email}
                 </p>
                 {companyName ? (
-                  <p className="text-xs text-muted-foreground">{companyName}</p>
+                  <p className="text-muted-foreground text-xs">{companyName}</p>
                 ) : null}
               </div>
             </DropdownMenuLabel>

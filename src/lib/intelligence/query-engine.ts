@@ -11,6 +11,7 @@ import {
   type QueryIntent,
 } from "@/lib/intelligence/intents";
 import { getProfilesForCompany } from "@/lib/intelligence/profiles/store";
+import { createClient } from "@/lib/supabase/server";
 import type { PayrollEmployeeSummary } from "@/lib/intelligence/profiles/types";
 import type { SourceReference } from "@/lib/intelligence/types";
 
@@ -20,6 +21,128 @@ type StructuredAnswer = {
   sources: SourceReference[];
   intent: QueryIntent;
 };
+
+async function answerFromTresbePayroll(
+  params: {
+    question: string;
+    companyId: string;
+    period?: string | null;
+  },
+  intent: QueryIntent,
+): Promise<StructuredAnswer | null> {
+  const payrollIntents = new Set<QueryIntent>([
+    "payroll_total",
+    "employee_count",
+    "most_hours_worked",
+    "total_hours",
+    "overtime_hours",
+    "total_tips",
+    "service_checks_total",
+    "service_check_recipients",
+    "summary",
+  ]);
+  if (
+    !payrollIntents.has(intent) ||
+    (intent === "summary" && !/n[oó]mina|payroll/i.test(params.question))
+  )
+    return null;
+
+  const supabase = await createClient();
+  const { data: company } = await supabase
+    .from("companies")
+    .select("slug")
+    .eq("id", params.companyId)
+    .maybeSingle();
+  if (company?.slug !== "tresbe") return null;
+
+  let query = supabase
+    .from("tresbe_payrolls")
+    .select("*")
+    .eq("company_id", params.companyId)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  if (params.period) query = query.eq("week_start", params.period);
+  const { data: payrolls } = await query;
+  const payroll = payrolls?.[0];
+  if (!payroll) return null;
+  const { data: entries } = await supabase
+    .from("tresbe_payroll_entries")
+    .select(
+      "employee_name_snapshot,total_weekly_hours,service_hours,service_check_amount,tips,employee_total",
+    )
+    .eq("payroll_id", payroll.id)
+    .order("employee_name_snapshot");
+  const rows = entries ?? [];
+  let message: string;
+  switch (intent) {
+    case "payroll_total":
+      message = `Total general de la nómina: ${formatMoney(payroll.grand_total)}. Nómina en sistema: ${formatMoney(payroll.total_system_pay)}; tips: ${formatMoney(payroll.total_tips)}; cheques de servicios: ${formatMoney(payroll.total_service_checks)}.`;
+      break;
+    case "employee_count":
+      message = formatCount(payroll.employee_count, "Empleados");
+      break;
+    case "total_hours":
+      message = formatCount(payroll.total_weekly_hours, "Horas totales");
+      break;
+    case "overtime_hours": {
+      const over = rows.filter((row) => Number(row.total_weekly_hours) > 40);
+      message = over.length
+        ? `Empleados sobre 40 horas:\n${over.map((row) => `• ${row.employee_name_snapshot}: ${row.total_weekly_hours} horas`).join("\n")}`
+        : "Ningún empleado superó 40 horas en esta nómina.";
+      break;
+    }
+    case "total_tips":
+      message = `Propinas: ${formatMoney(payroll.total_tips)}.`;
+      break;
+    case "service_checks_total":
+      message = `Total de cheques de servicios: ${formatMoney(payroll.total_service_checks)}.`;
+      break;
+    case "service_check_recipients": {
+      const services = rows.filter(
+        (row) => Number(row.service_check_amount) > 0,
+      );
+      message = services.length
+        ? `Empleados con cheque de servicios:\n${services.map((row) => `• ${row.employee_name_snapshot}: ${formatMoney(row.service_check_amount)}`).join("\n")}`
+        : "No hubo cheques de servicios en esta nómina.";
+      break;
+    }
+    case "most_hours_worked": {
+      const ranked = [...rows].sort(
+        (a, b) => Number(b.total_weekly_hours) - Number(a.total_weekly_hours),
+      );
+      message = ranked.length
+        ? `Quién trabajó más horas:\n${ranked
+            .slice(0, 5)
+            .map(
+              (row, index) =>
+                `${index + 1}. ${row.employee_name_snapshot}: ${row.total_weekly_hours} horas`,
+            )
+            .join("\n")}`
+        : "No hay horas registradas.";
+      break;
+    }
+    case "summary":
+      message = [
+        `Nómina Tresbe del ${payroll.week_start} al ${payroll.week_end}.`,
+        `Empleados: ${payroll.employee_count}. Horas: ${payroll.total_weekly_hours}.`,
+        `Nómina en sistema: ${formatMoney(payroll.total_system_pay)}.`,
+        `Tips: ${formatMoney(payroll.total_tips)}.`,
+        `Cheques de servicios: ${formatMoney(payroll.total_service_checks)}.`,
+        `Ajustes: ${formatMoney(payroll.total_adjustments)}.`,
+        `Total general: ${formatMoney(payroll.grand_total)}.`,
+      ].join("\n");
+      break;
+    default:
+      return null;
+  }
+  const source = {
+    title: `Nómina Tresbe ${payroll.week_start} al ${payroll.week_end}`,
+    period: `${payroll.week_start}/${payroll.week_end}`,
+    viewPath: `/dashboard/payroll?payroll=${payroll.id}`,
+    downloadPath: `/api/tresbe-payroll/${payroll.id}/pdf`,
+  };
+  return { answered: true, message, sources: [source], intent };
+}
 
 function formatMoney(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) {
@@ -70,10 +193,7 @@ function profileSources(
   });
 }
 
-function readField(
-  data: Record<string, unknown>,
-  key: string,
-): number | null {
+function readField(data: Record<string, unknown>, key: string): number | null {
   const value = data[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -284,6 +404,9 @@ export async function answerFromStructuredQuery(params: {
 }): Promise<StructuredAnswer> {
   const intent = detectQueryIntent(params.question);
 
+  const tresbePayroll = await answerFromTresbePayroll(params, intent);
+  if (tresbePayroll) return tresbePayroll;
+
   if (requiresOpenAI(intent)) {
     if (intent === "summary") {
       const profiles = await getProfilesForCompany(params.companyId, {
@@ -307,10 +430,7 @@ export async function answerFromStructuredQuery(params: {
               (profile.structured_data ?? {}) as Record<string, unknown>,
             ),
         );
-        if (
-          arProfile &&
-          (arProfile.extraction_confidence ?? 0) >= 0.35
-        ) {
+        if (arProfile && (arProfile.extraction_confidence ?? 0) >= 0.35) {
           const message = buildQuickBooksARAnalyticalSummary(
             arProfile.structured_data as unknown as QuickBooksARProfile,
           );
@@ -324,13 +444,10 @@ export async function answerFromStructuredQuery(params: {
       }
 
       const latest = payrollPreferred
-        ? profiles.find((p) => p.document_type === "payroll") ?? profiles[0]
-        : profiles.find((p) => p.document_type === "accounts_receivable") ??
-          profiles[0];
-      if (
-        latest?.summary &&
-        (latest.extraction_confidence ?? 0) >= 0.35
-      ) {
+        ? (profiles.find((p) => p.document_type === "payroll") ?? profiles[0])
+        : (profiles.find((p) => p.document_type === "accounts_receivable") ??
+          profiles[0]);
+      if (latest?.summary && (latest.extraction_confidence ?? 0) >= 0.35) {
         return {
           answered: true,
           message: latest.summary,
@@ -401,8 +518,7 @@ export async function answerFromStructuredQuery(params: {
         return {
           answered: true,
           message:
-            fallback.message ??
-            "No hay suficientes documentos para comparar.",
+            fallback.message ?? "No hay suficientes documentos para comparar.",
           sources: [],
           intent,
         };
@@ -472,6 +588,8 @@ export async function answerFromStructuredQuery(params: {
     "total_hours",
     "overtime_hours",
     "total_tips",
+    "service_checks_total",
+    "service_check_recipients",
   ]);
   const receivableIntents = new Set([
     "receivable_total",
@@ -482,10 +600,10 @@ export async function answerFromStructuredQuery(params: {
   ]);
 
   const preferred = payrollIntents.has(intent)
-    ? profiles.find((p) => p.document_type === "payroll") ?? profiles[0]
+    ? (profiles.find((p) => p.document_type === "payroll") ?? profiles[0])
     : receivableIntents.has(intent)
-      ? profiles.find((p) => p.document_type === "accounts_receivable") ??
-        profiles[0]
+      ? (profiles.find((p) => p.document_type === "accounts_receivable") ??
+        profiles[0])
       : profiles[0];
 
   const data = (preferred.structured_data ?? {}) as Record<string, unknown>;

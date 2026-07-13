@@ -83,11 +83,12 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
 
   const firstName = profile.full_name?.split(" ")[0] ?? "cliente";
   const quickActions =
-    company?.slug === "sibarita"
+    company?.slug === "sibarita" || company?.slug === "tresbe"
       ? [
           {
-            label: "Nómina semanal",
-            description: "Horas y pagos",
+            label: company.slug === "tresbe" ? "Nóminas" : "Nómina semanal",
+            description:
+              company.slug === "tresbe" ? "Ver enviadas" : "Horas y pagos",
             href: "/dashboard/payroll",
             icon: Banknote,
           },
