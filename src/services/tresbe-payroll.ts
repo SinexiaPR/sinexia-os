@@ -20,6 +20,11 @@ export type TresbeEmployee = {
   service_hourly_rate: number | null;
   default_weekly_hours: number | null;
   default_weekly_salary: number | null;
+  annual_salary: number | null;
+  wage_requires_review: boolean;
+  wage_review_reason: string | null;
+  wage_source: string | null;
+  wage_updated_at: string | null;
   is_active: boolean;
   internal_note: string | null;
 };
@@ -87,6 +92,16 @@ export type TresbePayrollSettings = {
   email_subject_template: string | null;
 };
 
+export type TresbeWageReviewItem = {
+  id: string;
+  company_id: string;
+  report_date: string;
+  official_name: string | null;
+  source_name: string | null;
+  employee_id: string | null;
+  reason: string;
+};
+
 export async function resolveTresbeCompany(companyId?: string | null) {
   const supabase = await createClient();
   let query = supabase
@@ -104,28 +119,36 @@ export async function getTresbeAdminWorkspace(
   payrollId?: string | null,
 ) {
   const supabase = await createClient();
-  const [employeesResult, payrollsResult, settingsResult] = await Promise.all([
-    supabase
-      .from("tresbe_employees")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("area")
-      .order("display_name"),
-    supabase
-      .from("tresbe_payrolls")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("week_start", { ascending: false })
-      .limit(52),
-    supabase
-      .from("tresbe_payroll_settings")
-      .select("*")
-      .eq("company_id", companyId)
-      .maybeSingle(),
-  ]);
+  const [employeesResult, payrollsResult, settingsResult, wageReviewsResult] =
+    await Promise.all([
+      supabase
+        .from("tresbe_employees")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("area")
+        .order("display_name"),
+      supabase
+        .from("tresbe_payrolls")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("week_start", { ascending: false })
+        .limit(52),
+      supabase
+        .from("tresbe_payroll_settings")
+        .select("*")
+        .eq("company_id", companyId)
+        .maybeSingle(),
+      supabase
+        .from("tresbe_wage_review_items")
+        .select("*")
+        .eq("company_id", companyId)
+        .is("resolved_at", null)
+        .order("created_at"),
+    ]);
   if (employeesResult.error) throw employeesResult.error;
   if (payrollsResult.error) throw payrollsResult.error;
   if (settingsResult.error) throw settingsResult.error;
+  if (wageReviewsResult.error) throw wageReviewsResult.error;
 
   const payrolls = (payrollsResult.data ?? []) as TresbePayroll[];
   const selected =
@@ -152,6 +175,7 @@ export async function getTresbeAdminWorkspace(
     selected,
     entries,
     settings: settingsResult.data as TresbePayrollSettings | null,
+    wageReviews: (wageReviewsResult.data ?? []) as TresbeWageReviewItem[],
   };
 }
 

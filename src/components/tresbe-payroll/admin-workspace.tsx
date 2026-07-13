@@ -29,6 +29,7 @@ import type {
   TresbePayroll,
   TresbePayrollEntry,
   TresbePayrollSettings,
+  TresbeWageReviewItem,
 } from "@/services/tresbe-payroll";
 
 type Company = { id: string; name: string; slug: string };
@@ -68,6 +69,7 @@ export function TresbePayrollAdminWorkspace({
   selected,
   entries,
   settings,
+  wageReviews,
 }: {
   company: Company;
   employees: TresbeEmployee[];
@@ -75,6 +77,7 @@ export function TresbePayrollAdminWorkspace({
   selected: TresbePayroll | null;
   entries: TresbePayrollEntry[];
   settings: TresbePayrollSettings | null;
+  wageReviews: TresbeWageReviewItem[];
 }) {
   const [tab, setTab] = useState<"weekly" | "employees" | "settings">("weekly");
   const [entryState, setEntryState] = useState(entries);
@@ -795,6 +798,39 @@ export function TresbePayrollAdminWorkspace({
               <Plus className="size-4" /> Agregar empleado
             </Button>
           </div>
+          {wageReviews.length ? (
+            <SurfaceCard className="border-amber-200 bg-amber-50/40">
+              <h2 className="font-semibold">Revisión de salarios</h2>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Elementos que no se actualizaron automáticamente desde el
+                reporte oficial del 13 de julio de 2026.
+              </p>
+              <div className="mt-4 space-y-2 text-sm">
+                {wageReviews.map((review) => {
+                  const employee = employees.find(
+                    (item) => item.id === review.employee_id,
+                  );
+                  return (
+                    <div
+                      key={review.id}
+                      className="rounded-md border bg-white p-3"
+                    >
+                      <p className="font-medium">
+                        {review.official_name ??
+                          employee?.display_name ??
+                          "Empleado"}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {review.source_name ? `${review.source_name} · ` : ""}
+                        {employee ? `${employee.area} · ` : ""}
+                        {review.reason}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </SurfaceCard>
+          ) : null}
           {employees.map((employee) => (
             <SurfaceCard key={employee.id} padding="sm">
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -812,6 +848,17 @@ export function TresbePayrollAdminWorkspace({
                     Servicio {money.format(employee.service_hourly_rate ?? 0)} ·
                     Semanal {money.format(employee.default_weekly_salary ?? 0)}
                   </p>
+                  {employee.annual_salary != null ? (
+                    <p className="text-muted-foreground text-xs">
+                      Salario anual {money.format(employee.annual_salary)}
+                    </p>
+                  ) : null}
+                  {employee.wage_requires_review ? (
+                    <p className="mt-1 text-xs font-medium text-amber-700">
+                      {employee.wage_review_reason ??
+                        "Salario requiere revisión"}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -1095,6 +1142,7 @@ function TresbeEmployeeDialog({
               serviceRate: numeric("serviceRate"),
               defaultHours: numeric("defaultHours"),
               defaultSalary: numeric("defaultSalary"),
+              annualSalary: numeric("annualSalary"),
               internalNote: String(data.get("internalNote") || "") || null,
             });
           }}
@@ -1207,6 +1255,17 @@ function TresbeEmployeeDialog({
               min="0"
               step="0.01"
               defaultValue={employee?.default_weekly_salary ?? ""}
+              className="mt-1"
+            />
+          </label>
+          <label className="text-sm">
+            Salario anual
+            <Input
+              name="annualSalary"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={employee?.annual_salary ?? ""}
               className="mt-1"
             />
           </label>

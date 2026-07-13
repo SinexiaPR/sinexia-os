@@ -44,6 +44,7 @@ const employeeSchema = z.object({
   serviceRate: z.number().min(0).nullable(),
   defaultHours: z.number().min(0).nullable(),
   defaultSalary: z.number().min(0).nullable(),
+  annualSalary: z.number().min(0).nullable(),
   internalNote: z.string().trim().max(1000).nullable(),
 });
 export type TresbeEmployeeInput = z.infer<typeof employeeSchema>;
@@ -58,6 +59,20 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
     return { error: error instanceof Error ? error.message : "No autorizado." };
   }
   const data = parsed.data;
+  const weeklySalary =
+    data.annualSalary != null
+      ? Math.round((data.annualSalary / 52) * 100) / 100
+      : data.defaultSalary;
+  const wageConfigured =
+    data.payrollRule === "full_services"
+      ? (data.serviceRate ?? data.regularRate ?? 0) > 0
+      : ["fixed_weekly_salary", "preset_40_weekly_salary"].includes(
+            data.payrollRule,
+          )
+        ? (weeklySalary ?? 0) > 0
+        : data.payrollRule === "standard_hourly_40_plus_services"
+          ? (data.regularRate ?? 0) > 0
+          : data.payrollRule === "custom_manual";
   const values = {
     company_id: data.companyId,
     first_name: data.firstName,
@@ -70,7 +85,14 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
     service_hourly_rate: data.serviceRate,
     default_weekly_hours:
       data.payrollRule === "preset_40_weekly_salary" ? 40 : data.defaultHours,
-    default_weekly_salary: data.defaultSalary,
+    default_weekly_salary: weeklySalary,
+    annual_salary: data.annualSalary,
+    wage_requires_review: !wageConfigured,
+    wage_review_reason: wageConfigured
+      ? null
+      : "Wage requires administrator review",
+    wage_source: "Manual administrator update",
+    wage_updated_at: new Date().toISOString(),
     internal_note: data.internalNote,
     updated_by: profile.id,
   };
