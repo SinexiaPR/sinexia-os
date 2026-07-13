@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Banknote,
   CalendarDays,
   Inbox,
   LayoutDashboard,
@@ -34,6 +35,12 @@ export const clientNavItems: NavItem[] = [
   { title: "SinexIA", href: "/dashboard/sia", icon: Sparkles },
   { title: "Profile", href: "/dashboard/profile", icon: User },
 ];
+
+export const tresbePayrollNavItem: NavItem = {
+  title: "Nóminas",
+  href: "/dashboard/payroll",
+  icon: Banknote,
+};
 
 export const adminNavItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },

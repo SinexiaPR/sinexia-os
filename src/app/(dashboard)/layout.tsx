@@ -1,10 +1,7 @@
 import { AdminWorkspaceShell } from "@/components/layout/admin/admin-workspace-shell";
 import { ClientWorkspaceShell } from "@/components/layout/client/client-workspace-shell";
 import { requireAuth } from "@/lib/auth/session";
-import {
-  getCompanyById,
-  getDocumentsForCompany,
-} from "@/services/documents";
+import { getCompanyById, getDocumentsForCompany } from "@/services/documents";
 import {
   countUnreadAdminInboxNotifications,
   countUnreadNotifications,
@@ -63,6 +60,7 @@ export default async function DashboardLayout({
     <ClientWorkspaceShell
       profile={profile}
       companyName={company?.name}
+      companySlug={company?.slug}
       notificationUnreadCount={notificationUnreadCount}
       reportNotifications={{
         profileId: profile.id,

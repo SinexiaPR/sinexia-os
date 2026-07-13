@@ -5,6 +5,8 @@ export type QueryIntent =
   | "total_hours"
   | "overtime_hours"
   | "total_tips"
+  | "service_checks_total"
+  | "service_check_recipients"
   | "receivable_total"
   | "customer_count"
   | "invoice_count_receivable"
@@ -48,8 +50,23 @@ const TOTAL_HOURS = [
   /total\s*hours?/i,
   /horas?\s*totales?/i,
 ];
-const OVERTIME = [/overtime/i, /horas?\s*extra/i];
+const OVERTIME = [
+  /overtime/i,
+  /horas?\s*extra/i,
+  /pasaron?\s*(de\s*)?40\s*horas/i,
+  /m[aá]s\s*de\s*40\s*horas/i,
+];
 const TIPS = [/tips?/i, /propinas?/i];
+const SERVICE_CHECKS = [
+  /total.*cheques?\s*de\s*servicios?/i,
+  /cu[aá]nto.*cheques?\s*de\s*servicios?/i,
+  /service\s*checks?\s*total/i,
+];
+const SERVICE_RECIPIENTS = [
+  /qui[eé]n.*(recibi[oó]|tiene).*cheques?\s*(por|de)\s*servicios?/i,
+  /empleados?.*cheques?\s*de\s*servicios?/i,
+  /who.*service\s*checks?/i,
+];
 const RECEIVABLE_TOTAL = [
   /total\s*receivable/i,
   /accounts?\s*receivable/i,
@@ -94,10 +111,7 @@ const PAYABLE_TOTAL = [
   /accounts?\s*payable/i,
   /cuentas?\s*por\s*pagar/i,
 ];
-const VENDOR_COUNT = [
-  /how\s*many\s*vendors?/i,
-  /cu[aá]ntos?\s*proveedores?/i,
-];
+const VENDOR_COUNT = [/how\s*many\s*vendors?/i, /cu[aá]ntos?\s*proveedores?/i];
 const REVENUE = [/revenue/i, /ingresos?/i, /ventas?/i];
 const EXPENSES = [/expenses?/i, /gastos?/i];
 const NET_INCOME = [/net\s*income/i, /utilidad/i];
@@ -164,12 +178,17 @@ export function detectQueryIntent(question: string): QueryIntent {
   if (matchesAny(q, TOTAL_HOURS)) return "total_hours";
   if (matchesAny(q, OVERTIME)) return "overtime_hours";
   if (matchesAny(q, TIPS)) return "total_tips";
+  if (matchesAny(q, SERVICE_RECIPIENTS)) return "service_check_recipients";
+  if (matchesAny(q, SERVICE_CHECKS)) return "service_checks_total";
 
   if (matchesAny(q, RECEIVABLE_TOTAL)) return "receivable_total";
   if (matchesAny(q, TOP_DEBTORS)) return "top_debtors";
   if (matchesAny(q, AGING_BUCKETS)) return "aging_buckets";
   if (matchesAny(q, CUSTOMER_COUNT)) return "customer_count";
-  if (matchesAny(q, INVOICE_COUNT) && /payable|pagar|vendor|proveedor/i.test(q)) {
+  if (
+    matchesAny(q, INVOICE_COUNT) &&
+    /payable|pagar|vendor|proveedor/i.test(q)
+  ) {
     return "invoice_count_payable";
   }
   if (matchesAny(q, INVOICE_COUNT)) return "invoice_count_receivable";

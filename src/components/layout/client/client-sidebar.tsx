@@ -7,11 +7,13 @@ import type { ClientReportNotifications } from "@/types/notifications";
 
 type ClientSidebarProps = {
   companyName?: string | null;
+  companySlug?: string | null;
   reportNotifications: ClientReportNotifications;
 };
 
 export function ClientSidebar({
   companyName,
+  companySlug,
   reportNotifications,
 }: ClientSidebarProps) {
   return (
@@ -22,6 +24,7 @@ export function ClientSidebar({
         </p>
         <ClientNav
           companyName={companyName}
+          companySlug={companySlug}
           reportNotifications={reportNotifications}
         />
         <SignOutControl variant="nav" />

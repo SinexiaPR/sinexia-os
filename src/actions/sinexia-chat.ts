@@ -47,8 +47,7 @@ export async function askSinexIA(params: {
   let conversationId = params.conversationId ?? null;
 
   if (!conversationId) {
-    const title =
-      trimmed.length > 60 ? `${trimmed.slice(0, 57)}…` : trimmed;
+    const title = trimmed.length > 60 ? `${trimmed.slice(0, 57)}…` : trimmed;
     const { data: conversation, error } = await supabase
       .from("sinexia_conversations")
       .insert({
@@ -106,8 +105,7 @@ export async function askSinexIA(params: {
   } catch (error) {
     console.error("[askSinexIA]", error);
     return {
-      error:
-        "SinexIA no pudo responder en este momento. Intente de nuevo.",
+      error: "SinexIA no pudo responder en este momento. Intente de nuevo.",
     };
   }
 }
@@ -120,10 +118,30 @@ export async function askSia(message: string) {
 export async function getSinexIASuggestions() {
   const profile = await requireClient();
   if (!profile.company_id) {
-    return { suggestions: assistantConfig.suggestedPrompts as unknown as string[] };
+    return {
+      suggestions: assistantConfig.suggestedPrompts as unknown as string[],
+    };
   }
 
-  const profiles = await getProfilesForCompanySuggestions(profile.company_id);
+  const supabase = await createClient();
+  const [{ data: company }, profiles] = await Promise.all([
+    supabase
+      .from("companies")
+      .select("slug")
+      .eq("id", profile.company_id)
+      .maybeSingle(),
+    getProfilesForCompanySuggestions(profile.company_id),
+  ]);
+  if (company?.slug === "tresbe") {
+    return {
+      suggestions: [
+        "¿Cuál fue el total general de la última nómina?",
+        "¿Quién trabajó más horas?",
+        "¿Quién recibió cheques de servicios?",
+        "¿Cuál fue el total de propinas?",
+      ],
+    };
+  }
   return {
     suggestions: buildSuggestedQuestionsFromProfiles(
       profiles.map((p) => ({
