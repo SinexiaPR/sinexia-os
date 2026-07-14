@@ -9,7 +9,7 @@ import {
   getViewedReportIds,
 } from "@/services/notifications";
 import { getReportsForCompany } from "@/services/reports";
-import { isCompanyInvoicingEnabled } from "@/services/invoices";
+import { shouldShowCompanyInvoices } from "@/services/invoices";
 
 export default async function DashboardLayout({
   children,
@@ -59,7 +59,7 @@ export default async function DashboardLayout({
           docs.map((doc) => doc.id),
         ),
         getViewedDocumentIds(profile.id),
-        isCompanyInvoicingEnabled(profile.company_id),
+        shouldShowCompanyInvoices(profile.company_id),
       ])
     : [[], [] as string[], [] as string[], [] as string[], false];
 
