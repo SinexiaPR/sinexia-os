@@ -60,6 +60,36 @@ export async function isCompanyInvoicingEnabled(companyId: string) {
   return data?.invoices_enabled === true;
 }
 
+export async function shouldShowCompanyInvoices(companyId: string) {
+  const supabase = await createClient();
+  const [profileResult, invoiceResult] = await Promise.all([
+    supabase
+      .from("company_billing_profiles")
+      .select("invoices_enabled")
+      .eq("company_id", companyId)
+      .maybeSingle(),
+    supabase
+      .from("invoices")
+      .select("id")
+      .eq("company_id", companyId)
+      .in("status", [
+        "issued",
+        "sent",
+        "viewed",
+        "paid",
+        "overdue",
+        "cancelled",
+      ])
+      .limit(1),
+  ]);
+  if (profileResult.error) throw profileResult.error;
+  if (invoiceResult.error) throw invoiceResult.error;
+  return (
+    profileResult.data?.invoices_enabled === true ||
+    Boolean(invoiceResult.data?.length)
+  );
+}
+
 export async function getInvoices(companyId?: string | null) {
   const supabase = await createClient();
   await supabase.rpc("refresh_invoice_overdue_statuses");

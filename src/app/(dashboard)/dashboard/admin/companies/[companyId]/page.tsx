@@ -19,6 +19,15 @@ function formatDate(value: string | null) {
   return value ? dateFormat.format(new Date(value)) : "Sin actividad";
 }
 
+const invoiceStatusLabels: Record<string, string> = {
+  issued: "Emitida",
+  sent: "Enviada",
+  viewed: "Vista",
+  paid: "Pagada",
+  overdue: "Vencida",
+  cancelled: "Cancelada",
+};
+
 export default async function AdminCompanyPage({
   params,
 }: {
@@ -107,6 +116,46 @@ export default async function AdminCompanyPage({
           </p>
         ) : null}
       </section>
+
+      <SurfaceCard>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Facturas
+            </p>
+            {summary.invoice.latestNumber ? (
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                <p className="text-lg font-semibold">
+                  #{summary.invoice.latestNumber}
+                </p>
+                <p className="text-sm">
+                  {summary.invoice.latestDate ?? "Sin fecha"} ·{" "}
+                  {new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: summary.invoice.latestCurrency,
+                  }).format(summary.invoice.latestTotal ?? 0)}
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  {invoiceStatusLabels[summary.invoice.latestStatus ?? ""] ??
+                    summary.invoice.latestStatus}
+                </p>
+              </div>
+            ) : (
+              <p className="text-muted-foreground mt-2 text-sm">
+                No hay facturas emitidas para esta empresa.
+              </p>
+            )}
+            <p className="text-muted-foreground mt-2 text-xs">
+              {summary.invoice.unpaidCount} pendientes de pago
+            </p>
+          </div>
+          <Button asChild variant="outline">
+            <Link href={`/dashboard/admin/companies/${company.id}/invoices`}>
+              Ver facturas
+            </Link>
+          </Button>
+        </div>
+      </SurfaceCard>
 
       <section aria-labelledby="categorias">
         <div className="flex items-center gap-2">

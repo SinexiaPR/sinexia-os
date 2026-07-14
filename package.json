@@ -24,6 +24,7 @@
     "test:tresbe-revisions": "tsx scripts/test-tresbe-payroll-revisions.ts",
     "test:tresbe-stabilization": "tsx scripts/test-tresbe-stabilization.ts",
     "test:invoices": "tsx scripts/test-invoices.ts",
+    "test:invoice-visibility": "tsx scripts/test-invoice-client-visibility.ts",
     "audit:security": "tsx scripts/audit-security.ts",
     "test:security": "tsx scripts/test-security-hardening.ts",
     "seed:users": "tsx scripts/seed-users.ts"

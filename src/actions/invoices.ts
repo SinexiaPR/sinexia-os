@@ -464,10 +464,16 @@ export async function emailInvoice(input: z.infer<typeof emailSchema>) {
 
 export async function markInvoiceViewed(invoiceId: string) {
   const profile = await requireAuth();
-  if (profile.role !== "client") return;
+  if (profile.role !== "client" || !profile.company_id)
+    return { error: "No autorizado." };
   const supabase = await createClient();
-  await supabase.rpc("mark_invoice_viewed", { p_invoice_id: invoiceId });
+  const { error } = await supabase.rpc("mark_invoice_viewed", {
+    p_invoice_id: invoiceId,
+  });
+  if (error) return { error: "No se pudo registrar la vista de la factura." };
   revalidatePath("/dashboard/invoices");
+  revalidatePath("/dashboard", "layout");
+  return { success: true };
 }
 
 const billingSettingsSchema = z.object({

@@ -32,6 +32,14 @@ export type CompanyWorkspace = {
     lastReportAt: string | null;
     lastAnalysisAt: string | null;
     lastUpdatedAt: string | null;
+    invoice: {
+      latestNumber: number | null;
+      latestDate: string | null;
+      latestTotal: number | null;
+      latestStatus: string | null;
+      latestCurrency: string;
+      unpaidCount: number;
+    };
   };
   categories: CategorySummary[];
   activity: {
@@ -65,6 +73,8 @@ export async function getAdminCompanyWorkspace(
     processingRes,
     notificationsRes,
     profilesRes,
+    latestInvoiceRes,
+    unpaidInvoicesRes,
   ] = await Promise.all([
     supabase.from("companies").select("*").eq("id", companyId).maybeSingle(),
     supabase
@@ -95,6 +105,21 @@ export async function getAdminCompanyWorkspace(
       .eq("company_id", companyId)
       .order("upload_date", { ascending: false })
       .limit(24),
+    supabase
+      .from("invoices")
+      .select("invoice_number,invoice_date,total,status,currency,issued_at")
+      .eq("company_id", companyId)
+      .eq("is_legacy_import", false)
+      .not("invoice_number", "is", null)
+      .order("invoice_number", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .eq("is_legacy_import", false)
+      .in("status", ["issued", "sent", "viewed", "overdue"]),
   ]);
   if (companyRes.error) throw companyRes.error;
   if (!companyRes.data) return null;
@@ -103,6 +128,8 @@ export async function getAdminCompanyWorkspace(
   if (processingRes.error) throw processingRes.error;
   if (notificationsRes.error) throw notificationsRes.error;
   if (profilesRes.error) throw profilesRes.error;
+  if (latestInvoiceRes.error) throw latestInvoiceRes.error;
+  if (unpaidInvoicesRes.error) throw unpaidInvoicesRes.error;
 
   const documents = documentsRes.data ?? [];
   const reports = reportsRes.data ?? [];
@@ -194,6 +221,7 @@ export async function getAdminCompanyWorkspace(
     reports[0]?.created_at,
     processing[0]?.processed_at,
     processing[0]?.created_at,
+    latestInvoiceRes.data?.issued_at,
   ].filter(Boolean) as string[];
   return {
     company: companyRes.data,
@@ -209,6 +237,16 @@ export async function getAdminCompanyWorkspace(
         processing.find((item) => item.status === "completed")?.processed_at ??
         null,
       lastUpdatedAt: dates.sort().at(-1) ?? null,
+      invoice: {
+        latestNumber: latestInvoiceRes.data?.invoice_number ?? null,
+        latestDate: latestInvoiceRes.data?.invoice_date ?? null,
+        latestTotal: latestInvoiceRes.data
+          ? Number(latestInvoiceRes.data.total)
+          : null,
+        latestStatus: latestInvoiceRes.data?.status ?? null,
+        latestCurrency: latestInvoiceRes.data?.currency ?? "USD",
+        unpaidCount: unpaidInvoicesRes.count ?? 0,
+      },
     },
     categories: [...categoryMap.values()].filter(
       (category) => category.count > 0,
