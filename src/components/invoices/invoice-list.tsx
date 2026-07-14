@@ -134,6 +134,9 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
           <option value="not_sent">Correo no enviado</option>
         </select>
       </div>
+      {message ? (
+        <p className="text-destructive border-b px-3 py-3 text-sm">{message}</p>
+      ) : null}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1100px] text-left text-sm">
           <thead className="text-muted-foreground border-b text-xs uppercase">
@@ -218,9 +221,6 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
           <p className="text-muted-foreground py-10 text-center text-sm">
             No hay facturas para estos filtros.
           </p>
-        ) : null}
-        {message ? (
-          <p className="text-destructive px-3 py-3 text-sm">{message}</p>
         ) : null}
       </div>
     </SurfaceCard>

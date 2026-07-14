@@ -153,6 +153,13 @@ async function main() {
     ),
     "utf8",
   );
+  const draftDeleteMigration = readFileSync(
+    join(
+      root,
+      "supabase/migrations/20260714121000_invoice_draft_delete_trigger_fix.sql",
+    ),
+    "utf8",
+  );
   assert.match(migration, /last_issued_number INTEGER/);
   assert.match(migration, /VALUES \('sinexia_global_invoice', 215\)/);
   assert.match(migration, /last_issued_number = last_issued_number \+ 1/);
@@ -199,6 +206,18 @@ async function main() {
   assert.match(
     sameDayMigration,
     /ALTER COLUMN default_payment_terms_days SET DEFAULT 0/,
+  );
+  assert.match(
+    draftDeleteMigration,
+    /TG_OP = 'DELETE'[\s\S]+NOT EXISTS[\s\S]+FROM public\.invoices/,
+  );
+  assert.match(
+    draftDeleteMigration,
+    /PERFORM public\.recalculate_invoice_totals\(target_invoice_id\)/,
+  );
+  assert.match(
+    draftDeleteMigration,
+    /REVOKE ALL ON FUNCTION public\.recalculate_invoice_after_item_change\(\)/,
   );
 
   assert.match(
