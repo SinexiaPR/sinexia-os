@@ -9,12 +9,14 @@ type ClientSidebarProps = {
   companyName?: string | null;
   companySlug?: string | null;
   reportNotifications: ClientReportNotifications;
+  invoicesEnabled?: boolean;
 };
 
 export function ClientSidebar({
   companyName,
   companySlug,
   reportNotifications,
+  invoicesEnabled = false,
 }: ClientSidebarProps) {
   return (
     <aside className="hidden w-48 shrink-0 md:block">
@@ -26,6 +28,7 @@ export function ClientSidebar({
           companyName={companyName}
           companySlug={companySlug}
           reportNotifications={reportNotifications}
+          invoicesEnabled={invoicesEnabled}
         />
         <SignOutControl variant="nav" />
       </div>
