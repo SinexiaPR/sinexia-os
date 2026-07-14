@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { PDFDocument } from "pdf-lib";
@@ -43,7 +43,7 @@ const invoice: Invoice = {
   invoice_number: 216,
   status: "issued",
   invoice_date: "2026-07-14",
-  due_date: "2026-07-29",
+  due_date: "2026-07-14",
   currency: "USD",
   subtotal: 300,
   discount_type: "percentage",
@@ -112,7 +112,15 @@ const settings: BillingSettings = {
 };
 
 async function main() {
-  const pdfBytes = await buildInvoicePdf({ invoice, items, settings });
+  const logoBytes = new Uint8Array(
+    readFileSync(join(process.cwd(), "public/sinexia-invoice-logo.png")),
+  );
+  const pdfBytes = await buildInvoicePdf({
+    invoice,
+    items,
+    settings,
+    logoBytes,
+  });
   assert.ok(pdfBytes.length > 1_000);
   const parsedPdf = await PDFDocument.load(pdfBytes);
   assert.equal(
@@ -121,6 +129,10 @@ async function main() {
     "a normal invoice must fit one page",
   );
   assert.equal(parsedPdf.getTitle(), "Factura 216");
+  if (process.env.INVOICE_PDF_OUTPUT) {
+    mkdirSync(join(process.cwd(), "tmp/pdfs"), { recursive: true });
+    writeFileSync(process.env.INVOICE_PDF_OUTPUT, pdfBytes);
+  }
 
   const root = process.cwd();
   const migration = readFileSync(
@@ -131,6 +143,13 @@ async function main() {
     join(
       root,
       "supabase/migrations/20250714100000_invoice_permissions_weekly_defaults.sql",
+    ),
+    "utf8",
+  );
+  const sameDayMigration = readFileSync(
+    join(
+      root,
+      "supabase/migrations/20260714120000_invoice_same_day_due_dates.sql",
     ),
     "utf8",
   );
@@ -166,6 +185,20 @@ async function main() {
   assert.doesNotMatch(
     migration,
     /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i,
+  );
+  assert.match(
+    sameDayMigration,
+    /UPDATE public\.invoices[\s\S]+WHERE status = 'draft'/,
+  );
+  assert.doesNotMatch(
+    sameDayMigration,
+    /WHERE status (?:<>|!=) 'draft'/,
+    "same-day migration must not rewrite issued invoice history",
+  );
+  assert.match(sameDayMigration, /NEW\.due_date := NEW\.invoice_date/);
+  assert.match(
+    sameDayMigration,
+    /ALTER COLUMN default_payment_terms_days SET DEFAULT 0/,
   );
 
   assert.match(
@@ -245,6 +278,14 @@ async function main() {
   assert.match(invoiceEditor, /existingItems\.length/);
   assert.match(invoiceEditor, /initialTemplate\?\.default_items/);
   assert.match(invoiceEditor, /template\?\.default_tax_rate/);
+  assert.match(invoiceEditor, /dueDate: invoiceDate/);
+  assert.match(invoiceEditor, /aria-readonly="true"/);
+  assert.match(invoiceActions, /\.eq\("status", "draft"\)/);
+  assert.match(
+    invoiceActions,
+    /Solo se pueden eliminar facturas que todavía son borradores/,
+  );
+  assert.match(invoiceActions, /sinexia-invoice-logo\.png/);
 
   for (const route of [
     "src/app/(dashboard)/dashboard/admin/invoices/page.tsx",

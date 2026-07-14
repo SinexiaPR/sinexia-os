@@ -51,12 +51,15 @@ export function InvoiceActions({ invoice }: { invoice: Invoice }) {
       error?: string;
       success?: boolean;
       invoiceId?: string;
+      deleted?: boolean;
     } | void>,
   ) {
     startTransition(async () => {
       setMessage(null);
       const result = await action();
       if (result && "error" in result && result.error) setMessage(result.error);
+      else if (result && "deleted" in result && result.deleted)
+        router.push("/dashboard/admin/invoices");
       else if (result && "invoiceId" in result && result.invoiceId)
         router.push(`/dashboard/admin/invoices/${result.invoiceId}`);
       else setMessage("Operación completada.");
@@ -96,7 +99,7 @@ export function InvoiceActions({ invoice }: { invoice: Invoice }) {
                     run(() => deleteInvoiceDraft(invoice.id));
                 }}
               >
-                Eliminar borrador
+                Eliminar factura
               </Button>
             </>
           ) : (

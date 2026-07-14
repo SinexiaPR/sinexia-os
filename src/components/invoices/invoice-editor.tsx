@@ -21,12 +21,6 @@ const inputClass =
 const textareaClass =
   "mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 
-function addDays(date: string, days: number) {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
 function profileAddress(company: BillingCompany) {
   const profile = company.billingProfile;
   if (!profile) return "";
@@ -65,15 +59,6 @@ export function InvoiceEditor({
   const [companyId, setCompanyId] = useState(initialCompany?.id ?? "");
   const [invoiceDate, setInvoiceDate] = useState(
     invoice?.invoice_date ?? today,
-  );
-  const [dueDate, setDueDate] = useState(
-    invoice?.due_date ??
-      addDays(
-        today,
-        initialTemplate?.default_terms_days ??
-          initialProfile?.default_payment_terms_days ??
-          15,
-      ),
   );
   const [currency, setCurrency] = useState(
     invoice?.currency ??
@@ -175,14 +160,6 @@ export function InvoiceEditor({
     setBillingAddress(profileAddress(company));
     setLanguage(profile?.default_language || "es");
     setClientNote(profile?.default_note || "");
-    setDueDate(
-      addDays(
-        invoiceDate,
-        template?.default_terms_days ??
-          profile?.default_payment_terms_days ??
-          15,
-      ),
-    );
     setCurrency(
       template?.default_currency ?? settings?.default_currency ?? "USD",
     );
@@ -199,7 +176,7 @@ export function InvoiceEditor({
       invoiceId: invoice?.id,
       companyId,
       invoiceDate,
-      dueDate,
+      dueDate: invoiceDate,
       currency,
       billingName,
       billingContact: billingContact || null,
@@ -269,10 +246,13 @@ export function InvoiceEditor({
               <Input
                 className="mt-1"
                 type="date"
-                min={invoiceDate}
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
+                value={invoiceDate}
+                readOnly
+                aria-readonly="true"
               />
+              <span className="text-muted-foreground mt-1 block text-xs">
+                El vencimiento es el mismo día de emisión.
+              </span>
             </label>
           </div>
         </SurfaceCard>

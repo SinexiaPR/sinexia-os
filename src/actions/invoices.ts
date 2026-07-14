@@ -1,7 +1,9 @@
 "use server";
 
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { buildInvoicePdf } from "@/lib/invoices/pdf";
@@ -47,8 +49,8 @@ const invoiceDraftSchema = z
     taxRate: z.coerce.number().min(0).max(100),
     items: z.array(invoiceItemSchema).min(1).max(100),
   })
-  .refine((value) => value.dueDate >= value.invoiceDate, {
-    message: "La fecha de vencimiento no puede ser anterior a la factura.",
+  .refine((value) => value.dueDate === value.invoiceDate, {
+    message: "La fecha de vencimiento debe ser igual a la fecha de factura.",
     path: ["dueDate"],
   })
   .refine(
@@ -125,7 +127,8 @@ export async function saveInvoiceDraft(input: InvoiceDraftInput) {
   const header = {
     company_id: value.companyId,
     invoice_date: value.invoiceDate,
-    due_date: value.dueDate,
+    // Same-day terms are server-authoritative; never trust a different client date.
+    due_date: value.invoiceDate,
     currency: value.currency,
     billing_name_snapshot: value.billingName,
     billing_contact_snapshot: nullable(value.billingContact),
@@ -266,8 +269,21 @@ export async function generateInvoicePdf(invoiceId: string) {
       if (downloaded.error) throw downloaded.error;
       return new Uint8Array(await downloaded.data.arrayBuffer());
     };
+    const loadDefaultLogo = async () => {
+      try {
+        return new Uint8Array(
+          await readFile(
+            join(process.cwd(), "public", "sinexia-invoice-logo.png"),
+          ),
+        );
+      } catch {
+        return undefined;
+      }
+    };
     const [logoBytes, signatureBytes] = await Promise.all([
-      downloadAsset(settings.logo_storage_path),
+      settings.logo_storage_path
+        ? downloadAsset(settings.logo_storage_path)
+        : loadDefaultLogo(),
       downloadAsset(settings.signature_storage_path),
     ]);
     const bytes = await buildInvoicePdf({
@@ -331,14 +347,20 @@ export async function issueInvoice(invoiceId: string) {
 export async function deleteInvoiceDraft(invoiceId: string) {
   await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("invoices")
     .delete()
     .eq("id", invoiceId)
-    .eq("status", "draft");
+    .eq("status", "draft")
+    .select("id")
+    .maybeSingle();
   if (error) return { error: error.message };
+  if (!data)
+    return {
+      error: "Solo se pueden eliminar facturas que todavía son borradores.",
+    };
   revalidatePath("/dashboard/admin/invoices");
-  redirect("/dashboard/admin/invoices");
+  return { success: true, deleted: true };
 }
 
 export async function duplicateInvoice(invoiceId: string) {
@@ -789,8 +811,6 @@ export async function createInvoiceFromRecurringProfile(recurringId: string) {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-  const due = new Date(`${invoiceDate}T12:00:00Z`);
-  due.setUTCDate(due.getUTCDate() + Number(recurring.default_terms_days ?? 15));
   const address = [
     billing?.address_line_1,
     billing?.address_line_2,
@@ -803,7 +823,7 @@ export async function createInvoiceFromRecurringProfile(recurringId: string) {
   return saveInvoiceDraft({
     companyId: company.id,
     invoiceDate,
-    dueDate: due.toISOString().slice(0, 10),
+    dueDate: invoiceDate,
     currency: recurring.default_currency ?? settings?.default_currency ?? "USD",
     billingName: billing?.billing_legal_name ?? company.name,
     billingContact: billing?.billing_contact_name ?? null,
