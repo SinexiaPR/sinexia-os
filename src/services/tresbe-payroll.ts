@@ -27,6 +27,7 @@ export type TresbeEmployee = {
   wage_updated_at: string | null;
   is_active: boolean;
   internal_note: string | null;
+  tresbe_employee_aliases?: Array<{ alias_name: string }>;
 };
 
 export type TresbePayroll = {
@@ -123,7 +124,7 @@ export async function getTresbeAdminWorkspace(
     await Promise.all([
       supabase
         .from("tresbe_employees")
-        .select("*")
+        .select("*,tresbe_employee_aliases(alias_name)")
         .eq("company_id", companyId)
         .order("area")
         .order("display_name"),

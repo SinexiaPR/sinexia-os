@@ -220,17 +220,16 @@ export async function buildTresbePayrollPdf(params: {
   entries: TresbePayrollEntry[];
 }) {
   const entries = params.entries.filter(hasTresbePayrollValue);
-  const visibleTotals = entries.reduce(
-    (totals, entry) => ({
-      hours: totals.hours + Number(entry.total_weekly_hours),
-      system: totals.system + Number(entry.system_pay),
-      tips: totals.tips + Number(entry.tips),
-      services: totals.services + Number(entry.service_check_amount),
-      adjustments: totals.adjustments + Number(entry.other_adjustments),
-      grand: totals.grand + Number(entry.employee_total),
-    }),
-    { hours: 0, system: 0, tips: 0, services: 0, adjustments: 0, grand: 0 },
-  );
+  // Monetary totals come from the saved payroll header, which is recalculated
+  // by PostgreSQL before preview/send. The PDF never creates a second total.
+  const visibleTotals = {
+    hours: Number(params.payroll.total_weekly_hours),
+    system: Number(params.payroll.total_system_pay),
+    tips: Number(params.payroll.total_tips),
+    services: Number(params.payroll.total_service_checks),
+    adjustments: Number(params.payroll.total_adjustments),
+    grand: Number(params.payroll.grand_total),
+  };
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -280,26 +279,36 @@ export async function buildTresbePayrollPdf(params: {
   y -= 42;
 
   const detailColumns: Column[] = [
-    { label: "Empleado", width: 130, value: (e) => e.employee_name_snapshot },
-    { label: "Area", width: 55, value: (e) => e.area_snapshot },
-    { label: "Horas", width: 45, value: (e) => number(e.total_weekly_hours) },
-    { label: "Sistema", width: 75, value: (e) => money(e.system_pay) },
-    { label: "Tips", width: 60, value: (e) => money(e.tips) },
+    { label: "Empleado", width: 116, value: (e) => e.employee_name_snapshot },
+    { label: "Area", width: 48, value: (e) => e.area_snapshot },
+    { label: "Horas", width: 38, value: (e) => number(e.total_weekly_hours) },
+    { label: "Sistema", width: 68, value: (e) => money(e.system_pay) },
+    { label: "Tips", width: 52, value: (e) => money(e.tips) },
     {
       label: "Servicios",
-      width: 80,
-      value: (e) => money(e.service_check_amount),
+      width: 104,
+      value: (e) =>
+        Number(e.service_check_amount) > 0
+          ? `${money(e.service_check_amount)} / ${number(e.service_hours)}h`
+          : money(0),
     },
     {
-      label: "Motivo servicio",
-      width: 105,
+      label: "Motivo / comentario",
+      width: 154,
       value: (e) =>
-        Number(e.service_check_amount) > 0 ? (e.service_reason ?? "Otro") : "-",
+        [
+          Number(e.service_check_amount) > 0
+            ? (e.service_reason ?? "Otro")
+            : null,
+          e.comment,
+        ]
+          .filter(Boolean)
+          .join(" - ") || "-",
     },
-    { label: "Ajustes", width: 70, value: (e) => money(e.other_adjustments) },
+    { label: "Ajustes", width: 62, value: (e) => money(e.other_adjustments) },
     {
       label: "Total a pagar",
-      width: 100,
+      width: 78,
       value: (e) => money(e.employee_total),
     },
   ];

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
 
 import { PDFDocument } from "pdf-lib";
 
@@ -122,6 +123,47 @@ async function main() {
   assert.equal(parsed.getPageCount(), 1, "payroll summary must fit one page");
   assert.equal(parsed.getTitle(), "Nomina Tresbe 2026-07-06");
   assert.equal(parsed.getAuthor(), "Sinexia OS");
+
+  const crowdedEntries = Array.from({ length: 39 }, (_, index) =>
+    makeEntry({
+      id: `entry-${index + 1}`,
+      employee_id: `employee-${index + 1}`,
+      employee_name_snapshot: `Empleado ${String(index + 1).padStart(2, "0")}`,
+      total_weekly_hours: 1,
+      system_hours: 1,
+      service_hours: 0,
+      system_pay: 10,
+      tips: 0,
+      service_check_amount: 0,
+      employee_total: 10,
+      service_reason: null,
+    }),
+  );
+  const crowdedBytes = await buildTresbePayrollPdf({
+    companyName: "Tresbe",
+    payroll: {
+      ...payroll,
+      employee_count: 39,
+      total_weekly_hours: 39,
+      total_system_hours: 39,
+      total_service_hours: 0,
+      total_system_pay: 390,
+      total_tips: 0,
+      total_service_checks: 0,
+      grand_total: 390,
+    },
+    entries: crowdedEntries,
+  });
+  const crowdedPdf = await PDFDocument.load(crowdedBytes);
+  assert.equal(
+    crowdedPdf.getPageCount(),
+    1,
+    "39 paid employees must still fit one page",
+  );
+
+  if (process.env.TRESBE_PDF_OUTPUT) {
+    await writeFile(process.env.TRESBE_PDF_OUTPUT, crowdedBytes);
+  }
 
   console.log("TRESBE payroll PDF generation: PASS");
 }

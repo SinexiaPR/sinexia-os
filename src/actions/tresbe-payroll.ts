@@ -47,6 +47,7 @@ const employeeSchema = z.object({
   defaultSalary: z.number().min(0).nullable(),
   annualSalary: z.number().min(0).nullable(),
   internalNote: z.string().trim().max(1000).nullable(),
+  aliases: z.array(z.string().trim().min(1).max(202)).max(30),
 });
 export type TresbeEmployeeInput = z.infer<typeof employeeSchema>;
 
@@ -111,19 +112,53 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
         .update(values)
         .eq("id", data.id)
         .eq("company_id", data.companyId)
-    : await supabase.from("tresbe_employees").insert({
-        ...values,
-        created_by: profile.id,
-      });
-  if (result.error)
+        .select("*")
+        .single()
+    : await supabase
+        .from("tresbe_employees")
+        .insert({
+          ...values,
+          created_by: profile.id,
+        })
+        .select("*")
+        .single();
+  if (result.error) {
+    console.error("saveTresbeEmployee", {
+      code: result.error.code,
+      message: result.error.message,
+    });
     return {
       error:
         result.error.code === "23505"
           ? "Ya existe un empleado con ese nombre."
-          : result.error.message,
+          : result.error.code === "PGRST116"
+            ? "No se encontró el empleado que intentas actualizar. Recarga la página."
+            : "No se pudo guardar la configuración del empleado.",
     };
+  }
+  const aliasesResult = await supabase.rpc("replace_tresbe_employee_aliases", {
+    p_employee_id: result.data.id,
+    p_aliases: data.aliases,
+  });
+  if (aliasesResult.error) {
+    console.error("saveTresbeEmployee.aliases", {
+      code: aliasesResult.error.code,
+      message: aliasesResult.error.message,
+    });
+    return {
+      error: "El empleado se guardó, pero no se pudieron guardar sus alias.",
+    };
+  }
   revalidatePath(`/dashboard/admin/companies/${data.companyId}/payroll`);
-  return { success: true };
+  return {
+    success: true,
+    employee: {
+      ...result.data,
+      tresbe_employee_aliases: (aliasesResult.data ?? []).map(
+        (alias: { alias_name: string }) => ({ alias_name: alias.alias_name }),
+      ),
+    },
+  };
 }
 
 export async function setTresbeEmployeeActive(
@@ -138,12 +173,20 @@ export async function setTresbeEmployeeActive(
     return { error: "No autorizado." };
   }
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("tresbe_employees")
     .update({ is_active: isActive, updated_by: profile.id })
     .eq("id", employeeId)
-    .eq("company_id", companyId);
-  if (error) return { error: error.message };
+    .eq("company_id", companyId)
+    .select("id,is_active")
+    .single();
+  if (error || !data) {
+    console.error("setTresbeEmployeeActive", {
+      code: error?.code,
+      message: error?.message,
+    });
+    return { error: "No se pudo actualizar el estado del empleado." };
+  }
   revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
   return { success: true };
 }
@@ -295,11 +338,24 @@ export async function saveTresbePayrollDraft(params: {
       updated_by: profile.id,
     })
     .eq("id", params.payrollId)
-    .eq("company_id", params.companyId);
-  if (header.error) return { error: header.error.message };
+    .eq("company_id", params.companyId)
+    .select("id")
+    .single();
+  if (header.error || !header.data) {
+    console.error("saveTresbePayrollDraft.header", {
+      code: header.error?.code,
+      message: header.error?.message,
+    });
+    return {
+      error:
+        header.error?.code === "PGRST116"
+          ? "La nómina ya no está disponible para editar. Recarga la página."
+          : "No se pudo guardar la cabecera de la nómina.",
+    };
+  }
 
   for (const entry of parsed.data) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("tresbe_payroll_entries")
       .update({
         total_weekly_hours: entry.totalWeeklyHours,
@@ -314,8 +370,22 @@ export async function saveTresbePayrollDraft(params: {
         comment: entry.comment || null,
       })
       .eq("id", entry.id)
-      .eq("payroll_id", params.payrollId);
-    if (error) return { error: error.message };
+      .eq("payroll_id", params.payrollId)
+      .select("id")
+      .single();
+    if (error || !data) {
+      console.error("saveTresbePayrollDraft.entry", {
+        entryId: entry.id,
+        code: error?.code,
+        message: error?.message,
+      });
+      return {
+        error:
+          error?.code === "PGRST116"
+            ? "Una fila de la nómina cambió o ya no existe. Recarga la página."
+            : `No se pudo guardar la entrada de ${entry.id}.`,
+      };
+    }
   }
   const overrides = parsed.data.filter(
     (entry) =>
@@ -432,6 +502,39 @@ export async function resetTresbePayrollDraft(
     payrollId,
     message: "Nómina reiniciada correctamente.",
   };
+}
+
+export async function deleteTresbePayrollDraft(
+  companyId: string,
+  payrollId: string,
+  reason: string,
+) {
+  const parsedReason = z.string().trim().min(5).max(500).safeParse(reason);
+  if (!parsedReason.success)
+    return { error: "Indica un motivo de al menos 5 caracteres." };
+  try {
+    await authorizeTresbeAdmin(companyId);
+  } catch {
+    return { error: "No autorizado." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_tresbe_payroll_draft", {
+    p_payroll_id: payrollId,
+    p_reason: parsedReason.data,
+  });
+  if (error) {
+    console.error("deleteTresbePayrollDraft", {
+      code: error.code,
+      message: error.message,
+    });
+    return {
+      error: error.message.includes("never-sent")
+        ? "Solo se puede eliminar una nómina borrador que nunca fue enviada."
+        : "No se pudo eliminar la nómina.",
+    };
+  }
+  revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
+  return { success: true, message: "Nómina eliminada correctamente." };
 }
 
 export async function reopenTresbePayroll(
