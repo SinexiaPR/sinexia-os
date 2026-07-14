@@ -46,6 +46,19 @@ const date = (value: string) =>
     timeZone: "UTC",
   }).format(new Date(`${value}T12:00:00Z`));
 
+export function hasTresbePayrollValue(entry: TresbePayrollEntry) {
+  return [
+    entry.total_weekly_hours,
+    entry.manual_system_amount,
+    entry.system_pay,
+    entry.tips,
+    entry.fixed_service_amount,
+    entry.service_check_amount,
+    entry.other_adjustments,
+    entry.employee_total,
+  ].some((value) => Number(value) !== 0);
+}
+
 function fit(value: string, font: PDFFont, size: number, width: number) {
   const clean = printable(value);
   if (font.widthOfTextAtSize(clean, size) <= width) return clean;
@@ -204,6 +217,18 @@ export async function buildTresbePayrollPdf(params: {
   payroll: TresbePayroll;
   entries: TresbePayrollEntry[];
 }) {
+  const entries = params.entries.filter(hasTresbePayrollValue);
+  const visibleTotals = entries.reduce(
+    (totals, entry) => ({
+      hours: totals.hours + Number(entry.total_weekly_hours),
+      system: totals.system + Number(entry.system_pay),
+      tips: totals.tips + Number(entry.tips),
+      services: totals.services + Number(entry.service_check_amount),
+      adjustments: totals.adjustments + Number(entry.other_adjustments),
+      grand: totals.grand + Number(entry.employee_total),
+    }),
+    { hours: 0, system: 0, tips: 0, services: 0, adjustments: 0, grand: 0 },
+  );
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -224,13 +249,13 @@ export async function buildTresbePayrollPdf(params: {
   });
   y -= 18;
   const summary = [
-    ["Empleados", String(params.payroll.employee_count)],
-    ["Total horas", number(params.payroll.total_weekly_hours)],
-    ["Nomina en sistema", money(params.payroll.total_system_pay)],
-    ["Tips", money(params.payroll.total_tips)],
-    ["Cheques de servicios", money(params.payroll.total_service_checks)],
-    ["Ajustes", money(params.payroll.total_adjustments)],
-    ["TOTAL GENERAL A PAGAR", money(params.payroll.grand_total)],
+    ["Empleados", String(entries.length)],
+    ["Total horas", number(visibleTotals.hours)],
+    ["Nomina en sistema", money(visibleTotals.system)],
+    ["Tips", money(visibleTotals.tips)],
+    ["Cheques de servicios", money(visibleTotals.services)],
+    ["Ajustes", money(visibleTotals.adjustments)],
+    ["TOTAL GENERAL A PAGAR", money(visibleTotals.grand)],
   ];
   summary.forEach(([label, value], index) => {
     const x = MARGIN + (index % 4) * 180;
@@ -273,7 +298,7 @@ export async function buildTresbePayrollPdf(params: {
   });
   y -= 10;
   y = drawTableHeader(page, bold, y, detailColumns);
-  params.entries.forEach((entry, index) => {
+  entries.forEach((entry, index) => {
     if (y < 70) {
       page = pdf.addPage([WIDTH, HEIGHT]);
       drawHeader(page, bold, regular, params.payroll, params.companyName, true);
@@ -283,7 +308,7 @@ export async function buildTresbePayrollPdf(params: {
     y = drawTableRow(page, regular, y, detailColumns, entry, index % 2 === 1);
   });
 
-  const serviceEntries = params.entries.filter(
+  const serviceEntries = entries.filter(
     (entry) => Number(entry.service_check_amount) > 0,
   );
   const serviceColumns: Column[] = [
@@ -372,11 +397,11 @@ export async function buildTresbePayrollPdf(params: {
   });
   y -= 20;
   const totals = [
-    ["TOTAL NOMINA EN SISTEMA", params.payroll.total_system_pay],
-    ["TOTAL TIPS", params.payroll.total_tips],
-    ["TOTAL CHEQUES DE SERVICIOS", params.payroll.total_service_checks],
-    ["TOTAL AJUSTES", params.payroll.total_adjustments],
-    ["TOTAL GENERAL A PAGAR", params.payroll.grand_total],
+    ["TOTAL NOMINA EN SISTEMA", visibleTotals.system],
+    ["TOTAL TIPS", visibleTotals.tips],
+    ["TOTAL CHEQUES DE SERVICIOS", visibleTotals.services],
+    ["TOTAL AJUSTES", visibleTotals.adjustments],
+    ["TOTAL GENERAL A PAGAR", visibleTotals.grand],
   ] as const;
   totals.forEach(([label, value], index) => {
     page.drawText(label, {
