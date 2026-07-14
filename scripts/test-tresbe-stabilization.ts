@@ -134,6 +134,11 @@ for (const alias of [
 }
 assert.match(
   reconciliation,
+  /FOREACH alias_value IN ARRAY mapping\.aliases LOOP/,
+);
+assert.doesNotMatch(reconciliation, /\bFOR\s+\w+\s+IN ARRAY\b/);
+assert.match(
+  reconciliation,
   /payroll\.status IN \('draft', 'calculated', 'corrected'\)/,
 );
 assert.match(migration, /normalized_name = 'fernando almonte'/);

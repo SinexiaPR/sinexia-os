@@ -221,7 +221,7 @@ BEGIN
 
     IF target_id IS NULL THEN CONTINUE; END IF;
 
-    FOR alias_value IN ARRAY mapping.aliases LOOP
+    FOREACH alias_value IN ARRAY mapping.aliases LOOP
       INSERT INTO public.tresbe_employee_aliases(
         company_id, employee_id, alias_name, normalized_alias
       ) VALUES (
