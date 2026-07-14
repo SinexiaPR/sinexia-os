@@ -7,6 +7,13 @@ const migrationPath = join(
   "supabase/migrations/20250713082000_tresbe_official_wages_20260713.sql",
 );
 const sql = readFileSync(migrationPath, "utf8");
+const confirmedSql = readFileSync(
+  join(
+    process.cwd(),
+    "supabase/migrations/20250713083000_tresbe_confirmed_aliases_wages.sql",
+  ),
+  "utf8",
+);
 
 const officialRows = sql.match(/^\s+\('[^\n]+\)[,;]$/gm) ?? [];
 assert.equal(officialRows.length, 28, "exactly 28 official employees required");
@@ -74,5 +81,67 @@ const expectedUnmatchedOfficial = [
 ];
 for (const name of expectedUnmatchedOfficial)
   assert.match(sql, new RegExp(name));
+
+assert.match(
+  confirmedSql,
+  /\('jared rivera', 'Jared Rivera Rodriguez', 10\.50\)/,
+);
+assert.match(
+  confirmedSql,
+  /\('lee pierre', 'Lee Zephyrus P\. Irene', 13\.00\)/,
+);
+assert.match(
+  confirmedSql,
+  /\('lee sanchez', 'Lee J\. de Jesus Sanchez', 11\.00\)/,
+);
+assert.match(
+  confirmedSql,
+  /\('henry casiano', 'Casiano Henry', 15\.00\)/,
+);
+assert.match(
+  confirmedSql,
+  /normalized_name = 'fernando almonte'[\s\S]+default_weekly_salary = 400\.00|default_weekly_salary = 400\.00[\s\S]+normalized_name = 'fernando almonte'/,
+);
+assert.match(
+  confirmedSql,
+  /normalized_name = 'ramon luis rivera'[\s\S]+default_weekly_salary = 220\.00|default_weekly_salary = 220\.00[\s\S]+normalized_name = 'ramon luis rivera'/,
+);
+assert.match(
+  confirmedSql,
+  /normalized_name = 'ramon luis rivera'[\s\S]+payroll_rule = 'full_services'|payroll_rule = 'full_services'[\s\S]+normalized_name = 'ramon luis rivera'/,
+);
+assert.match(confirmedSql, /'yediel', 'carlos ramos'/);
+assert.match(confirmedSql, /WHEN COALESCE\(NEW\.weekly_salary_snapshot, 0\) > 0/);
+assert.match(
+  confirmedSql,
+  /COALESCE\(e\.weekly_salary_snapshot, 0\) <= 0/,
+);
+assert.match(confirmedSql, /'julian mateo'::TEXT, 10\.00::NUMERIC/);
+assert.match(confirmedSql, /'nashely'::TEXT, 4\.50::NUMERIC/);
+assert.match(confirmedSql, /employee\.payroll_rule = 'full_services'/);
+assert.doesNotMatch(
+  confirmedSql,
+  /INSERT INTO public\.tresbe_employees/,
+  "confirmed aliases must never create duplicate employees",
+);
+assert.match(
+  confirmedSql,
+  /UPDATE public\.tresbe_payroll_entries/,
+  "open payroll entries must receive confirmed full-service rules",
+);
+assert.match(
+  confirmedSql,
+  /payroll\.status IN \('draft', 'calculated', 'corrected'\)/,
+);
+assert.doesNotMatch(
+  confirmedSql,
+  /payroll\.status IN \([^)]*'sent'/,
+  "confirmed wages must not rewrite historical payroll snapshots",
+);
+assert.doesNotMatch(
+  confirmedSql,
+  /normalized_name\s*=\s*'seguridad'/,
+  "Ramon Luis Rivera replaces the generic Seguridad record",
+);
 
 console.log("TRESBE official wage migration and review safeguards: PASS");

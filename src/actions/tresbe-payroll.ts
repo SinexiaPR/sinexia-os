@@ -65,7 +65,8 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
       : data.defaultSalary;
   const wageConfigured =
     data.payrollRule === "full_services"
-      ? (data.serviceRate ?? data.regularRate ?? 0) > 0
+      ? (weeklySalary ?? 0) > 0 ||
+        (data.serviceRate ?? data.regularRate ?? 0) > 0
       : ["fixed_weekly_salary", "preset_40_weekly_salary"].includes(
             data.payrollRule,
           )
@@ -378,6 +379,61 @@ export async function cancelTresbePayroll(
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
   return { success: true };
+}
+
+export async function resetTresbePayrollDraft(
+  companyId: string,
+  payrollId: string,
+  reason: string,
+) {
+  const parsedReason = z.string().trim().min(5).max(500).safeParse(reason);
+  if (!parsedReason.success)
+    return { error: "Indica un motivo de al menos 5 caracteres." };
+  try {
+    await authorizeTresbeAdmin(companyId);
+  } catch {
+    return { error: "No autorizado." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reset_tresbe_payroll_draft", {
+    p_payroll_id: payrollId,
+    p_reason: parsedReason.data,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
+  return {
+    success: true,
+    payrollId,
+    message: "Nómina reiniciada correctamente.",
+  };
+}
+
+export async function reopenTresbePayroll(
+  companyId: string,
+  payrollId: string,
+  reason: string,
+) {
+  const parsedReason = z.string().trim().min(10).max(500).safeParse(reason);
+  if (!parsedReason.success)
+    return { error: "Indica un motivo de al menos 10 caracteres." };
+  try {
+    await authorizeTresbeAdmin(companyId);
+  } catch {
+    return { error: "No autorizado." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reopen_tresbe_payroll", {
+    p_payroll_id: payrollId,
+    p_reason: parsedReason.data,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
+  revalidatePath("/dashboard/payroll");
+  return {
+    success: true,
+    payrollId,
+    message: "Nómina reabierta para corrección.",
+  };
 }
 
 export async function markTresbePayrollViewed(payrollId: string) {
