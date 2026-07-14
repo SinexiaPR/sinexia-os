@@ -541,6 +541,7 @@ export function TresbePayrollAdminWorkspace({
                             </>
                           ) : null}
                           {[
+                            "full_services",
                             "preset_40_weekly_salary",
                             "fixed_weekly_salary",
                           ].includes(rule) ? (

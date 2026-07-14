@@ -60,7 +60,9 @@ export function calculateTresbeEntry(
       serviceCheckAmount =
         input.fixedServiceAmount > 0
           ? cents(input.fixedServiceAmount)
-          : cents(serviceHours * Math.max(0, Number(input.serviceRate || 0)));
+          : Number(input.weeklySalary || 0) > 0
+            ? cents(Number(input.weeklySalary))
+            : cents(serviceHours * Math.max(0, Number(input.serviceRate || 0)));
       break;
     case "preset_40_weekly_salary":
     case "fixed_weekly_salary":

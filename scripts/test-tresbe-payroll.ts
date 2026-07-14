@@ -93,6 +93,17 @@ const fixedService = calculateTresbeEntry({
 });
 assert.equal(fixedService.serviceCheckAmount, 500);
 
+const fixedWeeklyFullService = calculateTresbeEntry({
+  ...base,
+  payrollRule: "full_services",
+  totalWeeklyHours: 0,
+  weeklySalary: 220,
+  tips: 15,
+});
+assert.equal(fixedWeeklyFullService.systemPay, 0);
+assert.equal(fixedWeeklyFullService.serviceCheckAmount, 220);
+assert.equal(fixedWeeklyFullService.employeeTotal, 235);
+
 for (const rule of [
   "preset_40_weekly_salary",
   "fixed_weekly_salary",

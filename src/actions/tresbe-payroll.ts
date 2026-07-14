@@ -65,7 +65,8 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
       : data.defaultSalary;
   const wageConfigured =
     data.payrollRule === "full_services"
-      ? (data.serviceRate ?? data.regularRate ?? 0) > 0
+      ? (weeklySalary ?? 0) > 0 ||
+        (data.serviceRate ?? data.regularRate ?? 0) > 0
       : ["fixed_weekly_salary", "preset_40_weekly_salary"].includes(
             data.payrollRule,
           )
