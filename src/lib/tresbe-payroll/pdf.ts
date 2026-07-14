@@ -48,11 +48,8 @@ const date = (value: string) =>
 
 export function hasTresbePayrollValue(entry: TresbePayrollEntry) {
   return [
-    entry.total_weekly_hours,
-    entry.manual_system_amount,
     entry.system_pay,
     entry.tips,
-    entry.fixed_service_amount,
     entry.service_check_amount,
     entry.other_adjustments,
     entry.employee_total,
@@ -176,40 +173,45 @@ function drawTableHeader(
   return y - 19;
 }
 
-function drawTableRow(
+function drawCompactTableRow(
   page: PDFPage,
   regular: PDFFont,
   y: number,
   columns: Column[],
   entry: TresbePayrollEntry,
   alternate: boolean,
+  rowHeight: number,
 ) {
+  const fontSize = rowHeight <= 9 ? 5.8 : rowHeight <= 11 ? 6.3 : 7;
   if (alternate)
     page.drawRectangle({
       x: MARGIN,
-      y: y - 18,
+      y: y - rowHeight,
       width: WIDTH - MARGIN * 2,
-      height: 18,
+      height: rowHeight,
       color: ALT,
     });
   let x = MARGIN;
   for (const column of columns) {
-    page.drawText(fit(column.value(entry), regular, 7.2, column.width - 8), {
-      x: x + 4,
-      y: y - 12,
-      size: 7.2,
-      font: regular,
-      color: NAVY,
-    });
+    page.drawText(
+      fit(column.value(entry), regular, fontSize, column.width - 6),
+      {
+        x: x + 3,
+        y: y - rowHeight + Math.max(2, (rowHeight - fontSize) / 2),
+        size: fontSize,
+        font: regular,
+        color: NAVY,
+      },
+    );
     x += column.width;
   }
   page.drawLine({
-    start: { x: MARGIN, y: y - 18 },
-    end: { x: WIDTH - MARGIN, y: y - 18 },
-    thickness: 0.3,
+    start: { x: MARGIN, y: y - rowHeight },
+    end: { x: WIDTH - MARGIN, y: y - rowHeight },
+    thickness: 0.25,
     color: BORDER,
   });
-  return y - 18;
+  return y - rowHeight;
 }
 
 export async function buildTresbePayrollPdf(params: {
@@ -236,203 +238,107 @@ export async function buildTresbePayrollPdf(params: {
   pdf.setAuthor("Sinexia OS");
   pdf.setSubject("Resumen semanal de nomina Tresbe");
 
-  let page = pdf.addPage([WIDTH, HEIGHT]);
+  const page = pdf.addPage([WIDTH, HEIGHT]);
   drawHeader(page, bold, regular, params.payroll, params.companyName, false);
-  let y = HEIGHT - 128;
+  let y = HEIGHT - 126;
 
-  page.drawText("1. RESUMEN DE NOMINA", {
+  page.drawText("RESUMEN DE PAGOS DE LA SEMANA", {
     x: MARGIN,
     y,
-    size: 11,
+    size: 10,
     font: bold,
     color: NAVY,
   });
-  y -= 18;
+  y -= 16;
   const summary = [
     ["Empleados", String(entries.length)],
-    ["Total horas", number(visibleTotals.hours)],
-    ["Nomina en sistema", money(visibleTotals.system)],
+    ["Horas", number(visibleTotals.hours)],
+    ["Sistema", money(visibleTotals.system)],
     ["Tips", money(visibleTotals.tips)],
-    ["Cheques de servicios", money(visibleTotals.services)],
+    ["Servicios", money(visibleTotals.services)],
     ["Ajustes", money(visibleTotals.adjustments)],
-    ["TOTAL GENERAL A PAGAR", money(visibleTotals.grand)],
+    ["TOTAL A PAGAR", money(visibleTotals.grand)],
   ];
   summary.forEach(([label, value], index) => {
-    const x = MARGIN + (index % 4) * 180;
-    const rowY = y - Math.floor(index / 4) * 42;
+    const cellWidth = (WIDTH - MARGIN * 2) / summary.length;
+    const x = MARGIN + index * cellWidth;
     page.drawText(label, {
       x,
-      y: rowY,
-      size: 7.5,
+      y,
+      size: 6.5,
       font: bold,
       color: MUTED,
     });
     page.drawText(value, {
       x,
-      y: rowY - 16,
-      size: index === 6 ? 13 : 11,
+      y: y - 13,
+      size: index === summary.length - 1 ? 10.5 : 8.5,
       font: bold,
-      color: index === 6 ? RED : NAVY,
+      color: index === summary.length - 1 ? RED : NAVY,
     });
   });
-  y -= 92;
+  y -= 42;
 
   const detailColumns: Column[] = [
     { label: "Empleado", width: 130, value: (e) => e.employee_name_snapshot },
-    { label: "Area", width: 62, value: (e) => e.area_snapshot },
-    { label: "Horas", width: 50, value: (e) => number(e.total_weekly_hours) },
-    { label: "H. sistema", width: 62, value: (e) => number(e.system_hours) },
-    { label: "Pago sistema", width: 78, value: (e) => money(e.system_pay) },
-    { label: "Tips", width: 62, value: (e) => money(e.tips) },
-    { label: "H. servicio", width: 62, value: (e) => number(e.service_hours) },
-    { label: "Cheque", width: 70, value: (e) => money(e.service_check_amount) },
-    { label: "Ajustes", width: 70, value: (e) => money(e.other_adjustments) },
-    { label: "Total", width: 74, value: (e) => money(e.employee_total) },
-  ];
-  page.drawText("2. DETALLE POR EMPLEADO", {
-    x: MARGIN,
-    y,
-    size: 11,
-    font: bold,
-    color: NAVY,
-  });
-  y -= 10;
-  y = drawTableHeader(page, bold, y, detailColumns);
-  entries.forEach((entry, index) => {
-    if (y < 70) {
-      page = pdf.addPage([WIDTH, HEIGHT]);
-      drawHeader(page, bold, regular, params.payroll, params.companyName, true);
-      y = HEIGHT - 125;
-      y = drawTableHeader(page, bold, y, detailColumns);
-    }
-    y = drawTableRow(page, regular, y, detailColumns, entry, index % 2 === 1);
-  });
-
-  const serviceEntries = entries.filter(
-    (entry) => Number(entry.service_check_amount) > 0,
-  );
-  const serviceColumns: Column[] = [
-    { label: "Empleado", width: 125, value: (e) => e.employee_name_snapshot },
-    { label: "Motivo", width: 105, value: (e) => e.service_reason ?? "Otro" },
+    { label: "Area", width: 55, value: (e) => e.area_snapshot },
+    { label: "Horas", width: 45, value: (e) => number(e.total_weekly_hours) },
+    { label: "Sistema", width: 75, value: (e) => money(e.system_pay) },
+    { label: "Tips", width: 60, value: (e) => money(e.tips) },
     {
-      label: "H. total",
-      width: 55,
-      value: (e) => number(e.total_weekly_hours),
-    },
-    { label: "H. sistema", width: 55, value: (e) => number(e.system_hours) },
-    { label: "H. servicio", width: 55, value: (e) => number(e.service_hours) },
-    {
-      label: "Tarifa",
-      width: 65,
-      value: (e) => money(e.service_rate_snapshot),
-    },
-    { label: "Fijo", width: 65, value: (e) => money(e.fixed_service_amount) },
-    {
-      label: "Cheque",
-      width: 75,
+      label: "Servicios",
+      width: 80,
       value: (e) => money(e.service_check_amount),
     },
-    { label: "Comentario", width: 120, value: (e) => e.comment ?? "-" },
+    {
+      label: "Motivo servicio",
+      width: 105,
+      value: (e) =>
+        Number(e.service_check_amount) > 0 ? (e.service_reason ?? "Otro") : "-",
+    },
+    { label: "Ajustes", width: 70, value: (e) => money(e.other_adjustments) },
+    {
+      label: "Total a pagar",
+      width: 100,
+      value: (e) => money(e.employee_total),
+    },
   ];
-  if (y < 150) {
-    page = pdf.addPage([WIDTH, HEIGHT]);
-    drawHeader(page, bold, regular, params.payroll, params.companyName, true);
-    y = HEIGHT - 125;
-  } else y -= 25;
-  page.drawText("3. CHEQUES DE SERVICIOS", {
+  page.drawText("EMPLEADOS CON PAGO", {
     x: MARGIN,
     y,
-    size: 11,
+    size: 9,
     font: bold,
     color: NAVY,
   });
-  y -= 10;
-  y = drawTableHeader(page, bold, y, serviceColumns);
-  if (!serviceEntries.length) {
-    page.drawText("No hay cheques de servicios en este periodo.", {
-      x: MARGIN + 4,
-      y: y - 14,
-      size: 8,
-      font: regular,
-      color: MUTED,
-    });
-    y -= 25;
-  } else {
-    serviceEntries.forEach((entry, index) => {
-      if (y < 70) {
-        page = pdf.addPage([WIDTH, HEIGHT]);
-        drawHeader(
-          page,
-          bold,
-          regular,
-          params.payroll,
-          params.companyName,
-          true,
-        );
-        y = HEIGHT - 125;
-        y = drawTableHeader(page, bold, y, serviceColumns);
-      }
-      y = drawTableRow(
-        page,
-        regular,
-        y,
-        serviceColumns,
-        entry,
-        index % 2 === 1,
-      );
-    });
-  }
+  y -= 8;
+  y = drawTableHeader(page, bold, y, detailColumns);
+  const rowHeight = Math.min(
+    16,
+    Math.max(8, (y - 58) / Math.max(entries.length, 1)),
+  );
+  entries.forEach((entry, index) => {
+    y = drawCompactTableRow(
+      page,
+      regular,
+      y,
+      detailColumns,
+      entry,
+      index % 2 === 1,
+      rowHeight,
+    );
+  });
 
-  if (y < 135) {
-    page = pdf.addPage([WIDTH, HEIGHT]);
-    drawHeader(page, bold, regular, params.payroll, params.companyName, true);
-    y = HEIGHT - 125;
-  } else y -= 25;
-  page.drawText("4. TOTALES", {
-    x: MARGIN,
-    y,
-    size: 11,
-    font: bold,
-    color: NAVY,
-  });
-  y -= 20;
-  const totals = [
-    ["TOTAL NOMINA EN SISTEMA", visibleTotals.system],
-    ["TOTAL TIPS", visibleTotals.tips],
-    ["TOTAL CHEQUES DE SERVICIOS", visibleTotals.services],
-    ["TOTAL AJUSTES", visibleTotals.adjustments],
-    ["TOTAL GENERAL A PAGAR", visibleTotals.grand],
-  ] as const;
-  totals.forEach(([label, value], index) => {
-    page.drawText(label, {
-      x: MARGIN,
-      y,
-      size: index === totals.length - 1 ? 10 : 8.5,
-      font: bold,
-      color: NAVY,
-    });
-    const amount = money(value);
-    page.drawText(amount, {
-      x: WIDTH - MARGIN - bold.widthOfTextAtSize(amount, 11),
-      y,
-      size: 11,
-      font: bold,
-      color: index === totals.length - 1 ? RED : NAVY,
-    });
-    y -= 18;
-  });
   if (params.payroll.client_note) {
-    y -= 8;
     page.drawText("Mensaje al cliente:", {
       x: MARGIN,
-      y,
-      size: 8.5,
+      y: 38,
+      size: 7,
       font: bold,
       color: NAVY,
     });
     page.drawText(
-      fit(params.payroll.client_note, regular, 8, WIDTH - MARGIN * 2 - 105),
-      { x: MARGIN + 105, y, size: 8, font: regular, color: MUTED },
+      fit(params.payroll.client_note, regular, 7, WIDTH - MARGIN * 2 - 90),
+      { x: MARGIN + 90, y: 38, size: 7, font: regular, color: MUTED },
     );
   }
 
