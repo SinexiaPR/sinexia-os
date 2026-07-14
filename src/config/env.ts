@@ -8,6 +8,9 @@ const envSchema = z.object({
   PAYROLL_EMAIL_PROVIDER_URL: z.string().url().optional(),
   PAYROLL_EMAIL_API_KEY: z.string().min(1).optional(),
   PAYROLL_EMAIL_FROM: z.string().email().optional(),
+  INVOICE_EMAIL_PROVIDER_URL: z.string().url().optional(),
+  INVOICE_EMAIL_API_KEY: z.string().min(1).optional(),
+  INVOICE_EMAIL_FROM: z.string().email().optional(),
 });
 
 function getEnv() {
@@ -19,6 +22,9 @@ function getEnv() {
     PAYROLL_EMAIL_PROVIDER_URL: process.env.PAYROLL_EMAIL_PROVIDER_URL,
     PAYROLL_EMAIL_API_KEY: process.env.PAYROLL_EMAIL_API_KEY,
     PAYROLL_EMAIL_FROM: process.env.PAYROLL_EMAIL_FROM,
+    INVOICE_EMAIL_PROVIDER_URL: process.env.INVOICE_EMAIL_PROVIDER_URL,
+    INVOICE_EMAIL_API_KEY: process.env.INVOICE_EMAIL_API_KEY,
+    INVOICE_EMAIL_FROM: process.env.INVOICE_EMAIL_FROM,
   });
 
   if (!parsed.success) {

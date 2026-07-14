@@ -3,6 +3,7 @@ import {
   BarChart3,
   Banknote,
   CalendarDays,
+  FileText,
   Inbox,
   LayoutDashboard,
   Sparkles,
@@ -42,9 +43,20 @@ export const tresbePayrollNavItem: NavItem = {
   icon: Banknote,
 };
 
+export const clientInvoicesNavItem: NavItem = {
+  title: "Facturas",
+  href: "/dashboard/invoices",
+  icon: FileText,
+};
+
 export const adminNavItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Calendario", href: "/dashboard/calendar", icon: CalendarDays },
+  {
+    title: "Facturación",
+    href: "/dashboard/admin/invoices",
+    icon: FileText,
+  },
   {
     title: "Inbox",
     href: "/dashboard/inbox",

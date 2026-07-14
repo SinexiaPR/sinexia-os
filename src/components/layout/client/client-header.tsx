@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   clientNavItems,
+  clientInvoicesNavItem,
   getPageTitle,
   tresbePayrollNavItem,
 } from "@/config/navigation";
@@ -41,6 +42,7 @@ type ClientHeaderProps = {
   companySlug?: string | null;
   notificationUnreadCount: number;
   reportNotifications: ClientReportNotifications;
+  invoicesEnabled?: boolean;
   className?: string;
 };
 
@@ -60,23 +62,20 @@ export function ClientHeader({
   companySlug,
   notificationUnreadCount,
   reportNotifications,
+  invoicesEnabled = false,
   className,
 }: ClientHeaderProps) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = useMemo(
     () =>
-      getPageTitle(
-        pathname,
-        companySlug === "tresbe"
-          ? [
-              clientNavItems[0],
-              tresbePayrollNavItem,
-              ...clientNavItems.slice(1),
-            ]
-          : clientNavItems,
-      ),
-    [companySlug, pathname],
+      getPageTitle(pathname, [
+        clientNavItems[0],
+        ...(companySlug === "tresbe" ? [tresbePayrollNavItem] : []),
+        ...(invoicesEnabled ? [clientInvoicesNavItem] : []),
+        ...clientNavItems.slice(1),
+      ]),
+    [companySlug, invoicesEnabled, pathname],
   );
 
   return (
@@ -104,6 +103,7 @@ export function ClientHeader({
               companyName={companyName}
               companySlug={companySlug}
               reportNotifications={reportNotifications}
+              invoicesEnabled={invoicesEnabled}
               onNavigate={() => setMobileNavOpen(false)}
               className="flex-1"
             />

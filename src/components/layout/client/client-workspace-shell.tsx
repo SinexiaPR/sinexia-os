@@ -13,6 +13,7 @@ type ClientWorkspaceShellProps = {
   companySlug?: string | null;
   notificationUnreadCount: number;
   reportNotifications: ClientReportNotifications;
+  invoicesEnabled?: boolean;
 };
 
 export function ClientWorkspaceShell({
@@ -22,6 +23,7 @@ export function ClientWorkspaceShell({
   companySlug,
   notificationUnreadCount,
   reportNotifications,
+  invoicesEnabled = false,
 }: ClientWorkspaceShellProps) {
   return (
     <div className="bg-background flex min-h-svh flex-col">
@@ -31,6 +33,7 @@ export function ClientWorkspaceShell({
         companySlug={companySlug}
         notificationUnreadCount={notificationUnreadCount}
         reportNotifications={reportNotifications}
+        invoicesEnabled={invoicesEnabled}
       />
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:py-14">
@@ -38,6 +41,7 @@ export function ClientWorkspaceShell({
           companyName={companyName}
           companySlug={companySlug}
           reportNotifications={reportNotifications}
+          invoicesEnabled={invoicesEnabled}
         />
 
         <main className="min-w-0 flex-1">{children}</main>

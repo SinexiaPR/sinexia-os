@@ -9,6 +9,7 @@ import {
   getViewedReportIds,
 } from "@/services/notifications";
 import { getReportsForCompany } from "@/services/reports";
+import { isCompanyInvoicingEnabled } from "@/services/invoices";
 
 export default async function DashboardLayout({
   children,
@@ -44,17 +45,23 @@ export default async function DashboardLayout({
     );
   }
 
-  const [reports, viewedReportIds, documentIds, viewedDocumentIds] =
-    profile.company_id
-      ? await Promise.all([
-          getReportsForCompany(profile.company_id),
-          getViewedReportIds(profile.id),
-          getDocumentsForCompany(profile.company_id).then((docs) =>
-            docs.map((doc) => doc.id),
-          ),
-          getViewedDocumentIds(profile.id),
-        ])
-      : [[], [] as string[], [] as string[], [] as string[]];
+  const [
+    reports,
+    viewedReportIds,
+    documentIds,
+    viewedDocumentIds,
+    invoicesEnabled,
+  ] = profile.company_id
+    ? await Promise.all([
+        getReportsForCompany(profile.company_id),
+        getViewedReportIds(profile.id),
+        getDocumentsForCompany(profile.company_id).then((docs) =>
+          docs.map((doc) => doc.id),
+        ),
+        getViewedDocumentIds(profile.id),
+        isCompanyInvoicingEnabled(profile.company_id),
+      ])
+    : [[], [] as string[], [] as string[], [] as string[], false];
 
   return (
     <ClientWorkspaceShell
@@ -62,6 +69,7 @@ export default async function DashboardLayout({
       companyName={company?.name}
       companySlug={company?.slug}
       notificationUnreadCount={notificationUnreadCount}
+      invoicesEnabled={invoicesEnabled}
       reportNotifications={{
         profileId: profile.id,
         reportIds: reports.map((r) => r.id),
