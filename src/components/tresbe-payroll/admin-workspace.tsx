@@ -2,13 +2,24 @@
 
 import Link from "next/link";
 import { Fragment, useMemo, useState, useTransition } from "react";
-import { ArrowLeft, FileText, Mail, Plus, Save, Send } from "lucide-react";
+import {
+  ArrowLeft,
+  FileText,
+  Mail,
+  Plus,
+  RotateCcw,
+  Save,
+  Send,
+  Trash2,
+} from "lucide-react";
 
 import {
   cancelTresbePayroll,
   createTresbePayroll,
   emailTresbePayroll,
   recalculateTresbePayroll,
+  reopenTresbePayroll,
+  resetTresbePayrollDraft,
   saveTresbeEmployee,
   saveTresbePayrollDraft,
   saveTresbePayrollSettings,
@@ -733,6 +744,25 @@ export function TresbePayrollAdminWorkspace({
                   >
                     Cancelar nómina
                   </Button>
+                  <Button
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => {
+                      const reason = window.prompt(
+                        "Motivo para descartar los datos y empezar de nuevo",
+                      );
+                      if (reason)
+                        run(() =>
+                          resetTresbePayrollDraft(
+                            company.id,
+                            selected.id,
+                            reason,
+                          ),
+                        );
+                    }}
+                  >
+                    <Trash2 className="size-4" /> Descartar y empezar de nuevo
+                  </Button>
                 </div>
               ) : (
                 <div className="flex flex-wrap justify-end gap-3">
@@ -746,6 +776,25 @@ export function TresbePayrollAdminWorkspace({
                         >
                           <FileText className="size-4" /> Ver PDF
                         </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={pending}
+                        onClick={() => {
+                          const reason = window.prompt(
+                            "Motivo de la corrección (mínimo 10 caracteres)",
+                          );
+                          if (reason)
+                            run(() =>
+                              reopenTresbePayroll(
+                                company.id,
+                                selected.id,
+                                reason,
+                              ),
+                            );
+                        }}
+                      >
+                        <RotateCcw className="size-4" /> Reabrir para corregir
                       </Button>
                       <Input
                         type="email"
@@ -771,6 +820,26 @@ export function TresbePayrollAdminWorkspace({
                         <Mail className="size-4" /> Enviar PDF por correo
                       </Button>
                     </>
+                  ) : selected.status === "cancelled" ? (
+                    <Button
+                      variant="outline"
+                      disabled={pending}
+                      onClick={() => {
+                        const reason = window.prompt(
+                          "Motivo para rehacer esta nómina",
+                        );
+                        if (reason)
+                          run(() =>
+                            resetTresbePayrollDraft(
+                              company.id,
+                              selected.id,
+                              reason,
+                            ),
+                          );
+                      }}
+                    >
+                      <RotateCcw className="size-4" /> Rehacer nómina
+                    </Button>
                   ) : null}
                 </div>
               )}
