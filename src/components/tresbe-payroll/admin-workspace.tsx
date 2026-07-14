@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   ArrowLeft,
   FileText,
@@ -17,6 +17,7 @@ import {
 import {
   cancelTresbePayroll,
   createTresbePayroll,
+  deleteTresbePayrollDraft,
   emailTresbePayroll,
   recalculateTresbePayroll,
   reconcileTresbeEmployees,
@@ -51,7 +52,7 @@ const money = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 const inputClass =
-  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
+  "h-8 w-full rounded-md border border-input bg-background px-2 text-xs sm:text-[13px]";
 const statusLabel: Record<TresbePayroll["status"], string> = {
   draft: "Borrador",
   calculated: "Calculada",
@@ -59,6 +60,21 @@ const statusLabel: Record<TresbePayroll["status"], string> = {
   viewed: "Vista por cliente",
   corrected: "Corregida",
   cancelled: "Cancelada",
+};
+const reviewLabel = (reason: string) => {
+  const normalized = reason.toLowerCase();
+  if (normalized.includes("ambiguous") || normalized.includes("ambigua"))
+    return "Coincidencia ambigua";
+  if (normalized.includes("rule") || normalized.includes("regla"))
+    return "Requiere regla de pago";
+  if (
+    normalized.includes("wage") ||
+    normalized.includes("rate") ||
+    normalized.includes("tarifa") ||
+    normalized.includes("compensación")
+  )
+    return "Requiere tarifa";
+  return "Configuración incompleta";
 };
 
 function toCalculation(entry: TresbePayrollEntry) {
@@ -424,7 +440,7 @@ export function TresbePayrollAdminWorkspace({
                 </div>
               </SurfaceCard>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {editable ? (
                   <div className="flex justify-end">
                     <Button
@@ -435,276 +451,11 @@ export function TresbePayrollAdminWorkspace({
                     </Button>
                   </div>
                 ) : null}
-                {entryState.map((entry, index) => {
-                  const result = toCalculation(entry);
-                  const rule = entry.payroll_rule_snapshot;
-                  const service = result.serviceCheckAmount > 0;
-                  return (
-                    <Fragment key={entry.id}>
-                      {index === 0 ||
-                      entryState[index - 1]?.area_snapshot !==
-                        entry.area_snapshot ? (
-                        <h2 className="text-muted-foreground pt-3 text-sm font-semibold tracking-wide uppercase">
-                          {entry.area_snapshot}
-                        </h2>
-                      ) : null}
-                      <SurfaceCard padding="sm">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <h3 className="font-medium">
-                              {entry.employee_name_snapshot}
-                            </h3>
-                            <p className="text-muted-foreground text-xs">
-                              {entry.area_snapshot} · {TRESBE_RULE_LABELS[rule]}
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {Number(entry.total_weekly_hours) > 40 ? (
-                                <span className="text-xs font-medium text-amber-700">
-                                  Más de 40 horas
-                                </span>
-                              ) : null}
-                              {service ? (
-                                <span className="text-xs font-medium text-red-700">
-                                  Genera cheque de servicios
-                                </span>
-                              ) : null}
-                              {entry.is_new_employee ? (
-                                <span className="text-xs font-medium text-blue-700">
-                                  Empleado nuevo esta semana
-                                </span>
-                              ) : null}
-                              {entry.receives_proportional_tips_snapshot ? (
-                                <span className="text-xs font-medium text-emerald-700">
-                                  Elegible para propina proporcional
-                                </span>
-                              ) : null}
-                              {rule === "unconfigured" ? (
-                                <span className="text-xs font-medium text-red-700">
-                                  Regla de pago pendiente
-                                </span>
-                              ) : null}
-                              {rule === "full_services" ? (
-                                <span className="text-xs font-medium text-red-700">
-                                  Pago completo por servicios
-                                </span>
-                              ) : null}
-                              {Number(entry.other_adjustments) !== 0 ? (
-                                <span className="text-xs font-medium text-amber-700">
-                                  Incluye ajuste manual
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                          <p className="font-semibold">
-                            {money.format(result.employeeTotal)}
-                          </p>
-                        </div>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                          <NumericField
-                            label={
-                              rule === "full_services"
-                                ? "Horas servicio"
-                                : "Horas semanales"
-                            }
-                            value={entry.total_weekly_hours}
-                            disabled={!editable}
-                            onChange={(value) =>
-                              updateEntry(entry.id, "total_weekly_hours", value)
-                            }
-                          />
-                          {[
-                            "standard_hourly_40_plus_services",
-                            "preset_40_hourly",
-                          ].includes(rule) ? (
-                            <>
-                              <NumericField
-                                label="Tarifa regular"
-                                value={entry.regular_rate_snapshot}
-                                disabled={!editable}
-                                onChange={(value) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "regular_rate_snapshot",
-                                    value,
-                                  )
-                                }
-                              />
-                              <NumericField
-                                label="Tarifa servicio"
-                                value={entry.service_rate_snapshot}
-                                disabled={!editable}
-                                onChange={(value) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "service_rate_snapshot",
-                                    value,
-                                  )
-                                }
-                              />
-                              <NumericField
-                                label="Cheque manual (override)"
-                                value={entry.fixed_service_amount}
-                                disabled={!editable}
-                                onChange={(value) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "fixed_service_amount",
-                                    value,
-                                  )
-                                }
-                              />
-                            </>
-                          ) : null}
-                          {rule === "full_services" ? (
-                            <>
-                              <NumericField
-                                label="Tarifa servicio"
-                                value={entry.service_rate_snapshot}
-                                disabled={!editable}
-                                onChange={(value) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "service_rate_snapshot",
-                                    value,
-                                  )
-                                }
-                              />
-                              <NumericField
-                                label="Servicio fijo"
-                                value={entry.fixed_service_amount}
-                                disabled={!editable}
-                                onChange={(value) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "fixed_service_amount",
-                                    value,
-                                  )
-                                }
-                              />
-                            </>
-                          ) : null}
-                          {[
-                            "full_services",
-                            "preset_40_weekly_salary",
-                            "fixed_weekly_salary",
-                          ].includes(rule) ? (
-                            <NumericField
-                              label="Salario semanal"
-                              value={entry.weekly_salary_snapshot}
-                              disabled={!editable}
-                              onChange={(value) =>
-                                updateEntry(
-                                  entry.id,
-                                  "weekly_salary_snapshot",
-                                  value,
-                                )
-                              }
-                            />
-                          ) : null}
-                          {rule === "custom_manual" ? (
-                            <>
-                              <NumericField
-                                label="Monto sistema"
-                                value={entry.manual_system_amount}
-                                disabled={!editable}
-                                onChange={(value) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "manual_system_amount",
-                                    value,
-                                  )
-                                }
-                              />
-                              <NumericField
-                                label="Monto servicios"
-                                value={entry.fixed_service_amount}
-                                disabled={!editable}
-                                onChange={(value) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "fixed_service_amount",
-                                    value,
-                                  )
-                                }
-                              />
-                            </>
-                          ) : null}
-                          <NumericField
-                            label="Tips"
-                            value={entry.tips}
-                            disabled={!editable}
-                            onChange={(value) =>
-                              updateEntry(entry.id, "tips", value)
-                            }
-                          />
-                          <NumericField
-                            label="Otros ajustes"
-                            value={entry.other_adjustments}
-                            disabled={!editable}
-                            allowNegative
-                            onChange={(value) =>
-                              updateEntry(entry.id, "other_adjustments", value)
-                            }
-                          />
-                        </div>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          {service || rule === "custom_manual" ? (
-                            <label className="text-muted-foreground text-xs">
-                              Motivo del servicio
-                              <select
-                                value={entry.service_reason ?? ""}
-                                disabled={!editable}
-                                onChange={(event) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "service_reason",
-                                    event.target.value,
-                                  )
-                                }
-                                className={`${inputClass} mt-1`}
-                              >
-                                <option value="">Automático</option>
-                                <option>Horas sobre 40</option>
-                                <option>Empleado por servicios</option>
-                                <option>Ajuste manual</option>
-                                <option>Otro</option>
-                              </select>
-                            </label>
-                          ) : null}
-                          <label className="text-muted-foreground text-xs">
-                            Comentario
-                            <Input
-                              value={entry.comment ?? ""}
-                              maxLength={1000}
-                              disabled={!editable}
-                              onChange={(event) =>
-                                updateEntry(
-                                  entry.id,
-                                  "comment",
-                                  event.target.value,
-                                )
-                              }
-                              className="mt-1"
-                            />
-                          </label>
-                        </div>
-                        <div className="bg-muted/50 mt-4 grid gap-2 rounded-lg p-3 text-xs sm:grid-cols-5">
-                          <span>H. sistema: {result.systemHours}</span>
-                          <span>
-                            Pago sistema: {money.format(result.systemPay)}
-                          </span>
-                          <span>H. servicio: {result.serviceHours}</span>
-                          <span>
-                            Cheque: {money.format(result.serviceCheckAmount)}
-                          </span>
-                          <strong>
-                            Total: {money.format(result.employeeTotal)}
-                          </strong>
-                        </div>
-                      </SurfaceCard>
-                    </Fragment>
-                  );
-                })}
+                <CompactPayrollEntries
+                  entries={entryState}
+                  editable={editable}
+                  updateEntry={updateEntry}
+                />
               </div>
 
               <PayrollSummary entries={entryState} />
@@ -793,6 +544,34 @@ export function TresbePayrollAdminWorkspace({
                   >
                     <Trash2 className="size-4" /> Descartar y empezar de nuevo
                   </Button>
+                  {selected.sent_at == null &&
+                  ["draft", "calculated"].includes(selected.status) ? (
+                    <Button
+                      variant="destructive"
+                      disabled={pending}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            "¿Eliminar permanentemente esta nómina borrador? Los empleados y su configuración no se eliminarán.",
+                          )
+                        )
+                          return;
+                        const reason = window.prompt(
+                          "Motivo de eliminación (mínimo 5 caracteres)",
+                        );
+                        if (reason)
+                          run(() =>
+                            deleteTresbePayrollDraft(
+                              company.id,
+                              selected.id,
+                              reason,
+                            ),
+                          );
+                      }}
+                    >
+                      <Trash2 className="size-4" /> Eliminar nómina
+                    </Button>
+                  ) : null}
                 </div>
               ) : (
                 <div className="flex flex-wrap justify-end gap-3">
@@ -932,7 +711,7 @@ export function TresbePayrollAdminWorkspace({
                       <p className="text-muted-foreground text-xs">
                         {review.source_name ? `${review.source_name} · ` : ""}
                         {employee ? `${employee.area} · ` : ""}
-                        {review.reason}
+                        {reviewLabel(review.reason)}
                       </p>
                     </div>
                   );
@@ -964,8 +743,10 @@ export function TresbePayrollAdminWorkspace({
                   ) : null}
                   {employee.wage_requires_review ? (
                     <p className="mt-1 text-xs font-medium text-amber-700">
-                      {employee.wage_review_reason ??
-                        "Salario requiere revisión"}
+                      {reviewLabel(
+                        employee.wage_review_reason ??
+                          "Configuración incompleta",
+                      )}
                     </p>
                   ) : null}
                 </div>
@@ -1059,40 +840,194 @@ export function TresbePayrollAdminWorkspace({
   );
 }
 
-function NumericField({
-  label,
-  value,
-  disabled,
-  allowNegative = false,
-  onChange,
+function CompactPayrollEntries({
+  entries,
+  editable,
+  updateEntry,
 }: {
-  label: string;
-  value: number | null;
-  disabled: boolean;
-  allowNegative?: boolean;
-  onChange: (value: string) => void;
+  entries: TresbePayrollEntry[];
+  editable: boolean;
+  updateEntry: (
+    id: string,
+    field: keyof TresbePayrollEntry,
+    value: string,
+  ) => void;
 }) {
+  const numericInput =
+    "h-7 w-20 rounded border border-input bg-background px-1.5 text-right text-xs tabular-nums disabled:opacity-70";
+  const numeric = (
+    entry: TresbePayrollEntry,
+    field: keyof TresbePayrollEntry,
+    label: string,
+    allowNegative = false,
+  ) => (
+    <input
+      aria-label={`${label} de ${entry.employee_name_snapshot}`}
+      type="number"
+      min={allowNegative ? undefined : "0"}
+      step="0.01"
+      value={(entry[field] as number | null) ?? ""}
+      disabled={!editable}
+      onChange={(event) => updateEntry(entry.id, field, event.target.value)}
+      className={numericInput}
+    />
+  );
+
   return (
-    <label className="text-muted-foreground text-xs">
-      {label}
-      <Input
-        type="number"
-        min={allowNegative ? undefined : "0"}
-        step="0.01"
-        value={value ?? ""}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1"
-      />
-    </label>
+    <div className="border-border max-h-[68vh] overflow-auto rounded-lg border">
+      <table className="w-full min-w-[1420px] border-collapse text-xs sm:text-[13px]">
+        <thead className="bg-muted sticky top-0 z-10 text-[11px] tracking-wide uppercase">
+          <tr className="border-border border-b">
+            {[
+              "Empleado",
+              "Área / regla",
+              "Horas",
+              "H. sistema",
+              "Tarifa / base",
+              "Pago sistema",
+              "Tips",
+              "H. servicio",
+              "Tarifa servicio",
+              "Cheque / override",
+              "Ajustes",
+              "Total",
+              "Comentario",
+            ].map((heading) => (
+              <th key={heading} className="px-2 py-2 text-left font-semibold">
+                {heading}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => {
+            const result = toCalculation(entry);
+            const rule = entry.payroll_rule_snapshot;
+            const hourly = [
+              "standard_hourly_40_plus_services",
+              "preset_40_hourly",
+            ].includes(rule);
+            const fixed = [
+              "preset_40_weekly_salary",
+              "fixed_weekly_salary",
+            ].includes(rule);
+            return (
+              <tr
+                key={entry.id}
+                className="border-border hover:bg-muted/40 border-b last:border-b-0"
+              >
+                <td className="max-w-44 px-2 py-1.5 align-top font-medium">
+                  {entry.employee_name_snapshot}
+                  <div className="mt-0.5 flex gap-1 text-[10px] font-normal">
+                    {entry.is_new_employee ? (
+                      <span className="text-blue-700">Nuevo</span>
+                    ) : null}
+                    {rule === "unconfigured" ? (
+                      <span className="text-amber-700">Configurar</span>
+                    ) : null}
+                    {result.serviceCheckAmount > 0 ? (
+                      <span className="text-red-700">Servicios</span>
+                    ) : null}
+                  </div>
+                </td>
+                <td className="text-muted-foreground max-w-44 px-2 py-1.5 align-top text-[11px]">
+                  <div>{entry.area_snapshot}</div>
+                  <div>{TRESBE_RULE_LABELS[rule]}</div>
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "total_weekly_hours", "Horas")}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums">
+                  {result.systemHours}
+                </td>
+                <td className="px-2 py-1.5">
+                  {hourly
+                    ? numeric(entry, "regular_rate_snapshot", "Tarifa regular")
+                    : fixed || rule === "full_services"
+                      ? numeric(
+                          entry,
+                          "weekly_salary_snapshot",
+                          "Salario semanal",
+                        )
+                      : rule === "custom_manual"
+                        ? numeric(
+                            entry,
+                            "manual_system_amount",
+                            "Monto sistema",
+                          )
+                        : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-medium tabular-nums">
+                  {money.format(result.systemPay)}
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "tips", "Tips")}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums">
+                  {result.serviceHours}
+                </td>
+                <td className="px-2 py-1.5">
+                  {hourly || rule === "full_services"
+                    ? numeric(entry, "service_rate_snapshot", "Tarifa servicio")
+                    : "—"}
+                </td>
+                <td className="px-2 py-1.5">
+                  {hourly ||
+                  rule === "full_services" ||
+                  rule === "custom_manual" ? (
+                    <div>
+                      {numeric(
+                        entry,
+                        "fixed_service_amount",
+                        "Cheque de servicios",
+                      )}
+                      {result.serviceCheckAmount > 0 ? (
+                        <div className="text-muted-foreground mt-0.5 text-right text-[10px] tabular-nums">
+                          Calculado: {money.format(result.serviceCheckAmount)}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    money.format(result.serviceCheckAmount)
+                  )}
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "other_adjustments", "Otros ajustes", true)}
+                </td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                  {money.format(result.employeeTotal)}
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    aria-label={`Comentario de ${entry.employee_name_snapshot}`}
+                    value={entry.comment ?? ""}
+                    maxLength={1000}
+                    disabled={!editable}
+                    placeholder="Opcional"
+                    onChange={(event) =>
+                      updateEntry(entry.id, "comment", event.target.value)
+                    }
+                    className="border-input bg-background h-7 w-48 rounded border px-2 text-xs disabled:opacity-70"
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 function PayrollSummary({ entries }: { entries: TresbePayrollEntry[] }) {
-  const rows = entries.map((entry) => ({
-    entry,
-    result: toCalculation(entry),
-  }));
+  const rows = entries
+    .map((entry) => ({ entry, result: toCalculation(entry) }))
+    .filter(
+      ({ entry, result }) =>
+        result.employeeTotal !== 0 ||
+        Number(entry.tips) !== 0 ||
+        Number(entry.other_adjustments) !== 0,
+    );
   const totals = rows.reduce(
     (sum, row) => ({
       system: sum.system + row.result.systemPay,
@@ -1253,6 +1188,10 @@ function TresbeEmployeeDialog({
               defaultSalary: numeric("defaultSalary"),
               annualSalary: numeric("annualSalary"),
               internalNote: String(data.get("internalNote") || "") || null,
+              aliases: String(data.get("aliases") || "")
+                .split(/[\n,]/)
+                .map((alias) => alias.trim())
+                .filter(Boolean),
             });
           }}
         >
@@ -1376,6 +1315,18 @@ function TresbeEmployeeDialog({
               step="0.01"
               defaultValue={employee?.annual_salary ?? ""}
               className="mt-1"
+            />
+          </label>
+          <label className="text-sm sm:col-span-2">
+            Alias (uno por línea o separados por coma)
+            <textarea
+              name="aliases"
+              maxLength={2000}
+              defaultValue={(employee?.tresbe_employee_aliases ?? [])
+                .map((alias) => alias.alias_name)
+                .join("\n")}
+              rows={3}
+              className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
             />
           </label>
           <label className="text-sm sm:col-span-2">

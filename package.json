@@ -22,6 +22,7 @@
     "test:tresbe-payroll-pdf": "tsx scripts/test-tresbe-payroll-pdf.ts",
     "test:tresbe-wages": "tsx scripts/test-tresbe-wages.ts",
     "test:tresbe-revisions": "tsx scripts/test-tresbe-payroll-revisions.ts",
+    "test:tresbe-stabilization": "tsx scripts/test-tresbe-stabilization.ts",
     "test:invoices": "tsx scripts/test-invoices.ts",
     "audit:security": "tsx scripts/audit-security.ts",
     "test:security": "tsx scripts/test-security-hardening.ts",
