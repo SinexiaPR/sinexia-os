@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 
 import { PDFDocument } from "pdf-lib";
 
-import { buildTresbePayrollPdf } from "../src/lib/tresbe-payroll/pdf";
+import {
+  buildTresbePayrollPdf,
+  hasTresbePayrollValue,
+} from "../src/lib/tresbe-payroll/pdf";
 import type {
   TresbePayroll,
   TresbePayrollEntry,
@@ -67,6 +70,25 @@ const makeEntry = (
 });
 
 async function main() {
+  const emptyEntry = makeEntry({
+    total_weekly_hours: 0,
+    system_hours: 0,
+    service_hours: 0,
+    system_pay: 0,
+    tips: 0,
+    service_check_amount: 0,
+    other_adjustments: 0,
+    employee_total: 0,
+  });
+  assert.equal(hasTresbePayrollValue(emptyEntry), false);
+  assert.equal(
+    hasTresbePayrollValue({ ...emptyEntry, total_weekly_hours: 40 }),
+    false,
+    "hours without an amount to pay must stay out of the PDF",
+  );
+  assert.equal(hasTresbePayrollValue(makeEntry({})), true);
+  assert.equal(hasTresbePayrollValue({ ...emptyEntry, tips: 25 }), true);
+
   const bytes = await buildTresbePayrollPdf({
     companyName: "Tresbe",
     payroll,
@@ -91,12 +113,13 @@ async function main() {
         employee_total: 385,
         service_reason: "Empleado por servicios",
       }),
+      emptyEntry,
     ],
   });
 
   assert.ok(bytes.length > 1_000, "PDF must contain rendered payroll content");
   const parsed = await PDFDocument.load(bytes);
-  assert.ok(parsed.getPageCount() >= 1);
+  assert.equal(parsed.getPageCount(), 1, "payroll summary must fit one page");
   assert.equal(parsed.getTitle(), "Nomina Tresbe 2026-07-06");
   assert.equal(parsed.getAuthor(), "Sinexia OS");
 

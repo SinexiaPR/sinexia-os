@@ -194,6 +194,33 @@ export function TresbePayrollAdminWorkspace({
       comment: entry.comment || null,
     })),
   });
+  const previewPdf = () => {
+    const previewWindow = window.open("about:blank", "_blank");
+    if (!previewWindow) {
+      setMessage("Permite ventanas emergentes para abrir la vista previa PDF.");
+      return;
+    }
+    startTransition(async () => {
+      setMessage(null);
+      const saved = await saveTresbePayrollDraft(draftPayload());
+      if (saved.error) {
+        previewWindow.close();
+        setMessage(saved.error);
+        return;
+      }
+      const recalculated = await recalculateTresbePayroll(
+        company.id,
+        selected!.id,
+      );
+      if (recalculated.error) {
+        previewWindow.close();
+        setMessage(recalculated.error);
+        return;
+      }
+      previewWindow.location.href = `/api/tresbe-payroll/${selected!.id}/pdf?preview=${Date.now()}`;
+      setMessage("Vista previa actualizada correctamente.");
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -703,14 +730,12 @@ export function TresbePayrollAdminWorkspace({
                   >
                     Recalcular
                   </Button>
-                  <Button asChild variant="outline">
-                    <a
-                      href={`/api/tresbe-payroll/${selected.id}/pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <FileText className="size-4" /> Vista previa PDF
-                    </a>
+                  <Button
+                    variant="outline"
+                    disabled={pending}
+                    onClick={previewPdf}
+                  >
+                    <FileText className="size-4" /> Vista previa PDF
                   </Button>
                   <Button
                     disabled={pending}
