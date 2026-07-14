@@ -1,9 +1,15 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+
+import { deleteInboxDocument } from "@/actions/documents";
 import { DocumentStatusBadge } from "@/components/dashboard/document-status-badge";
 import { DocumentStatusSelect } from "@/components/dashboard/document-status-select";
 import { DocumentViewLink } from "@/components/dashboard/document-view-link";
 import { DocumentViewedIndicator } from "@/components/dashboard/document-viewed-indicator";
+import { Button } from "@/components/ui/button";
 import {
   addLocalViewedDocument,
   useIsDocumentViewed,
@@ -40,6 +46,8 @@ export function DocumentRowClient({
   isAdmin = false,
   className,
 }: DocumentRowClientProps) {
+  const router = useRouter();
+  const [isDeleting, startDeleteTransition] = useTransition();
   const isViewed = useIsDocumentViewed(
     document.id,
     viewedDocumentIds,
@@ -110,6 +118,36 @@ export function DocumentRowClient({
             >
               Ver archivo
             </DocumentViewLink>
+          ) : null}
+          {isAdmin ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={isDeleting}
+              className="size-9 shrink-0 text-red-700 hover:bg-red-50 hover:text-red-800"
+              aria-label="Eliminar archivo"
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    "¿Eliminar este archivo? Esta acción no se puede deshacer.",
+                  )
+                ) {
+                  return;
+                }
+
+                startDeleteTransition(async () => {
+                  const result = await deleteInboxDocument(document.id);
+                  if (result.error) {
+                    window.alert(result.error);
+                    return;
+                  }
+                  router.refresh();
+                });
+              }}
+            >
+              <Trash2 className="size-4" />
+            </Button>
           ) : null}
         </div>
       </div>
