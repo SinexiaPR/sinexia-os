@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
-import { deleteInvoiceDraft } from "@/actions/invoices";
+import { deleteInvoice } from "@/actions/invoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
@@ -187,22 +187,22 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                         Ver
                       </Link>
                     </Button>
-                    {invoice.status === "draft" ? (
+                    {["draft", "cancelled"].includes(invoice.status) &&
+                    !invoice.is_legacy_import ? (
                       <Button
                         size="sm"
                         variant="destructive"
                         disabled={pending}
-                        aria-label="Eliminar factura en borrador"
+                        aria-label={`Eliminar factura ${invoice.status === "draft" ? "en borrador" : "cancelada"}`}
                         onClick={() => {
-                          if (
-                            !window.confirm(
-                              "¿Eliminar esta factura de prueba? Esta acción no consume número oficial.",
-                            )
-                          )
-                            return;
+                          const warning =
+                            invoice.status === "cancelled"
+                              ? `¿Eliminar definitivamente la factura cancelada #${invoice.invoice_number}? Su número oficial no se reutilizará.`
+                              : "¿Eliminar esta factura de prueba? Esta acción no consume número oficial.";
+                          if (!window.confirm(warning)) return;
                           startTransition(async () => {
                             setMessage(null);
-                            const result = await deleteInvoiceDraft(invoice.id);
+                            const result = await deleteInvoice(invoice.id);
                             if (result.error) setMessage(result.error);
                             else router.refresh();
                           });

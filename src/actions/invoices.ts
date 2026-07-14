@@ -344,21 +344,25 @@ export async function issueInvoice(invoiceId: string) {
   return { success: true, invoiceNumber: data as number };
 }
 
-export async function deleteInvoiceDraft(invoiceId: string) {
+export async function deleteInvoice(invoiceId: string) {
   await requireAdmin();
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("invoices")
-    .delete()
-    .eq("id", invoiceId)
-    .eq("status", "draft")
-    .select("id")
-    .maybeSingle();
+  const { data: pdfStoragePath, error } = await supabase.rpc(
+    "delete_admin_invoice",
+    { p_invoice_id: invoiceId },
+  );
   if (error) return { error: error.message };
-  if (!data)
-    return {
-      error: "Solo se pueden eliminar facturas que todavía son borradores.",
-    };
+  if (pdfStoragePath) {
+    const removed = await createAdminClient()
+      .storage.from("invoices")
+      .remove([String(pdfStoragePath)]);
+    if (removed.error)
+      console.error("Deleted invoice left an orphaned PDF", {
+        invoice_id: invoiceId,
+        storage_path: pdfStoragePath,
+        storage_error: removed.error.message,
+      });
+  }
   revalidatePath("/dashboard/admin/invoices");
   return { success: true, deleted: true };
 }

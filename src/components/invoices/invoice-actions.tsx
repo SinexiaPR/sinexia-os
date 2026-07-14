@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 
 import {
   cancelInvoice,
-  deleteInvoiceDraft,
+  deleteInvoice,
   duplicateInvoice,
   emailInvoice,
   generateInvoicePdf,
@@ -96,7 +96,7 @@ export function InvoiceActions({ invoice }: { invoice: Invoice }) {
                       "¿Eliminar este borrador? No consume número oficial.",
                     )
                   )
-                    run(() => deleteInvoiceDraft(invoice.id));
+                    run(() => deleteInvoice(invoice.id));
                 }}
               >
                 Eliminar factura
@@ -126,6 +126,22 @@ export function InvoiceActions({ invoice }: { invoice: Invoice }) {
                   onClick={() => run(() => duplicateInvoice(invoice.id))}
                 >
                   Duplicar como borrador
+                </Button>
+              ) : null}
+              {invoice.status === "cancelled" && !invoice.is_legacy_import ? (
+                <Button
+                  variant="destructive"
+                  disabled={pending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `¿Eliminar definitivamente la factura cancelada #${invoice.invoice_number}? Su número oficial no se reutilizará.`,
+                      )
+                    )
+                      run(() => deleteInvoice(invoice.id));
+                  }}
+                >
+                  Eliminar factura
                 </Button>
               ) : null}
               {!["paid", "cancelled"].includes(invoice.status) ? (

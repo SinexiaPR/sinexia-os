@@ -160,6 +160,13 @@ async function main() {
     ),
     "utf8",
   );
+  const cancelledDeleteMigration = readFileSync(
+    join(
+      root,
+      "supabase/migrations/20260714122000_delete_cancelled_invoices.sql",
+    ),
+    "utf8",
+  );
   assert.match(migration, /last_issued_number INTEGER/);
   assert.match(migration, /VALUES \('sinexia_global_invoice', 215\)/);
   assert.match(migration, /last_issued_number = last_issued_number \+ 1/);
@@ -219,6 +226,25 @@ async function main() {
     draftDeleteMigration,
     /REVOKE ALL ON FUNCTION public\.recalculate_invoice_after_item_change\(\)/,
   );
+  assert.match(
+    cancelledDeleteMigration,
+    /OLD\.status NOT IN \('draft', 'cancelled'\)/,
+  );
+  assert.match(
+    cancelledDeleteMigration,
+    /target_invoice\.status NOT IN \('draft', 'cancelled'\)/,
+  );
+  assert.match(cancelledDeleteMigration, /SECURITY DEFINER/);
+  assert.match(cancelledDeleteMigration, /SET search_path = public, pg_temp/);
+  assert.match(
+    cancelledDeleteMigration,
+    /DELETE FROM public\.invoice_email_deliveries/,
+  );
+  assert.match(
+    cancelledDeleteMigration,
+    /GRANT EXECUTE ON FUNCTION public\.delete_admin_invoice\(UUID\)[\s\S]+TO authenticated/,
+  );
+  assert.doesNotMatch(cancelledDeleteMigration, /GRANT EXECUTE[\s\S]+TO anon/);
 
   assert.match(
     permissionMigration,
@@ -299,11 +325,7 @@ async function main() {
   assert.match(invoiceEditor, /template\?\.default_tax_rate/);
   assert.match(invoiceEditor, /dueDate: invoiceDate/);
   assert.match(invoiceEditor, /aria-readonly="true"/);
-  assert.match(invoiceActions, /\.eq\("status", "draft"\)/);
-  assert.match(
-    invoiceActions,
-    /Solo se pueden eliminar facturas que todavía son borradores/,
-  );
+  assert.match(invoiceActions, /"delete_admin_invoice"/);
   assert.match(invoiceActions, /sinexia-invoice-logo\.png/);
 
   for (const route of [
