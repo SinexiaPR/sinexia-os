@@ -11,6 +11,7 @@ import { requireAdmin, requireClient } from "@/lib/auth/session";
 import { scheduleInboxDocumentProcessing } from "@/lib/intelligence/processing";
 import { isAnalyzableFilename } from "@/lib/intelligence/extraction/utils";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   validateDocumentUploadMetadata,
   type DocumentPriority,
@@ -142,5 +143,58 @@ export async function updateDocumentStatus(
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/inbox");
+  return { success: true };
+}
+
+export async function deleteInboxDocument(
+  documentId: string,
+): Promise<{ error?: string; success?: boolean }> {
+  await requireAdmin();
+
+  if (!documentId) {
+    return { error: "Documento no válido." };
+  }
+
+  const admin = createAdminClient();
+  const { data: document, error: fetchError } = await admin
+    .from("documents")
+    .select("file_url")
+    .eq("id", documentId)
+    .maybeSingle();
+
+  if (fetchError || !document) {
+    return { error: "No se encontró el documento." };
+  }
+
+  const { error: deleteError } = await admin
+    .from("documents")
+    .delete()
+    .eq("id", documentId);
+
+  if (deleteError) {
+    console.error("[documents] deleteInboxDocument", deleteError.message);
+    return {
+      error:
+        deleteError.code === "23503"
+          ? "Este documento está asociado a otro registro y no se puede eliminar."
+          : "No se pudo eliminar el documento.",
+    };
+  }
+
+  const { error: storageError } = await admin.storage
+    .from("documents")
+    .remove([document.file_url]);
+
+  if (storageError) {
+    console.error(
+      "[documents] deleteInboxDocument storage",
+      storageError.message,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/inbox");
+  revalidatePath("/dashboard/sia");
+
   return { success: true };
 }
