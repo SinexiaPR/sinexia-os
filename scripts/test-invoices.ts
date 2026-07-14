@@ -127,6 +127,13 @@ async function main() {
     join(root, "supabase/migrations/20250714020000_admin_invoicing.sql"),
     "utf8",
   );
+  const permissionMigration = readFileSync(
+    join(
+      root,
+      "supabase/migrations/20250714100000_invoice_permissions_weekly_defaults.sql",
+    ),
+    "utf8",
+  );
   assert.match(migration, /last_issued_number INTEGER/);
   assert.match(migration, /VALUES \('sinexia_global_invoice', 215\)/);
   assert.match(migration, /last_issued_number = last_issued_number \+ 1/);
@@ -144,7 +151,10 @@ async function main() {
   assert.match(migration, /\(215, 'cut', 'Cut Butcher Shop'\)/);
   assert.match(migration, /Clients read own published invoices/);
   assert.match(migration, /company_id = public\.current_company_id\(\)/);
-  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.invoice_admin_details/);
+  assert.match(
+    migration,
+    /CREATE TABLE IF NOT EXISTS public\.invoice_admin_details/,
+  );
   assert.match(migration, /Admins manage invoice private details/);
   const invoiceTable = migration.slice(
     migration.indexOf("CREATE TABLE IF NOT EXISTS public.invoices"),
@@ -157,6 +167,84 @@ async function main() {
     migration,
     /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i,
   );
+
+  assert.match(
+    permissionMigration,
+    /CREATE OR REPLACE FUNCTION public\.recalculate_invoice_totals\(value UUID\)/,
+  );
+  assert.match(permissionMigration, /SECURITY DEFINER/);
+  assert.match(permissionMigration, /SET search_path = public, pg_temp/);
+  assert.match(
+    permissionMigration,
+    /auth\.uid\(\) IS NULL OR NOT public\.is_admin\(\)/,
+  );
+  assert.match(
+    permissionMigration,
+    /REVOKE ALL ON FUNCTION public\.recalculate_invoice_totals\(UUID\)[\s\S]+FROM PUBLIC, anon/,
+  );
+  assert.match(
+    permissionMigration,
+    /GRANT EXECUTE ON FUNCTION public\.recalculate_invoice_totals\(UUID\)[\s\S]+TO authenticated/,
+  );
+  assert.doesNotMatch(
+    permissionMigration,
+    /GRANT EXECUTE[\s\S]+TO anon/,
+    "anon must not execute invoice management functions",
+  );
+  assert.match(
+    permissionMigration,
+    /sum\(round\(item\.quantity \* item\.unit_price, 2\)\)/,
+  );
+  assert.match(permissionMigration, /taxable_subtotal/);
+  assert.match(permissionMigration, /NOTIFY pgrst, 'reload schema'/);
+  assert.match(permissionMigration, /'weekly-tresbe'[\s\S]+250\.00/);
+  assert.match(permissionMigration, /'weekly-sibarita'[\s\S]+250\.00/);
+  assert.match(
+    permissionMigration,
+    /'weekly-cut-meat-distributors'[\s\S]+180\.00/,
+  );
+  assert.match(permissionMigration, /'weekly-cut-butcher-shop'[\s\S]+320\.00/);
+  assert.match(permissionMigration, /'weekly-magol'[\s\S]+130\.00/);
+  assert.match(permissionMigration, /frequency = 'weekly'/);
+  assert.match(permissionMigration, /ON CONFLICT \(company_id, template_key\)/);
+  assert.match(permissionMigration, /invoice_template_match_reviews/);
+  assert.doesNotMatch(
+    permissionMigration,
+    /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i,
+    "company UUIDs must not be hardcoded",
+  );
+  assert.doesNotMatch(
+    permissionMigration,
+    /UPDATE public\.invoices[\s\S]+status = 'issued'/,
+    "template migration must not modify issued invoices",
+  );
+
+  const invoiceActions = readFileSync(
+    join(root, "src/actions/invoices.ts"),
+    "utf8",
+  );
+  assert.match(invoiceActions, /await requireAdmin\(\)/);
+  assert.match(
+    invoiceActions,
+    /No se pudieron calcular los totales de la factura/,
+  );
+  assert.match(invoiceActions, /postgres_error_code/);
+  assert.match(invoiceActions, /authenticated_user_id/);
+  assert.doesNotMatch(invoiceActions, /service.role|SERVICE_ROLE/);
+  const invoiceService = readFileSync(
+    join(root, "src/services/invoices.ts"),
+    "utf8",
+  );
+  const invoiceEditor = readFileSync(
+    join(root, "src/components/invoices/invoice-editor.tsx"),
+    "utf8",
+  );
+  assert.match(invoiceService, /weeklyInvoiceTemplate/);
+  assert.match(invoiceService, /\.eq\("frequency", "weekly"\)/);
+  assert.match(invoiceService, /\.eq\("enabled", true\)/);
+  assert.match(invoiceEditor, /existingItems\.length/);
+  assert.match(invoiceEditor, /initialTemplate\?\.default_items/);
+  assert.match(invoiceEditor, /template\?\.default_tax_rate/);
 
   for (const route of [
     "src/app/(dashboard)/dashboard/admin/invoices/page.tsx",

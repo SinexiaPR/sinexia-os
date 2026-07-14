@@ -59,16 +59,27 @@ export function InvoiceEditor({
     companies.find((company) => company.id === invoice?.company_id) ??
     companies[0];
   const initialProfile = initialCompany?.billingProfile;
+  const initialTemplate = invoice
+    ? null
+    : initialCompany?.weeklyInvoiceTemplate;
   const [companyId, setCompanyId] = useState(initialCompany?.id ?? "");
   const [invoiceDate, setInvoiceDate] = useState(
     invoice?.invoice_date ?? today,
   );
   const [dueDate, setDueDate] = useState(
     invoice?.due_date ??
-      addDays(today, initialProfile?.default_payment_terms_days ?? 15),
+      addDays(
+        today,
+        initialTemplate?.default_terms_days ??
+          initialProfile?.default_payment_terms_days ??
+          15,
+      ),
   );
   const [currency, setCurrency] = useState(
-    invoice?.currency ?? settings?.default_currency ?? "USD",
+    invoice?.currency ??
+      initialTemplate?.default_currency ??
+      settings?.default_currency ??
+      "USD",
   );
   const [language, setLanguage] = useState<"es" | "en">(
     invoice?.language ?? initialProfile?.default_language ?? "es",
@@ -85,7 +96,10 @@ export function InvoiceEditor({
       "",
   );
   const [billingEmail, setBillingEmail] = useState(
-    invoice?.billing_email_snapshot ?? initialProfile?.billing_email ?? "",
+    invoice?.billing_email_snapshot ??
+      initialTemplate?.billing_email ??
+      initialProfile?.billing_email ??
+      "",
   );
   const [billingCc, setBillingCc] = useState(
     invoice?.billing_cc_snapshot ?? initialProfile?.billing_cc ?? "",
@@ -104,7 +118,12 @@ export function InvoiceEditor({
     invoice?.internal_note ?? "",
   );
   const [taxRate, setTaxRate] = useState(
-    Number(invoice?.tax_rate ?? settings?.default_tax_rate ?? 0),
+    Number(
+      invoice?.tax_rate ??
+        initialTemplate?.default_tax_rate ??
+        settings?.default_tax_rate ??
+        0,
+    ),
   );
   const [discountType, setDiscountType] = useState<
     "none" | "fixed" | "percentage"
@@ -119,15 +138,17 @@ export function InvoiceEditor({
           quantity: Number(item.quantity),
           unitPrice: Number(item.unit_price),
         }))
-      : initialProfile?.default_invoice_items?.length
-        ? initialProfile.default_invoice_items
-        : [
-            {
-              description: "Paquete de servicios administrativos",
-              quantity: 1,
-              unitPrice: 0,
-            },
-          ],
+      : initialTemplate?.default_items?.length
+        ? initialTemplate.default_items
+        : initialProfile?.default_invoice_items?.length
+          ? initialProfile.default_invoice_items
+          : [
+              {
+                description: "Paquete de servicios administrativos",
+                quantity: 1,
+                unitPrice: 0,
+              },
+            ],
   );
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -145,16 +166,31 @@ export function InvoiceEditor({
     const company = companies.find((item) => item.id === id);
     if (!company) return;
     const profile = company.billingProfile;
+    const template = company.weeklyInvoiceTemplate;
     setCompanyId(id);
     setBillingName(profile?.billing_legal_name || company.name);
     setBillingContact(profile?.billing_contact_name || "");
-    setBillingEmail(profile?.billing_email || "");
+    setBillingEmail(template?.billing_email || profile?.billing_email || "");
     setBillingCc(profile?.billing_cc || "");
     setBillingAddress(profileAddress(company));
     setLanguage(profile?.default_language || "es");
     setClientNote(profile?.default_note || "");
-    setDueDate(addDays(invoiceDate, profile?.default_payment_terms_days ?? 15));
-    if (profile?.default_invoice_items?.length)
+    setDueDate(
+      addDays(
+        invoiceDate,
+        template?.default_terms_days ??
+          profile?.default_payment_terms_days ??
+          15,
+      ),
+    );
+    setCurrency(
+      template?.default_currency ?? settings?.default_currency ?? "USD",
+    );
+    setTaxRate(
+      Number(template?.default_tax_rate ?? settings?.default_tax_rate ?? 0),
+    );
+    if (template?.default_items?.length) setItems(template.default_items);
+    else if (profile?.default_invoice_items?.length)
       setItems(profile.default_invoice_items);
   }
 

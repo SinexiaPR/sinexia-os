@@ -131,6 +131,7 @@ export type BillingCompany = {
   name: string;
   slug: string;
   billingProfile: CompanyBillingProfile | null;
+  weeklyInvoiceTemplate: RecurringInvoiceProfile | null;
 };
 
 export type RecurringInvoiceProfile = {
@@ -147,6 +148,10 @@ export type RecurringInvoiceProfile = {
   }>;
   default_terms_days: number;
   billing_email: string | null;
+  default_currency: string;
+  default_tax_rate: number;
+  effective_date: string;
+  template_key: string | null;
   enabled: boolean;
   companies?: { name: string } | null;
 };
