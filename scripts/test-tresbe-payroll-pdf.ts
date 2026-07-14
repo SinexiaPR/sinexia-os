@@ -81,6 +81,11 @@ async function main() {
     employee_total: 0,
   });
   assert.equal(hasTresbePayrollValue(emptyEntry), false);
+  assert.equal(
+    hasTresbePayrollValue({ ...emptyEntry, total_weekly_hours: 40 }),
+    false,
+    "hours without an amount to pay must stay out of the PDF",
+  );
   assert.equal(hasTresbePayrollValue(makeEntry({})), true);
   assert.equal(hasTresbePayrollValue({ ...emptyEntry, tips: 25 }), true);
 
@@ -114,7 +119,7 @@ async function main() {
 
   assert.ok(bytes.length > 1_000, "PDF must contain rendered payroll content");
   const parsed = await PDFDocument.load(bytes);
-  assert.ok(parsed.getPageCount() >= 1);
+  assert.equal(parsed.getPageCount(), 1, "payroll summary must fit one page");
   assert.equal(parsed.getTitle(), "Nomina Tresbe 2026-07-06");
   assert.equal(parsed.getAuthor(), "Sinexia OS");
 
