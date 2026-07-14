@@ -7,6 +7,7 @@ import {
   FileText,
   Mail,
   Plus,
+  RefreshCw,
   RotateCcw,
   Save,
   Send,
@@ -18,6 +19,7 @@ import {
   createTresbePayroll,
   emailTresbePayroll,
   recalculateTresbePayroll,
+  reconcileTresbeEmployees,
   reopenTresbePayroll,
   resetTresbePayrollDraft,
   saveTresbeEmployee,
@@ -510,7 +512,10 @@ export function TresbePayrollAdminWorkspace({
                               updateEntry(entry.id, "total_weekly_hours", value)
                             }
                           />
-                          {rule === "standard_hourly_40_plus_services" ? (
+                          {[
+                            "standard_hourly_40_plus_services",
+                            "preset_40_hourly",
+                          ].includes(rule) ? (
                             <>
                               <NumericField
                                 label="Tarifa regular"
@@ -893,12 +898,21 @@ export function TresbePayrollAdminWorkspace({
               <Plus className="size-4" /> Agregar empleado
             </Button>
           </div>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => run(() => reconcileTresbeEmployees(company.id))}
+            >
+              <RefreshCw className="size-4" /> Volver a cotejar empleados
+            </Button>
+          </div>
           {wageReviews.length ? (
             <SurfaceCard className="border-amber-200 bg-amber-50/40">
               <h2 className="font-semibold">Revisión de salarios</h2>
               <p className="text-muted-foreground mt-1 text-sm">
-                Elementos que no se actualizaron automáticamente desde el
-                reporte oficial del 13 de julio de 2026.
+                Solo aparecen identidades ambiguas o empleados sin una regla de
+                pago o compensación utilizable.
               </p>
               <div className="mt-4 space-y-2 text-sm">
                 {wageReviews.map((review) => {
@@ -1335,7 +1349,7 @@ function TresbeEmployeeDialog({
               min="0"
               step="0.01"
               defaultValue={
-                rule === "preset_40_weekly_salary"
+                ["preset_40_hourly", "preset_40_weekly_salary"].includes(rule)
                   ? 40
                   : (employee?.default_weekly_hours ?? "")
               }
