@@ -1,6 +1,7 @@
 export type TresbePayrollRule =
   | "unconfigured"
   | "standard_hourly_40_plus_services"
+  | "preset_40_hourly"
   | "full_services"
   | "preset_40_weekly_salary"
   | "fixed_weekly_salary"
@@ -47,6 +48,7 @@ export function calculateTresbeEntry(
     case "unconfigured":
       break;
     case "standard_hourly_40_plus_services":
+    case "preset_40_hourly":
       systemHours = Math.min(hours, 40);
       serviceHours = Math.max(hours - 40, 0);
       systemPay = cents(systemHours * regularRate);
@@ -62,7 +64,7 @@ export function calculateTresbeEntry(
           ? cents(input.fixedServiceAmount)
           : Number(input.weeklySalary || 0) > 0
             ? cents(Number(input.weeklySalary))
-            : cents(serviceHours * Math.max(0, Number(input.serviceRate || 0)));
+            : cents(serviceHours * serviceRate);
       break;
     case "preset_40_weekly_salary":
     case "fixed_weekly_salary":
@@ -126,6 +128,7 @@ export function sumTresbePayroll(
 export const TRESBE_RULE_LABELS: Record<TresbePayrollRule, string> = {
   unconfigured: "Sin configurar",
   standard_hourly_40_plus_services: "Por hora · 40 + servicios",
+  preset_40_hourly: "Por hora · 40 predeterminadas",
   full_services: "Servicios completos",
   preset_40_weekly_salary: "40 horas · salario semanal",
   fixed_weekly_salary: "Salario semanal fijo",

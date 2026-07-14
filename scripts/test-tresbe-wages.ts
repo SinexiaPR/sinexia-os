@@ -14,6 +14,13 @@ const confirmedSql = readFileSync(
   ),
   "utf8",
 );
+const reconciliationSql = readFileSync(
+  join(
+    process.cwd(),
+    "supabase/migrations/20250714091000_tresbe_employee_reconciliation.sql",
+  ),
+  "utf8",
+);
 
 const officialRows = sql.match(/^\s+\('[^\n]+\)[,;]$/gm) ?? [];
 assert.equal(officialRows.length, 28, "exactly 28 official employees required");
@@ -94,10 +101,7 @@ assert.match(
   confirmedSql,
   /\('lee sanchez', 'Lee J\. de Jesus Sanchez', 11\.00\)/,
 );
-assert.match(
-  confirmedSql,
-  /\('henry casiano', 'Casiano Henry', 15\.00\)/,
-);
+assert.match(confirmedSql, /\('henry casiano', 'Casiano Henry', 15\.00\)/);
 assert.match(
   confirmedSql,
   /normalized_name = 'fernando almonte'[\s\S]+default_weekly_salary = 400\.00|default_weekly_salary = 400\.00[\s\S]+normalized_name = 'fernando almonte'/,
@@ -111,11 +115,11 @@ assert.match(
   /normalized_name = 'ramon luis rivera'[\s\S]+payroll_rule = 'full_services'|payroll_rule = 'full_services'[\s\S]+normalized_name = 'ramon luis rivera'/,
 );
 assert.match(confirmedSql, /'yediel', 'carlos ramos'/);
-assert.match(confirmedSql, /WHEN COALESCE\(NEW\.weekly_salary_snapshot, 0\) > 0/);
 assert.match(
   confirmedSql,
-  /COALESCE\(e\.weekly_salary_snapshot, 0\) <= 0/,
+  /WHEN COALESCE\(NEW\.weekly_salary_snapshot, 0\) > 0/,
 );
+assert.match(confirmedSql, /COALESCE\(e\.weekly_salary_snapshot, 0\) <= 0/);
 assert.match(confirmedSql, /'julian mateo'::TEXT, 10\.00::NUMERIC/);
 assert.match(confirmedSql, /'nashely'::TEXT, 4\.50::NUMERIC/);
 assert.match(confirmedSql, /employee\.payroll_rule = 'full_services'/);
@@ -143,5 +147,45 @@ assert.doesNotMatch(
   /normalized_name\s*=\s*'seguridad'/,
   "Ramon Luis Rivera replaces the generic Seguridad record",
 );
+
+for (const alias of [
+  "jared rivera",
+  "rivera rodriguez, jared",
+  "lee sanchez",
+  "de jesus sanchez, lee j.",
+  "lee zephyrus p. irene",
+  "irene, lee zephyrinus p.",
+  "regino",
+  "pizarro, regino",
+]) {
+  assert.match(reconciliationSql, new RegExp(alias.replaceAll(".", "\\.")));
+}
+assert.match(
+  reconciliationSql,
+  /CREATE TABLE IF NOT EXISTS public\.tresbe_employee_aliases/,
+);
+assert.match(reconciliationSql, /UNIQUE\(company_id, normalized_alias\)/);
+assert.match(reconciliationSql, /employee\.payroll_rule = 'preset_40_hourly'/);
+assert.match(reconciliationSql, /regular_hourly_rate = 16\.25/);
+assert.match(reconciliationSql, /default_weekly_hours = 40/);
+assert.match(reconciliationSql, /default_weekly_salary = NULL/);
+assert.match(
+  reconciliationSql,
+  /payroll\.status IN \('draft', 'calculated', 'corrected'\)/,
+);
+assert.doesNotMatch(
+  reconciliationSql,
+  /payroll\.status IN \([^)]*'sent'/,
+  "reconciliation must never rewrite sent payroll snapshots",
+);
+assert.match(reconciliationSql, /employee\.is_active/);
+assert.match(reconciliationSql, /wage_requires_review/);
+assert.doesNotMatch(
+  reconciliationSql,
+  /INSERT INTO public\.tresbe_employees/,
+  "reconciliation must not create employees",
+);
+assert.match(reconciliationSql, /Only admins can reconcile Tresbe employees/);
+assert.match(reconciliationSql, /public\.is_tresbe_company\(p_company_id\)/);
 
 console.log("TRESBE official wage migration and review safeguards: PASS");

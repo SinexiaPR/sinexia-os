@@ -34,6 +34,7 @@ const employeeSchema = z.object({
   payrollRule: z.enum([
     "unconfigured",
     "standard_hourly_40_plus_services",
+    "preset_40_hourly",
     "full_services",
     "preset_40_weekly_salary",
     "fixed_weekly_salary",
@@ -71,7 +72,9 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
             data.payrollRule,
           )
         ? (weeklySalary ?? 0) > 0
-        : data.payrollRule === "standard_hourly_40_plus_services"
+        : ["standard_hourly_40_plus_services", "preset_40_hourly"].includes(
+              data.payrollRule,
+            )
           ? (data.regularRate ?? 0) > 0
           : data.payrollRule === "custom_manual";
   const values = {
@@ -84,8 +87,12 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
     receives_proportional_tips: data.receivesProportionalTips,
     regular_hourly_rate: data.regularRate,
     service_hourly_rate: data.serviceRate,
-    default_weekly_hours:
-      data.payrollRule === "preset_40_weekly_salary" ? 40 : data.defaultHours,
+    default_weekly_hours: [
+      "preset_40_hourly",
+      "preset_40_weekly_salary",
+    ].includes(data.payrollRule)
+      ? 40
+      : data.defaultHours,
     default_weekly_salary: weeklySalary,
     annual_salary: data.annualSalary,
     wage_requires_review: !wageConfigured,
@@ -136,6 +143,21 @@ export async function setTresbeEmployeeActive(
     .update({ is_active: isActive, updated_by: profile.id })
     .eq("id", employeeId)
     .eq("company_id", companyId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
+  return { success: true };
+}
+
+export async function reconcileTresbeEmployees(companyId: string) {
+  try {
+    await authorizeTresbeAdmin(companyId);
+  } catch {
+    return { error: "No autorizado." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reconcile_tresbe_employees", {
+    p_company_id: companyId,
+  });
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
   return { success: true };
@@ -255,7 +277,9 @@ export async function saveTresbePayrollDraft(params: {
   if (
     parsed.data.some(
       (entry) =>
-        entryRules.get(entry.id) === "standard_hourly_40_plus_services" &&
+        ["standard_hourly_40_plus_services", "preset_40_hourly"].includes(
+          entryRules.get(entry.id) ?? "",
+        ) &&
         entry.fixedServiceAmount > 0 &&
         (entry.comment?.length ?? 0) < 5,
     )
@@ -295,7 +319,9 @@ export async function saveTresbePayrollDraft(params: {
   }
   const overrides = parsed.data.filter(
     (entry) =>
-      entryRules.get(entry.id) === "standard_hourly_40_plus_services" &&
+      ["standard_hourly_40_plus_services", "preset_40_hourly"].includes(
+        entryRules.get(entry.id) ?? "",
+      ) &&
       entry.fixedServiceAmount > 0 &&
       entry.comment,
   );

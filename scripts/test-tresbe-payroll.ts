@@ -61,6 +61,26 @@ const exactly40 = calculateTresbeEntry({
 assert.equal(exactly40.serviceHours, 0);
 assert.equal(exactly40.serviceCheckAmount, 0);
 
+const presetHourly = calculateTresbeEntry({
+  ...base,
+  payrollRule: "preset_40_hourly",
+  totalWeeklyHours: 40,
+  regularRate: 16.25,
+});
+assert.equal(presetHourly.systemHours, 40);
+assert.equal(presetHourly.systemPay, 650);
+assert.equal(presetHourly.serviceHours, 0);
+
+const presetHourlyOver40 = calculateTresbeEntry({
+  ...base,
+  payrollRule: "preset_40_hourly",
+  totalWeeklyHours: 45,
+  regularRate: 16.25,
+});
+assert.equal(presetHourlyOver40.systemPay, 650);
+assert.equal(presetHourlyOver40.serviceHours, 5);
+assert.equal(presetHourlyOver40.serviceCheckAmount, 81.25);
+
 const hourlyOverride = calculateTresbeEntry({
   ...base,
   payrollRule: "standard_hourly_40_plus_services",
@@ -92,6 +112,14 @@ const fixedService = calculateTresbeEntry({
   fixedServiceAmount: 500,
 });
 assert.equal(fixedService.serviceCheckAmount, 500);
+
+const fullServiceRegularRateFallback = calculateTresbeEntry({
+  ...base,
+  payrollRule: "full_services",
+  totalWeeklyHours: 10,
+  regularRate: 17.5,
+});
+assert.equal(fullServiceRegularRateFallback.serviceCheckAmount, 175);
 
 const fixedWeeklyFullService = calculateTresbeEntry({
   ...base,
