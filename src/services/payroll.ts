@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
+export type WorkerClassification = "w2" | "services" | "contractor";
+
 export type PayrollEmployee = {
   id: string;
   company_id: string;
@@ -10,6 +12,8 @@ export type PayrollEmployee = {
   regular_hourly_rate: number | null;
   training_hourly_rate: number | null;
   fixed_weekly_salary: number | null;
+  worker_classification: WorkerClassification;
+  hiring_date: string | null;
   active: boolean;
   requires_compensation_review: boolean;
   internal_note: string | null;
@@ -36,6 +40,11 @@ export type WeeklyPayrollEntry = {
   regular_hours: number;
   training_hours: number;
   other_payments: number;
+  vacation_paid_hours: number;
+  sick_paid_hours: number;
+  holiday_paid_hours: number;
+  jury_duty_hours: number;
+  bereavement_hours: number;
   comment: string | null;
 };
 

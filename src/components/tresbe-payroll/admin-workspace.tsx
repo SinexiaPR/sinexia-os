@@ -209,6 +209,11 @@ export function TresbePayrollAdminWorkspace({
       tips: Number(entry.tips),
       fixedServiceAmount: Number(entry.fixed_service_amount),
       otherAdjustments: Number(entry.other_adjustments),
+      vacationPaidHours: Number(entry.vacation_paid_hours),
+      sickPaidHours: Number(entry.sick_paid_hours),
+      holidayPaidHours: Number(entry.holiday_paid_hours),
+      juryDutyHours: Number(entry.jury_duty_hours),
+      bereavementHours: Number(entry.bereavement_hours),
       serviceReason: (entry.service_reason || null) as
         | "Horas sobre 40"
         | "Empleado por servicios"
@@ -889,7 +894,7 @@ function CompactPayrollEntries({
 
   return (
     <div className="border-border max-h-[68vh] overflow-auto rounded-lg border">
-      <table className="w-full min-w-[1420px] border-collapse text-xs sm:text-[13px]">
+      <table className="w-full min-w-[1850px] border-collapse text-xs sm:text-[13px]">
         <thead className="bg-muted sticky top-0 z-10 text-[11px] tracking-wide uppercase">
           <tr className="border-border border-b">
             {[
@@ -905,6 +910,11 @@ function CompactPayrollEntries({
               "Cheque / override",
               "Ajustes",
               "Total",
+              "Vacaciones",
+              "Enfermedad",
+              "Feriado",
+              "Jurado",
+              "Duelo",
               "Comentario",
             ].map((heading) => (
               <th key={heading} className="px-2 py-2 text-left font-semibold">
@@ -1010,6 +1020,21 @@ function CompactPayrollEntries({
                 </td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
                   {money.format(result.employeeTotal)}
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "vacation_paid_hours", "Vacaciones pagadas")}
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "sick_paid_hours", "Enfermedad pagada")}
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "holiday_paid_hours", "Feriado pagado")}
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "jury_duty_hours", "Jurado")}
+                </td>
+                <td className="px-2 py-1.5">
+                  {numeric(entry, "bereavement_hours", "Duelo")}
                 </td>
                 <td className="px-2 py-1.5">
                   <input
@@ -1188,6 +1213,9 @@ function TresbeEmployeeDialog({
   const [rule, setRule] = useState<TresbePayrollRule>(
     employee?.payroll_rule ?? "unconfigured",
   );
+  const [workerClassification, setWorkerClassification] = useState<
+    TresbeEmployeeInput["workerClassification"]
+  >(employee?.worker_classification ?? "w2");
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
       <SurfaceCard className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-b-none sm:rounded-b-2xl">
@@ -1219,6 +1247,7 @@ function TresbeEmployeeDialog({
               defaultSalary: numeric("defaultSalary"),
               annualSalary: numeric("annualSalary"),
               hiringDate: String(data.get("hiringDate") || "") || null,
+              workerClassification,
               internalNote: String(data.get("internalNote") || "") || null,
               aliases: String(data.get("aliases") || "")
                 .split(/[\n,]/)
@@ -1264,6 +1293,22 @@ function TresbeEmployeeDialog({
               <option value="services">Servicios</option>
               <option value="mixed">Mixto</option>
               <option value="manual">Manual</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            Clasificación
+            <select
+              value={workerClassification}
+              onChange={(event) =>
+                setWorkerClassification(
+                  event.target.value as typeof workerClassification,
+                )
+              }
+              className={`${inputClass} mt-1`}
+            >
+              <option value="w2">W2 (nómina)</option>
+              <option value="services">Servicios</option>
+              <option value="contractor">Contratista</option>
             </select>
           </label>
           <label className="text-sm sm:col-span-2">

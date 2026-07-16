@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin, requireAuth } from "@/lib/auth/session";
+import {
+  reverseLeaveAccrualForTresbePayroll,
+  syncLeaveAccrualForTresbePayroll,
+} from "@/lib/leave-accrual/processing";
 import { createClient } from "@/lib/supabase/server";
 import {
   sendPayrollEmail,
@@ -50,6 +54,7 @@ const employeeSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable(),
+  workerClassification: z.enum(["w2", "services", "contractor"]),
   internalNote: z.string().trim().max(1000).nullable(),
   aliases: z.array(z.string().trim().min(1).max(202)).max(30),
 });
@@ -107,6 +112,7 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
     wage_source: "Manual administrator update",
     wage_updated_at: new Date().toISOString(),
     hiring_date: data.hiringDate,
+    worker_classification: data.workerClassification,
     internal_note: data.internalNote,
     updated_by: profile.id,
   };
@@ -267,6 +273,11 @@ const entrySchema = z.object({
   tips: z.number().min(0),
   fixedServiceAmount: z.number().min(0),
   otherAdjustments: z.number(),
+  vacationPaidHours: z.number().min(0),
+  sickPaidHours: z.number().min(0),
+  holidayPaidHours: z.number().min(0),
+  juryDutyHours: z.number().min(0),
+  bereavementHours: z.number().min(0),
   serviceReason: z
     .enum(["Horas sobre 40", "Empleado por servicios", "Ajuste manual", "Otro"])
     .nullable(),
@@ -371,6 +382,11 @@ export async function saveTresbePayrollDraft(params: {
         tips: entry.tips,
         fixed_service_amount: entry.fixedServiceAmount,
         other_adjustments: entry.otherAdjustments,
+        vacation_paid_hours: entry.vacationPaidHours,
+        sick_paid_hours: entry.sickPaidHours,
+        holiday_paid_hours: entry.holidayPaidHours,
+        jury_duty_hours: entry.juryDutyHours,
+        bereavement_hours: entry.bereavementHours,
         service_reason: entry.serviceReason,
         comment: entry.comment || null,
       })
@@ -456,6 +472,11 @@ export async function sendTresbePayrollToClient(params: {
         ? "Revisa tarifas, salarios, servicios y explicaciones antes de enviar."
         : error.message,
     };
+  try {
+    await syncLeaveAccrualForTresbePayroll(params.payrollId);
+  } catch (leaveError) {
+    console.error("syncLeaveAccrualForTresbePayroll", leaveError);
+  }
   revalidatePath(`/dashboard/admin/companies/${params.companyId}/payroll`);
   revalidatePath("/dashboard/payroll");
   revalidatePath("/dashboard", "layout");
@@ -478,6 +499,11 @@ export async function cancelTresbePayroll(
     p_reason: reason,
   });
   if (error) return { error: error.message };
+  try {
+    await reverseLeaveAccrualForTresbePayroll(payrollId);
+  } catch (leaveError) {
+    console.error("reverseLeaveAccrualForTresbePayroll", leaveError);
+  }
   revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
   return { success: true };
 }
@@ -561,6 +587,11 @@ export async function reopenTresbePayroll(
     p_reason: parsedReason.data,
   });
   if (error) return { error: error.message };
+  try {
+    await reverseLeaveAccrualForTresbePayroll(payrollId);
+  } catch (leaveError) {
+    console.error("reverseLeaveAccrualForTresbePayroll", leaveError);
+  }
   revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
   revalidatePath("/dashboard/payroll");
   return {

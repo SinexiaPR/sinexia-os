@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Banknote,
+  CalendarClock,
   CalendarDays,
   FileText,
   Inbox,
@@ -56,6 +57,11 @@ export const adminNavItems: NavItem[] = [
     title: "Facturación",
     href: "/dashboard/admin/invoices",
     icon: FileText,
+  },
+  {
+    title: "Vacaciones y enfermedad",
+    href: "/dashboard/admin/leave-accrual",
+    icon: CalendarClock,
   },
   {
     title: "Inbox",
