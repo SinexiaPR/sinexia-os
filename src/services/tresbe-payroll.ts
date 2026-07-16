@@ -4,6 +4,8 @@ import type { TresbePayrollRule } from "@/lib/tresbe-payroll/calculations";
 export type TresbePayrollStatus =
   "draft" | "calculated" | "sent" | "viewed" | "corrected" | "cancelled";
 
+export type WorkerClassification = "w2" | "services" | "contractor";
+
 export type TresbeEmployee = {
   id: string;
   company_id: string;
@@ -26,6 +28,7 @@ export type TresbeEmployee = {
   wage_source: string | null;
   wage_updated_at: string | null;
   hiring_date: string | null;
+  worker_classification: WorkerClassification;
   is_active: boolean;
   internal_note: string | null;
   tresbe_employee_aliases?: Array<{ alias_name: string }>;
@@ -82,6 +85,11 @@ export type TresbePayrollEntry = {
   service_check_amount: number;
   other_adjustments: number;
   employee_total: number;
+  vacation_paid_hours: number;
+  sick_paid_hours: number;
+  holiday_paid_hours: number;
+  jury_duty_hours: number;
+  bereavement_hours: number;
   service_reason: string | null;
   comment: string | null;
 };
