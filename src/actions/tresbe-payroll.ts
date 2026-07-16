@@ -46,6 +46,10 @@ const employeeSchema = z.object({
   defaultHours: z.number().min(0).nullable(),
   defaultSalary: z.number().min(0).nullable(),
   annualSalary: z.number().min(0).nullable(),
+  hiringDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
   internalNote: z.string().trim().max(1000).nullable(),
   aliases: z.array(z.string().trim().min(1).max(202)).max(30),
 });
@@ -102,6 +106,7 @@ export async function saveTresbeEmployee(input: TresbeEmployeeInput) {
       : "Wage requires administrator review",
     wage_source: "Manual administrator update",
     wage_updated_at: new Date().toISOString(),
+    hiring_date: data.hiringDate,
     internal_note: data.internalNote,
     updated_by: profile.id,
   };

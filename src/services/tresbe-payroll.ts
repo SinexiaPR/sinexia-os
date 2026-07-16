@@ -25,6 +25,7 @@ export type TresbeEmployee = {
   wage_review_reason: string | null;
   wage_source: string | null;
   wage_updated_at: string | null;
+  hiring_date: string | null;
   is_active: boolean;
   internal_note: string | null;
   tresbe_employee_aliases?: Array<{ alias_name: string }>;

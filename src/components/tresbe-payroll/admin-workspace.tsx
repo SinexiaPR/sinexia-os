@@ -52,6 +52,11 @@ const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
+const shortDate = new Intl.DateTimeFormat("es", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
 const inputClass =
   "h-8 w-full rounded-md border border-input bg-background px-2 text-xs sm:text-[13px]";
 const statusLabel: Record<TresbePayroll["status"], string> = {
@@ -742,6 +747,14 @@ export function TresbePayrollAdminWorkspace({
                       Salario anual {money.format(employee.annual_salary)}
                     </p>
                   ) : null}
+                  <p className="text-muted-foreground text-xs">
+                    Fecha de contratación:{" "}
+                    {employee.hiring_date
+                      ? shortDate.format(
+                          new Date(`${employee.hiring_date}T00:00:00`),
+                        )
+                      : "Sin registrar"}
+                  </p>
                   {employee.wage_requires_review ? (
                     <p className="mt-1 text-xs font-medium text-amber-700">
                       {reviewLabel(
@@ -1205,6 +1218,7 @@ function TresbeEmployeeDialog({
               defaultHours: numeric("defaultHours"),
               defaultSalary: numeric("defaultSalary"),
               annualSalary: numeric("annualSalary"),
+              hiringDate: String(data.get("hiringDate") || "") || null,
               internalNote: String(data.get("internalNote") || "") || null,
               aliases: String(data.get("aliases") || "")
                 .split(/[\n,]/)
@@ -1332,6 +1346,15 @@ function TresbeEmployeeDialog({
               min="0"
               step="0.01"
               defaultValue={employee?.annual_salary ?? ""}
+              className="mt-1"
+            />
+          </label>
+          <label className="text-sm">
+            Fecha de contratación
+            <Input
+              name="hiringDate"
+              type="date"
+              defaultValue={employee?.hiring_date ?? ""}
               className="mt-1"
             />
           </label>
