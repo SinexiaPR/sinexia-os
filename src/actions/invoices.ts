@@ -1,7 +1,9 @@
 "use server";
 
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { buildInvoicePdf } from "@/lib/invoices/pdf";
@@ -47,8 +49,8 @@ const invoiceDraftSchema = z
     taxRate: z.coerce.number().min(0).max(100),
     items: z.array(invoiceItemSchema).min(1).max(100),
   })
-  .refine((value) => value.dueDate >= value.invoiceDate, {
-    message: "La fecha de vencimiento no puede ser anterior a la factura.",
+  .refine((value) => value.dueDate === value.invoiceDate, {
+    message: "La fecha de vencimiento debe ser igual a la fecha de factura.",
     path: ["dueDate"],
   })
   .refine(
@@ -62,6 +64,34 @@ export type InvoiceDraftInput = z.infer<typeof invoiceDraftSchema>;
 function nullable(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+type InvoiceDatabaseError = { code?: string; message?: string };
+
+function invoiceSaveDatabaseError(params: {
+  error: InvoiceDatabaseError;
+  invoiceId?: string;
+  userId: string;
+  operation: string;
+}) {
+  const message = params.error.message ?? "Database error";
+  const isCalculationError =
+    params.operation === "recalculate_invoice_totals" ||
+    message.includes("recalculate_invoice_totals") ||
+    (message.includes("permission denied") && message.includes("function"));
+  console.error("Invoice draft database operation failed", {
+    invoice_id: params.invoiceId ?? null,
+    authenticated_user_id: params.userId,
+    function_called: isCalculationError
+      ? "public.recalculate_invoice_totals(uuid)"
+      : null,
+    postgres_error_code: params.error.code ?? null,
+    postgres_message: message,
+    operation: params.operation,
+  });
+  return isCalculationError
+    ? "No se pudieron calcular los totales de la factura. Verifique los conceptos e intente nuevamente."
+    : "No se pudo guardar la factura. Verifique los datos e intente nuevamente.";
 }
 
 async function addInvoiceEvent(
@@ -87,17 +117,18 @@ export async function saveInvoiceDraft(input: InvoiceDraftInput) {
   const supabase = await createClient();
   const value = parsed.data;
 
-  const { data: company } = await supabase
+  const { data: company, error: companyError } = await supabase
     .from("companies")
     .select("id")
     .eq("id", value.companyId)
     .maybeSingle();
-  if (!company) return { error: "Cliente no válido." };
+  if (companyError || !company) return { error: "Cliente no válido." };
 
   const header = {
     company_id: value.companyId,
     invoice_date: value.invoiceDate,
-    due_date: value.dueDate,
+    // Same-day terms are server-authoritative; never trust a different client date.
+    due_date: value.invoiceDate,
     currency: value.currency,
     billing_name_snapshot: value.billingName,
     billing_contact_snapshot: nullable(value.billingContact),
@@ -126,19 +157,42 @@ export async function saveInvoiceDraft(input: InvoiceDraftInput) {
       .from("invoices")
       .update(header)
       .eq("id", invoiceId);
-    if (update.error) return { error: update.error.message };
+    if (update.error)
+      return {
+        error: invoiceSaveDatabaseError({
+          error: update.error,
+          invoiceId,
+          userId: profile.id,
+          operation: "update_invoice_header",
+        }),
+      };
     const deleted = await supabase
       .from("invoice_items")
       .delete()
       .eq("invoice_id", invoiceId);
-    if (deleted.error) return { error: deleted.error.message };
+    if (deleted.error)
+      return {
+        error: invoiceSaveDatabaseError({
+          error: deleted.error,
+          invoiceId,
+          userId: profile.id,
+          operation: "delete_invoice_items",
+        }),
+      };
   } else {
     const inserted = await supabase
       .from("invoices")
       .insert({ ...header, created_by: profile.id })
       .select("id")
       .single();
-    if (inserted.error) return { error: inserted.error.message };
+    if (inserted.error)
+      return {
+        error: invoiceSaveDatabaseError({
+          error: inserted.error,
+          userId: profile.id,
+          operation: "insert_invoice_header",
+        }),
+      };
     invoiceId = inserted.data.id;
   }
 
@@ -168,8 +222,27 @@ export async function saveInvoiceDraft(input: InvoiceDraftInput) {
   if (insertedItems.error) {
     if (!value.invoiceId)
       await supabase.from("invoices").delete().eq("id", invoiceId!);
-    return { error: insertedItems.error.message };
+    return {
+      error: invoiceSaveDatabaseError({
+        error: insertedItems.error,
+        invoiceId,
+        userId: profile.id,
+        operation: "insert_invoice_items",
+      }),
+    };
   }
+  const recalculated = await supabase.rpc("recalculate_invoice_totals", {
+    value: invoiceId!,
+  });
+  if (recalculated.error)
+    return {
+      error: invoiceSaveDatabaseError({
+        error: recalculated.error,
+        invoiceId,
+        userId: profile.id,
+        operation: "recalculate_invoice_totals",
+      }),
+    };
   await addInvoiceEvent(
     invoiceId!,
     profile.id,
@@ -196,8 +269,21 @@ export async function generateInvoicePdf(invoiceId: string) {
       if (downloaded.error) throw downloaded.error;
       return new Uint8Array(await downloaded.data.arrayBuffer());
     };
+    const loadDefaultLogo = async () => {
+      try {
+        return new Uint8Array(
+          await readFile(
+            join(process.cwd(), "public", "sinexia-invoice-logo.png"),
+          ),
+        );
+      } catch {
+        return undefined;
+      }
+    };
     const [logoBytes, signatureBytes] = await Promise.all([
-      downloadAsset(settings.logo_storage_path),
+      settings.logo_storage_path
+        ? downloadAsset(settings.logo_storage_path)
+        : loadDefaultLogo(),
       downloadAsset(settings.signature_storage_path),
     ]);
     const bytes = await buildInvoicePdf({
@@ -258,17 +344,27 @@ export async function issueInvoice(invoiceId: string) {
   return { success: true, invoiceNumber: data as number };
 }
 
-export async function deleteInvoiceDraft(invoiceId: string) {
+export async function deleteInvoice(invoiceId: string) {
   await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("invoices")
-    .delete()
-    .eq("id", invoiceId)
-    .eq("status", "draft");
+  const { data: pdfStoragePath, error } = await supabase.rpc(
+    "delete_admin_invoice",
+    { p_invoice_id: invoiceId },
+  );
   if (error) return { error: error.message };
+  if (pdfStoragePath) {
+    const removed = await createAdminClient()
+      .storage.from("invoices")
+      .remove([String(pdfStoragePath)]);
+    if (removed.error)
+      console.error("Deleted invoice left an orphaned PDF", {
+        invoice_id: invoiceId,
+        storage_path: pdfStoragePath,
+        storage_error: removed.error.message,
+      });
+  }
   revalidatePath("/dashboard/admin/invoices");
-  redirect("/dashboard/admin/invoices");
+  return { success: true, deleted: true };
 }
 
 export async function duplicateInvoice(invoiceId: string) {
@@ -725,8 +821,6 @@ export async function createInvoiceFromRecurringProfile(recurringId: string) {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-  const due = new Date(`${invoiceDate}T12:00:00Z`);
-  due.setUTCDate(due.getUTCDate() + Number(recurring.default_terms_days ?? 15));
   const address = [
     billing?.address_line_1,
     billing?.address_line_2,
@@ -739,8 +833,8 @@ export async function createInvoiceFromRecurringProfile(recurringId: string) {
   return saveInvoiceDraft({
     companyId: company.id,
     invoiceDate,
-    dueDate: due.toISOString().slice(0, 10),
-    currency: settings?.default_currency ?? "USD",
+    dueDate: invoiceDate,
+    currency: recurring.default_currency ?? settings?.default_currency ?? "USD",
     billingName: billing?.billing_legal_name ?? company.name,
     billingContact: billing?.billing_contact_name ?? null,
     billingEmail: recurring.billing_email ?? billing?.billing_email ?? null,
@@ -752,7 +846,9 @@ export async function createInvoiceFromRecurringProfile(recurringId: string) {
     internalNote: `Creado desde perfil recurrente: ${recurring.name}`,
     discountType: "none",
     discountValue: 0,
-    taxRate: Number(settings?.default_tax_rate ?? 0),
+    taxRate: Number(
+      recurring.default_tax_rate ?? settings?.default_tax_rate ?? 0,
+    ),
     items: recurring.default_items,
   });
 }

@@ -64,10 +64,10 @@ function drawInvoiceHeader(params: {
 }) {
   const { page, regular, bold, invoice, settings } = params;
   if (params.logo) {
-    const scale = Math.min(110 / params.logo.width, 40 / params.logo.height, 1);
+    const scale = Math.min(150 / params.logo.width, 75 / params.logo.height, 1);
     page.drawImage(params.logo, {
       x: MARGIN,
-      y: 716,
+      y: 710,
       width: params.logo.width * scale,
       height: params.logo.height * scale,
     });

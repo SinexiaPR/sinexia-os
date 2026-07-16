@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 
 import {
   cancelInvoice,
-  deleteInvoiceDraft,
+  deleteInvoice,
   duplicateInvoice,
   emailInvoice,
   generateInvoicePdf,
@@ -51,12 +51,15 @@ export function InvoiceActions({ invoice }: { invoice: Invoice }) {
       error?: string;
       success?: boolean;
       invoiceId?: string;
+      deleted?: boolean;
     } | void>,
   ) {
     startTransition(async () => {
       setMessage(null);
       const result = await action();
       if (result && "error" in result && result.error) setMessage(result.error);
+      else if (result && "deleted" in result && result.deleted)
+        router.push("/dashboard/admin/invoices");
       else if (result && "invoiceId" in result && result.invoiceId)
         router.push(`/dashboard/admin/invoices/${result.invoiceId}`);
       else setMessage("Operación completada.");
@@ -93,10 +96,10 @@ export function InvoiceActions({ invoice }: { invoice: Invoice }) {
                       "¿Eliminar este borrador? No consume número oficial.",
                     )
                   )
-                    run(() => deleteInvoiceDraft(invoice.id));
+                    run(() => deleteInvoice(invoice.id));
                 }}
               >
-                Eliminar borrador
+                Eliminar factura
               </Button>
             </>
           ) : (
@@ -123,6 +126,22 @@ export function InvoiceActions({ invoice }: { invoice: Invoice }) {
                   onClick={() => run(() => duplicateInvoice(invoice.id))}
                 >
                   Duplicar como borrador
+                </Button>
+              ) : null}
+              {invoice.status === "cancelled" && !invoice.is_legacy_import ? (
+                <Button
+                  variant="destructive"
+                  disabled={pending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `¿Eliminar definitivamente la factura cancelada #${invoice.invoice_number}? Su número oficial no se reutilizará.`,
+                      )
+                    )
+                      run(() => deleteInvoice(invoice.id));
+                  }}
+                >
+                  Eliminar factura
                 </Button>
               ) : null}
               {!["paid", "cancelled"].includes(invoice.status) ? (

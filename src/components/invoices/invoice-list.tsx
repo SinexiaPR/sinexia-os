@@ -1,8 +1,11 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 
+import { deleteInvoice } from "@/actions/invoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
@@ -19,6 +22,9 @@ const statusLabels: Record<InvoiceStatus, string> = {
 };
 
 export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
   const [company, setCompany] = useState("");
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -128,6 +134,9 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
           <option value="not_sent">Correo no enviado</option>
         </select>
       </div>
+      {message ? (
+        <p className="text-destructive border-b px-3 py-3 text-sm">{message}</p>
+      ) : null}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1100px] text-left text-sm">
           <thead className="text-muted-foreground border-b text-xs uppercase">
@@ -172,11 +181,37 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                 <td>{invoice.sent_at?.slice(0, 10) ?? "—"}</td>
                 <td>{invoice.paid_at?.slice(0, 10) ?? "—"}</td>
                 <td className="text-right">
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={`/dashboard/admin/invoices/${invoice.id}`}>
-                      Ver
-                    </Link>
-                  </Button>
+                  <div className="flex justify-end gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/dashboard/admin/invoices/${invoice.id}`}>
+                        Ver
+                      </Link>
+                    </Button>
+                    {["draft", "cancelled"].includes(invoice.status) &&
+                    !invoice.is_legacy_import ? (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={pending}
+                        aria-label={`Eliminar factura ${invoice.status === "draft" ? "en borrador" : "cancelada"}`}
+                        onClick={() => {
+                          const warning =
+                            invoice.status === "cancelled"
+                              ? `¿Eliminar definitivamente la factura cancelada #${invoice.invoice_number}? Su número oficial no se reutilizará.`
+                              : "¿Eliminar esta factura de prueba? Esta acción no consume número oficial.";
+                          if (!window.confirm(warning)) return;
+                          startTransition(async () => {
+                            setMessage(null);
+                            const result = await deleteInvoice(invoice.id);
+                            if (result.error) setMessage(result.error);
+                            else router.refresh();
+                          });
+                        }}
+                      >
+                        <Trash2 className="size-4" /> Eliminar
+                      </Button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}

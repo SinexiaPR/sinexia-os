@@ -33,20 +33,37 @@ export async function getRecurringInvoiceProfiles() {
 
 export async function getBillingCompanies(): Promise<BillingCompany[]> {
   const supabase = await createClient();
-  const [{ data: companies, error }, { data: profiles, error: profileError }] =
-    await Promise.all([
-      supabase.from("companies").select("id,name,slug").order("name"),
-      supabase.from("company_billing_profiles").select("*"),
-    ]);
+  const [
+    { data: companies, error },
+    { data: profiles, error: profileError },
+    { data: templates, error: templateError },
+  ] = await Promise.all([
+    supabase.from("companies").select("id,name,slug").order("name"),
+    supabase.from("company_billing_profiles").select("*"),
+    supabase
+      .from("recurring_invoice_profiles")
+      .select("*")
+      .eq("frequency", "weekly")
+      .eq("enabled", true)
+      .not("template_key", "is", null)
+      .lte("effective_date", new Date().toISOString().slice(0, 10))
+      .order("effective_date", { ascending: false }),
+  ]);
   if (error) throw error;
   if (profileError) throw profileError;
+  if (templateError) throw templateError;
   const profileMap = new Map(
     (profiles ?? []).map((profile) => [profile.company_id, profile]),
   );
+  const templateMap = new Map<string, RecurringInvoiceProfile>();
+  for (const template of templates ?? [])
+    if (!templateMap.has(template.company_id))
+      templateMap.set(template.company_id, template as RecurringInvoiceProfile);
   return (companies ?? []).map((company) => ({
     ...company,
     billingProfile:
       (profileMap.get(company.id) as CompanyBillingProfile) ?? null,
+    weeklyInvoiceTemplate: templateMap.get(company.id) ?? null,
   }));
 }
 
