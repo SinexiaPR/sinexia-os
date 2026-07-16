@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
   calculateTresbeEntry,
+  getServiceCheckPayAmount,
   sumTresbePayroll,
 } from "../src/lib/tresbe-payroll/calculations";
 
@@ -131,6 +132,61 @@ const fixedWeeklyFullService = calculateTresbeEntry({
 assert.equal(fixedWeeklyFullService.systemPay, 0);
 assert.equal(fixedWeeklyFullService.serviceCheckAmount, 220);
 assert.equal(fixedWeeklyFullService.employeeTotal, 235);
+
+// Cheque de servicios: empleado 100% servicios con tips debe incluir los tips.
+assert.equal(
+  getServiceCheckPayAmount("full_services", fullService),
+  fullService.employeeTotal,
+  "full_services check must include tips",
+);
+assert.equal(getServiceCheckPayAmount("full_services", fullService), 385);
+
+// Empleado 100% servicios sin tips: el cheque no cambia (ya es igual a serviceCheckAmount).
+const fullServiceNoTips = calculateTresbeEntry({
+  ...base,
+  payrollRule: "full_services",
+  totalWeeklyHours: 20,
+  serviceRate: 18,
+});
+assert.equal(
+  getServiceCheckPayAmount("full_services", fullServiceNoTips),
+  fullServiceNoTips.serviceCheckAmount,
+);
+assert.equal(getServiceCheckPayAmount("full_services", fullServiceNoTips), 360);
+
+// Empleado de nómina regular con tips: no debe generarse cheque de servicios.
+const pureSalaryWithTips = calculateTresbeEntry({
+  ...base,
+  payrollRule: "fixed_weekly_salary",
+  totalWeeklyHours: 40,
+  weeklySalary: 900,
+  tips: 40,
+});
+assert.equal(
+  getServiceCheckPayAmount("fixed_weekly_salary", pureSalaryWithTips),
+  0,
+  "pure-payroll employees must never get a service check, tips or not",
+);
+
+// Empleado con pago mixto (nómina + servicios) con tips: el cheque de servicios
+// no debe incluir los tips (siguen mostrándose aparte, sin cambios).
+const mixedWithTips = calculateTresbeEntry({
+  ...base,
+  payrollRule: "standard_hourly_40_plus_services",
+  totalWeeklyHours: 45,
+  regularRate: 10,
+  serviceRate: 20,
+  tips: 30,
+});
+assert.equal(
+  getServiceCheckPayAmount("standard_hourly_40_plus_services", mixedWithTips),
+  mixedWithTips.serviceCheckAmount,
+  "mixed employees' check amount must not include tips",
+);
+assert.equal(
+  getServiceCheckPayAmount("standard_hourly_40_plus_services", mixedWithTips),
+  100,
+);
 
 for (const rule of [
   "preset_40_weekly_salary",

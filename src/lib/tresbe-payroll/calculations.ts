@@ -94,6 +94,21 @@ export function calculateTresbeEntry(
   };
 }
 
+/**
+ * The amount the single services check must be written for. For
+ * `full_services` employees this must include tips (matching Total a
+ * pagar exactly) so no separate tip check is ever produced; every other
+ * payroll rule keeps the services-only amount.
+ */
+export function getServiceCheckPayAmount(
+  payrollRule: TresbePayrollRule,
+  calculation: Pick<TresbeCalculation, "serviceCheckAmount" | "employeeTotal">,
+): number {
+  return payrollRule === "full_services"
+    ? calculation.employeeTotal
+    : calculation.serviceCheckAmount;
+}
+
 export function sumTresbePayroll(
   entries: Array<TresbeCalculationInput & { employeeTotal?: number }>,
 ) {

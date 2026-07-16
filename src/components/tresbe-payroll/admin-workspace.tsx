@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import {
   calculateTresbeEntry,
+  getServiceCheckPayAmount,
   TRESBE_RULE_LABELS,
   type TresbePayrollRule,
 } from "@/lib/tresbe-payroll/calculations";
@@ -1038,6 +1039,14 @@ function PayrollSummary({ entries }: { entries: TresbePayrollEntry[] }) {
     }),
     { system: 0, tips: 0, services: 0, adjustments: 0, grand: 0 },
   );
+  const serviceCheckPayoutTotal = rows
+    .filter((row) => row.result.serviceCheckAmount > 0)
+    .reduce(
+      (sum, row) =>
+        sum +
+        getServiceCheckPayAmount(row.entry.payroll_rule_snapshot, row.result),
+      0,
+    );
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <SurfaceCard>
@@ -1091,21 +1100,30 @@ function PayrollSummary({ entries }: { entries: TresbePayrollEntry[] }) {
           {rows.filter((row) => row.result.serviceCheckAmount > 0).length ? (
             rows
               .filter((row) => row.result.serviceCheckAmount > 0)
-              .map(({ entry, result }) => (
-                <div key={entry.id} className="rounded-lg border p-3 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <strong>{entry.employee_name_snapshot}</strong>
-                    <strong>{money.format(result.serviceCheckAmount)}</strong>
+              .map(({ entry, result }) => {
+                const checkAmount = getServiceCheckPayAmount(
+                  entry.payroll_rule_snapshot,
+                  result,
+                );
+                return (
+                  <div
+                    key={entry.id}
+                    className="rounded-lg border p-3 text-sm"
+                  >
+                    <div className="flex justify-between gap-3">
+                      <strong>{entry.employee_name_snapshot}</strong>
+                      <strong>{money.format(checkAmount)}</strong>
+                    </div>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      {entry.service_reason ??
+                        (entry.payroll_rule_snapshot === "full_services"
+                          ? "Empleado por servicios"
+                          : "Horas sobre 40")}{" "}
+                      · {result.serviceHours} horas
+                    </p>
                   </div>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {entry.service_reason ??
-                      (entry.payroll_rule_snapshot === "full_services"
-                        ? "Empleado por servicios"
-                        : "Horas sobre 40")}{" "}
-                    · {result.serviceHours} horas
-                  </p>
-                </div>
-              ))
+                );
+              })
           ) : (
             <p className="text-muted-foreground text-sm">
               No hay cheques de servicios en esta semana.
@@ -1114,7 +1132,7 @@ function PayrollSummary({ entries }: { entries: TresbePayrollEntry[] }) {
         </div>
         <SummaryLine
           label="TOTAL CHEQUES DE SERVICIOS"
-          value={totals.services}
+          value={serviceCheckPayoutTotal}
           strong
         />
       </SurfaceCard>
