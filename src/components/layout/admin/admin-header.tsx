@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { SignOutControl } from "@/components/auth/sign-out-control";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { InstallMenuItem } from "@/components/pwa/install-menu-item";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -118,6 +119,7 @@ export function AdminHeader({
           <DropdownMenuItem asChild>
             <Link href="/dashboard/profile">Perfil</Link>
           </DropdownMenuItem>
+          <InstallMenuItem />
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
