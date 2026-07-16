@@ -130,6 +130,11 @@ const entry: WeeklyPayrollEntry = {
   regular_hours: 40,
   training_hours: 2,
   other_payments: 25,
+  vacation_paid_hours: 0,
+  sick_paid_hours: 0,
+  holiday_paid_hours: 0,
+  jury_duty_hours: 0,
+  bereavement_hours: 0,
   comment: null,
 };
 assert.equal(calculatePayrollEntry(entry), 455);

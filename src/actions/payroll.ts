@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAuth } from "@/lib/auth/session";
+import {
+  reverseLeaveAccrualForSibaritaPayroll,
+  syncLeaveAccrualForSibaritaPayroll,
+} from "@/lib/leave-accrual/processing";
 import { createClient } from "@/lib/supabase/server";
 import { resolveSibaritaCompany } from "@/services/payroll";
 
@@ -27,6 +31,11 @@ const employeeSchema = z.object({
   regularRate: z.number().min(0).nullable(),
   trainingRate: z.number().min(0).nullable(),
   fixedSalary: z.number().min(0).nullable(),
+  workerClassification: z.enum(["w2", "services", "contractor"]),
+  hiringDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
   internalNote: z.string().trim().max(1000).nullable().optional(),
 });
 
@@ -69,6 +78,8 @@ export async function savePayrollEmployee(input: PayrollEmployeeInput) {
       data.compensationType === "hourly_training" ? data.trainingRate : 0,
     fixed_weekly_salary:
       data.compensationType === "fixed_weekly" ? data.fixedSalary : null,
+    worker_classification: data.workerClassification,
+    hiring_date: data.hiringDate,
     requires_compensation_review: false,
     internal_note: data.internalNote ?? null,
   };
@@ -148,6 +159,11 @@ const entryUpdateSchema = z.object({
   regularHours: z.number().min(0),
   trainingHours: z.number().min(0),
   otherPayments: z.number().min(0),
+  vacationPaidHours: z.number().min(0),
+  sickPaidHours: z.number().min(0),
+  holidayPaidHours: z.number().min(0),
+  juryDutyHours: z.number().min(0),
+  bereavementHours: z.number().min(0),
   comment: z.string().max(500).nullable(),
 });
 export type PayrollEntryUpdate = z.infer<typeof entryUpdateSchema>;
@@ -180,6 +196,11 @@ export async function saveWeeklyPayrollEntries(
         regular_hours: update.regularHours,
         training_hours: update.trainingHours,
         other_payments: update.otherPayments,
+        vacation_paid_hours: update.vacationPaidHours,
+        sick_paid_hours: update.sickPaidHours,
+        holiday_paid_hours: update.holidayPaidHours,
+        jury_duty_hours: update.juryDutyHours,
+        bereavement_hours: update.bereavementHours,
         comment: update.comment,
       })
       .eq("id", update.id)
@@ -236,6 +257,11 @@ export async function approveWeeklyPayroll(
     .eq("company_id", companyId)
     .eq("status", "submitted");
   if (error) return { error: error.message };
+  try {
+    await syncLeaveAccrualForSibaritaPayroll(payrollId);
+  } catch (leaveError) {
+    console.error("syncLeaveAccrualForSibaritaPayroll", leaveError);
+  }
   revalidatePath("/dashboard/payroll");
   return { success: true };
 }
@@ -276,6 +302,11 @@ export async function reopenWeeklyPayroll(
   });
 
   if (error) return { error: error.message };
+  try {
+    await reverseLeaveAccrualForSibaritaPayroll(parsed.data.payrollId);
+  } catch (leaveError) {
+    console.error("reverseLeaveAccrualForSibaritaPayroll", leaveError);
+  }
   revalidatePath("/dashboard/payroll");
   return { success: true };
 }

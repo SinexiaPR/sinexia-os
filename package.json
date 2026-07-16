@@ -23,6 +23,7 @@
     "test:tresbe-wages": "tsx scripts/test-tresbe-wages.ts",
     "test:tresbe-revisions": "tsx scripts/test-tresbe-payroll-revisions.ts",
     "test:tresbe-stabilization": "tsx scripts/test-tresbe-stabilization.ts",
+    "test:leave-accrual": "tsx scripts/test-leave-accrual.ts",
     "test:invoices": "tsx scripts/test-invoices.ts",
     "test:invoice-visibility": "tsx scripts/test-invoice-client-visibility.ts",
     "audit:security": "tsx scripts/audit-security.ts",

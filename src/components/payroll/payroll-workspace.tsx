@@ -69,7 +69,16 @@ export function PayrollWorkspace({
   );
   const updateEntry = (
     id: string,
-    field: "regular_hours" | "training_hours" | "other_payments" | "comment",
+    field:
+      | "regular_hours"
+      | "training_hours"
+      | "other_payments"
+      | "vacation_paid_hours"
+      | "sick_paid_hours"
+      | "holiday_paid_hours"
+      | "jury_duty_hours"
+      | "bereavement_hours"
+      | "comment",
     value: string,
   ) =>
     setEntryState((current) =>
@@ -299,6 +308,101 @@ export function PayrollWorkspace({
                         />
                       </label>
                     </div>
+                    <p className="text-muted-foreground mt-4 text-xs font-medium tracking-wide uppercase">
+                      Licencias (solo para acumulación de vacaciones/enfermedad)
+                    </p>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-5">
+                      <label className="text-muted-foreground text-xs">
+                        Vacaciones pagadas
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.vacation_paid_hours}
+                          disabled={selected.status !== "draft"}
+                          onChange={(e) =>
+                            updateEntry(
+                              entry.id,
+                              "vacation_paid_hours",
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="text-muted-foreground text-xs">
+                        Enfermedad pagada
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.sick_paid_hours}
+                          disabled={selected.status !== "draft"}
+                          onChange={(e) =>
+                            updateEntry(
+                              entry.id,
+                              "sick_paid_hours",
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="text-muted-foreground text-xs">
+                        Feriado pagado
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.holiday_paid_hours}
+                          disabled={selected.status !== "draft"}
+                          onChange={(e) =>
+                            updateEntry(
+                              entry.id,
+                              "holiday_paid_hours",
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="text-muted-foreground text-xs">
+                        Jurado
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.jury_duty_hours}
+                          disabled={selected.status !== "draft"}
+                          onChange={(e) =>
+                            updateEntry(
+                              entry.id,
+                              "jury_duty_hours",
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="text-muted-foreground text-xs">
+                        Duelo
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.bereavement_hours}
+                          disabled={selected.status !== "draft"}
+                          onChange={(e) =>
+                            updateEntry(
+                              entry.id,
+                              "bereavement_hours",
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                    </div>
                   </SurfaceCard>
                 ))}
               </div>
@@ -317,6 +421,11 @@ export function PayrollWorkspace({
                             regularHours: Number(item.regular_hours),
                             trainingHours: Number(item.training_hours),
                             otherPayments: Number(item.other_payments),
+                            vacationPaidHours: Number(item.vacation_paid_hours),
+                            sickPaidHours: Number(item.sick_paid_hours),
+                            holidayPaidHours: Number(item.holiday_paid_hours),
+                            juryDutyHours: Number(item.jury_duty_hours),
+                            bereavementHours: Number(item.bereavement_hours),
                             comment: item.comment,
                           })),
                         ),
@@ -338,6 +447,11 @@ export function PayrollWorkspace({
                             regularHours: Number(item.regular_hours),
                             trainingHours: Number(item.training_hours),
                             otherPayments: Number(item.other_payments),
+                            vacationPaidHours: Number(item.vacation_paid_hours),
+                            sickPaidHours: Number(item.sick_paid_hours),
+                            holidayPaidHours: Number(item.holiday_paid_hours),
+                            juryDutyHours: Number(item.jury_duty_hours),
+                            bereavementHours: Number(item.bereavement_hours),
                             comment: item.comment,
                           })),
                         );
@@ -470,6 +584,7 @@ export function PayrollWorkspace({
         <EmployeeDialog
           companyId={company.id}
           employee={employeeForm === "new" ? null : employeeForm}
+          isAdmin={isAdmin}
           pending={pending}
           onClose={() => setEmployeeForm(null)}
           onSave={(input) => run(() => savePayrollEmployee(input))}
@@ -529,12 +644,14 @@ export function PayrollWorkspace({
 function EmployeeDialog({
   companyId,
   employee,
+  isAdmin,
   pending,
   onClose,
   onSave,
 }: {
   companyId: string;
   employee: PayrollEmployee | null;
+  isAdmin: boolean;
   pending: boolean;
   onClose: () => void;
   onSave: (input: PayrollEmployeeInput) => void;
@@ -542,6 +659,9 @@ function EmployeeDialog({
   const [type, setType] = useState<
     "hourly" | "hourly_training" | "fixed_weekly"
   >(employee?.compensation_type ?? "hourly");
+  const [workerClassification, setWorkerClassification] = useState<
+    PayrollEmployeeInput["workerClassification"]
+  >(employee?.worker_classification ?? "w2");
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
       <SurfaceCard className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-b-none sm:rounded-b-2xl">
@@ -573,6 +693,12 @@ function EmployeeDialog({
               regularRate: number("regularRate"),
               trainingRate: number("trainingRate"),
               fixedSalary: number("fixedSalary"),
+              workerClassification: isAdmin
+                ? workerClassification
+                : (employee?.worker_classification ?? "w2"),
+              hiringDate: isAdmin
+                ? String(data.get("hiringDate") || "") || null
+                : (employee?.hiring_date ?? null),
               internalNote: String(data.get("internalNote") || "") || null,
             });
           }}
@@ -622,6 +748,35 @@ function EmployeeDialog({
               <option value="fixed_weekly">Salario semanal fijo</option>
             </select>
           </label>
+          {isAdmin ? (
+            <>
+              <label className="text-sm">
+                Clasificación
+                <select
+                  value={workerClassification}
+                  onChange={(e) =>
+                    setWorkerClassification(
+                      e.target.value as typeof workerClassification,
+                    )
+                  }
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="w2">W2 (nómina)</option>
+                  <option value="services">Servicios</option>
+                  <option value="contractor">Contratista</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                Fecha de contratación
+                <Input
+                  name="hiringDate"
+                  type="date"
+                  defaultValue={employee?.hiring_date ?? ""}
+                  className="mt-1"
+                />
+              </label>
+            </>
+          ) : null}
           {type !== "fixed_weekly" ? (
             <label className="text-sm">
               Tarifa regular
