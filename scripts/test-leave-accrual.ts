@@ -179,6 +179,55 @@ assert.equal(monthsOfService("2025-01-15", 2025, 12), 11);
   assert.deepEqual(replayLeaveHistory(input), replayLeaveHistory(input));
 }
 
+// --- replay: opening balance seeds the running balance before month 1 ---
+{
+  const results = replayLeaveHistory({
+    hiringDate: "2021-01-01",
+    months: [month({ year: 2026, month: 8, qualifyingHours: 130 })],
+    sickBalanceCapHours: DEFAULT_SICK_BALANCE_CAP_HOURS,
+    openingVacationHours: 50,
+    openingSickHours: 60,
+  });
+  assert.equal(results[0].tenureTier, "five_to_fifteen", "tier still comes from hiringDate, not the opening balance");
+  assert.equal(results[0].vacationAccruedHours, 8);
+  assert.equal(results[0].vacationBalanceAfterHours, 58, "50 opening + 8 accrued");
+  assert.equal(results[0].sickBalanceAfterHours, 68, "60 opening + 8 accrued");
+}
+
+// --- replay: opening balance still respects the sick cap and vacation clamp ---
+{
+  const results = replayLeaveHistory({
+    hiringDate: "2021-01-01",
+    months: [
+      month({ year: 2026, month: 8, qualifyingHours: 130, vacationUsedHours: 200 }),
+    ],
+    sickBalanceCapHours: DEFAULT_SICK_BALANCE_CAP_HOURS,
+    openingVacationHours: 150,
+    openingSickHours: 118,
+  });
+  assert.equal(
+    results[0].vacationBalanceAfterHours,
+    0,
+    "150 opening + 8 accrued - 200 used must clamp at 0, never negative",
+  );
+  assert.equal(
+    results[0].sickBalanceAfterHours,
+    DEFAULT_SICK_BALANCE_CAP_HOURS,
+    "118 opening + 8 accrued must clamp at the cap, not 126",
+  );
+}
+
+// --- replay: no opening balance defaults to starting from zero (unchanged behavior) ---
+{
+  const results = replayLeaveHistory({
+    hiringDate: "2025-01-01",
+    months: [month({ year: 2025, month: 3, qualifyingHours: 130 })],
+    sickBalanceCapHours: DEFAULT_SICK_BALANCE_CAP_HOURS,
+  });
+  assert.equal(results[0].vacationBalanceAfterHours, 4);
+  assert.equal(results[0].sickBalanceAfterHours, 8);
+}
+
 // --- payMonthFor / enumerateMonths ---
 assert.deepEqual(payMonthFor("2026-02-03"), { year: 2026, month: 2 });
 assert.deepEqual(enumerateMonths(2025, 11, 2026, 2), [

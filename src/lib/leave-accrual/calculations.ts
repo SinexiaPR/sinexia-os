@@ -124,18 +124,29 @@ export type MonthAccrualResult = {
  * genuinely zero-hour month has no effect on the resulting balances (tier
  * is computed from the calendar date, not from the count of prior months),
  * but including it keeps a complete monthly audit trail.
+ *
+ * `openingVacationHours`/`openingSickHours` seed the running balance before
+ * the first month in `months` is replayed, instead of starting at zero.
+ * This is how a pre-existing historical balance (e.g. imported from a prior
+ * payroll system when this module first goes live) survives a future
+ * recompute: the opening balance is stored once (see
+ * `employee_leave_opening_balances`) and re-applied every replay, while
+ * `months` only ever needs to cover activity tracked by this system's own
+ * ledger going forward.
  */
 export function replayLeaveHistory(params: {
   hiringDate: string;
   months: MonthLedgerInput[];
   sickBalanceCapHours: number;
+  openingVacationHours?: number;
+  openingSickHours?: number;
 }): MonthAccrualResult[] {
   const sorted = [...params.months].sort((a, b) =>
     a.year !== b.year ? a.year - b.year : a.month - b.month,
   );
 
-  let vacationBalance = 0;
-  let sickBalance = 0;
+  let vacationBalance = params.openingVacationHours ?? 0;
+  let sickBalance = params.openingSickHours ?? 0;
   const results: MonthAccrualResult[] = [];
 
   for (const monthInput of sorted) {
