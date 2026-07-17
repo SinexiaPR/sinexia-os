@@ -65,11 +65,24 @@ async function upsertLedgerRow(
   if (error) throw error;
 }
 
+/** year*12+month, for cheap month-range comparisons without Date objects. */
+function monthKey(year: number, month: number): number {
+  return year * 12 + month;
+}
+
+function monthFromKey(key: number): { year: number; month: number } {
+  const year = Math.floor((key - 1) / 12);
+  const month = key - year * 12;
+  return { year, month };
+}
+
 /**
  * Fully recomputes and persists one employee's leave balance/history from
- * their active (non-reversed) ledger rows. Derived, not incremental: safe
- * to call as many times as needed, always converges to the same result for
- * the same ledger state (see replayLeaveHistory's doc comment).
+ * their active (non-reversed) ledger rows, seeded by an opening balance
+ * (see `employee_leave_opening_balances`) when one exists. Derived, not
+ * incremental: safe to call as many times as needed, always converges to
+ * the same result for the same ledger + opening-balance state (see
+ * replayLeaveHistory's doc comment).
  */
 async function replayAndPersistBalance(
   supabase: SupabaseClient,
@@ -80,7 +93,7 @@ async function replayAndPersistBalance(
 ) {
   const employeeColumn = employeeColumnFor(sourceSystem);
 
-  const [ledgerResult, sickBalanceCapHours] = await Promise.all([
+  const [ledgerResult, sickBalanceCapHours, openingResult] = await Promise.all([
     supabase
       .from("employee_leave_ledger_entries")
       .select("period_year,period_month,qualifying_hours,vacation_used_hours,sick_used_hours")
@@ -88,8 +101,16 @@ async function replayAndPersistBalance(
       .eq(employeeColumn, employeeId)
       .is("reversed_at", null),
     getSickBalanceCapHours(supabase, companyId),
+    supabase
+      .from("employee_leave_opening_balances")
+      .select("opening_vacation_hours,opening_sick_hours,as_of_year,as_of_month")
+      .eq("source_system", sourceSystem)
+      .eq(employeeColumn, employeeId)
+      .maybeSingle(),
   ]);
   if (ledgerResult.error) throw ledgerResult.error;
+  if (openingResult.error) throw openingResult.error;
+  const opening = openingResult.data;
 
   const byMonth = new Map<string, MonthLedgerInput>();
   for (const row of ledgerResult.data ?? []) {
@@ -108,13 +129,36 @@ async function replayAndPersistBalance(
   }
 
   if (byMonth.size === 0) {
-    // Every payroll that ever touched this employee has since been
-    // reopened/reversed with nothing reprocessed yet — nothing to show.
-    await supabase
-      .from("employee_leave_balances")
-      .delete()
-      .eq("source_system", sourceSystem)
-      .eq(employeeColumn, employeeId);
+    if (!opening) {
+      // Every payroll that ever touched this employee has since been
+      // reopened/reversed with nothing reprocessed yet — nothing to show.
+      await supabase
+        .from("employee_leave_balances")
+        .delete()
+        .eq("source_system", sourceSystem)
+        .eq(employeeColumn, employeeId);
+      return;
+    }
+    // No ledger activity yet, but a historical opening balance was imported
+    // (e.g. from a prior payroll system) — that balance IS the current one.
+    const { error: balanceError } = await supabase.from("employee_leave_balances").upsert(
+      {
+        company_id: companyId,
+        source_system: sourceSystem,
+        [employeeColumn]: employeeId,
+        vacation_balance_hours: Number(opening.opening_vacation_hours),
+        sick_balance_hours: Number(opening.opening_sick_hours),
+        vacation_accrued_lifetime_hours: Number(opening.opening_vacation_hours),
+        sick_accrued_lifetime_hours: Number(opening.opening_sick_hours),
+        vacation_used_lifetime_hours: 0,
+        sick_used_lifetime_hours: 0,
+        last_replayed_year: opening.as_of_year,
+        last_replayed_month: opening.as_of_month,
+        last_payroll_processed_at: new Date().toISOString(),
+      },
+      { onConflict: employeeColumn },
+    );
+    if (balanceError) throw balanceError;
     return;
   }
 
@@ -127,9 +171,24 @@ async function replayAndPersistBalance(
   const last = activeMonths[activeMonths.length - 1];
   const [hiringYear, hiringMonth] = hiringDate.split("-").map(Number);
 
+  // Months already summarized by the opening balance don't need to be
+  // replayed again (they'd only ever be zero-hour gap months anyway, since
+  // real ledger activity only exists once this module went live) — start
+  // right after the opening balance's as-of month. Guard against an
+  // inconsistent opening balance dated after ledger activity already
+  // started by never starting later than the earliest active month.
+  const hiringStartKey = monthKey(hiringYear, hiringMonth);
+  const openingStartKey = opening ? monthKey(opening.as_of_year, opening.as_of_month) + 1 : null;
+  const earliestActiveKey = monthKey(activeMonths[0].year, activeMonths[0].month);
+  const startKey = Math.min(
+    openingStartKey ?? hiringStartKey,
+    earliestActiveKey,
+  );
+  const { year: startYear, month: startMonth } = monthFromKey(startKey);
+
   const months: MonthLedgerInput[] = enumerateMonths(
-    hiringYear,
-    hiringMonth,
+    startYear,
+    startMonth,
     last.year,
     last.month,
   ).map(({ year, month }) => {
@@ -145,7 +204,13 @@ async function replayAndPersistBalance(
     );
   });
 
-  const results = replayLeaveHistory({ hiringDate, months, sickBalanceCapHours });
+  const results = replayLeaveHistory({
+    hiringDate,
+    months,
+    sickBalanceCapHours,
+    openingVacationHours: opening ? Number(opening.opening_vacation_hours) : undefined,
+    openingSickHours: opening ? Number(opening.opening_sick_hours) : undefined,
+  });
   const final = results[results.length - 1];
 
   const historyRows = results.map((result) => ({
@@ -182,7 +247,16 @@ async function replayAndPersistBalance(
       vacationUsed: sum.vacationUsed + result.vacationUsedHours,
       sickUsed: sum.sickUsed + result.sickUsedHours,
     }),
-    { vacationAccrued: 0, sickAccrued: 0, vacationUsed: 0, sickUsed: 0 },
+    {
+      // The opening balance folds in whatever mix of historical accrual and
+      // usage produced it — with no further breakdown available, it's
+      // counted here as "accrued" so lifetime totals stay reconcilable
+      // with the current balance (accrued - used = balance).
+      vacationAccrued: opening ? Number(opening.opening_vacation_hours) : 0,
+      sickAccrued: opening ? Number(opening.opening_sick_hours) : 0,
+      vacationUsed: 0,
+      sickUsed: 0,
+    },
   );
 
   const { error: balanceError } = await supabase
