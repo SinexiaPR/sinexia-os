@@ -2,9 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   DEFAULT_SICK_BALANCE_CAP_HOURS,
   enumerateMonths,
-  payMonthFor,
   qualifyingHoursFromCategories,
   replayLeaveHistory,
+  splitHoursAcrossMonths,
   type MonthLedgerInput,
 } from "@/lib/leave-accrual/calculations";
 
@@ -67,7 +67,7 @@ async function upsertLedgerRow(
   };
   const { error } = await supabase
     .from("employee_leave_ledger_entries")
-    .upsert(payload, { onConflict: entryColumnFor(sourceSystem) });
+    .upsert(payload, { onConflict: `${entryColumnFor(sourceSystem)},period_year,period_month` });
   if (error) throw error;
 }
 
@@ -321,7 +321,7 @@ export async function syncLeaveAccrualForSibaritaPayroll(payrollId: string) {
   const supabase = await createClient();
   const { data: payroll, error: payrollError } = await supabase
     .from("weekly_payrolls")
-    .select("id,company_id,week_end")
+    .select("id,company_id,week_start,week_end")
     .eq("id", payrollId)
     .maybeSingle();
   if (payrollError) throw payrollError;
@@ -344,7 +344,6 @@ export async function syncLeaveAccrualForSibaritaPayroll(payrollId: string) {
   if (employeesError) throw employeesError;
   const employeeById = new Map((employees ?? []).map((employee) => [employee.id, employee]));
 
-  const { year, month } = payMonthFor(payroll.week_end);
   const touchedEmployeeIds = new Set<string>();
 
   for (const entry of entries) {
@@ -360,17 +359,24 @@ export async function syncLeaveAccrualForSibaritaPayroll(payrollId: string) {
       juryDutyHours: Number(entry.jury_duty_hours),
       bereavementHours: Number(entry.bereavement_hours),
     });
-    await upsertLedgerRow(supabase, "sibarita", {
-      companyId: payroll.company_id,
-      employeeId: employee.id,
-      entryId: entry.id,
-      payrollId: payroll.id,
-      periodYear: year,
-      periodMonth: month,
+    const portions = splitHoursAcrossMonths(payroll.week_start, {
       qualifyingHours,
       vacationUsedHours: Number(entry.vacation_paid_hours),
       sickUsedHours: Number(entry.sick_paid_hours),
     });
+    for (const portion of portions) {
+      await upsertLedgerRow(supabase, "sibarita", {
+        companyId: payroll.company_id,
+        employeeId: employee.id,
+        entryId: entry.id,
+        payrollId: payroll.id,
+        periodYear: portion.year,
+        periodMonth: portion.month,
+        qualifyingHours: portion.qualifyingHours,
+        vacationUsedHours: portion.vacationUsedHours,
+        sickUsedHours: portion.sickUsedHours,
+      });
+    }
     touchedEmployeeIds.add(employee.id);
   }
 
@@ -439,7 +445,7 @@ export async function syncLeaveAccrualForTresbePayroll(payrollId: string) {
   const supabase = await createClient();
   const { data: payroll, error: payrollError } = await supabase
     .from("tresbe_payrolls")
-    .select("id,company_id,week_end")
+    .select("id,company_id,week_start,week_end")
     .eq("id", payrollId)
     .maybeSingle();
   if (payrollError) throw payrollError;
@@ -462,7 +468,6 @@ export async function syncLeaveAccrualForTresbePayroll(payrollId: string) {
   if (employeesError) throw employeesError;
   const employeeById = new Map((employees ?? []).map((employee) => [employee.id, employee]));
 
-  const { year, month } = payMonthFor(payroll.week_end);
   const touchedEmployeeIds = new Set<string>();
 
   for (const entry of entries) {
@@ -481,17 +486,24 @@ export async function syncLeaveAccrualForTresbePayroll(payrollId: string) {
       juryDutyHours: Number(entry.jury_duty_hours),
       bereavementHours: Number(entry.bereavement_hours),
     });
-    await upsertLedgerRow(supabase, "tresbe", {
-      companyId: payroll.company_id,
-      employeeId: employee.id,
-      entryId: entry.id,
-      payrollId: payroll.id,
-      periodYear: year,
-      periodMonth: month,
+    const portions = splitHoursAcrossMonths(payroll.week_start, {
       qualifyingHours,
       vacationUsedHours: Number(entry.vacation_paid_hours),
       sickUsedHours: Number(entry.sick_paid_hours),
     });
+    for (const portion of portions) {
+      await upsertLedgerRow(supabase, "tresbe", {
+        companyId: payroll.company_id,
+        employeeId: employee.id,
+        entryId: entry.id,
+        payrollId: payroll.id,
+        periodYear: portion.year,
+        periodMonth: portion.month,
+        qualifyingHours: portion.qualifyingHours,
+        vacationUsedHours: portion.vacationUsedHours,
+        sickUsedHours: portion.sickUsedHours,
+      });
+    }
     touchedEmployeeIds.add(employee.id);
   }
 

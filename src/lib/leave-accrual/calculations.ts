@@ -289,6 +289,87 @@ export function payMonthFor(weekEnd: string): { year: number; month: number } {
   return parseYearMonth(weekEnd);
 }
 
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function isLeapYear(year: number): boolean {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2 && isLeapYear(year)) return 29;
+  return DAYS_IN_MONTH[month - 1];
+}
+
+function addOneDay(date: { year: number; month: number; day: number }): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  if (date.day < daysInMonth(date.year, date.month)) {
+    return { year: date.year, month: date.month, day: date.day + 1 };
+  }
+  if (date.month < 12) return { year: date.year, month: date.month + 1, day: 1 };
+  return { year: date.year + 1, month: 1, day: 1 };
+}
+
+/** A week's raw hour totals, before splitting across a month boundary. */
+export type WeekHourTotals = {
+  qualifyingHours: number;
+  vacationUsedHours: number;
+  sickUsedHours: number;
+};
+
+export type MonthSplitPortion = {
+  year: number;
+  month: number;
+  /** Fraction of the week's 7 days that fell in this calendar month (0 < fraction <= 1). */
+  fraction: number;
+  qualifyingHours: number;
+  vacationUsedHours: number;
+  sickUsedHours: number;
+};
+
+/**
+ * Splits a week's hour totals across the calendar month(s) it spans,
+ * proportional to how many of the week's 7 days fall in each month. Both
+ * payroll systems enforce `week_end = week_start + 6` (always exactly 7
+ * days), so this is a same-size day-count proration rather than a
+ * variable-length one.
+ *
+ * Neither payroll system records which hours were worked on which specific
+ * day — only one weekly total per employee per entry — so day-count
+ * proration is the closest available approximation to "attribute hours to
+ * their real workday" without capturing new data. When the week doesn't
+ * cross a month boundary (the overwhelming majority of weeks), this
+ * degenerates to a single portion with the full totals unchanged.
+ */
+export function splitHoursAcrossMonths(
+  weekStart: string,
+  totals: WeekHourTotals,
+): MonthSplitPortion[] {
+  const daysByMonth = new Map<string, { year: number; month: number; days: number }>();
+  let cursor = parseFullDate(weekStart);
+  for (let i = 0; i < 7; i++) {
+    const key = `${cursor.year}-${cursor.month}`;
+    const existing = daysByMonth.get(key) ?? { year: cursor.year, month: cursor.month, days: 0 };
+    existing.days += 1;
+    daysByMonth.set(key, existing);
+    cursor = addOneDay(cursor);
+  }
+
+  return [...daysByMonth.values()].map(({ year, month, days }) => {
+    const fraction = days / 7;
+    return {
+      year,
+      month,
+      fraction,
+      qualifyingHours: round2(totals.qualifyingHours * fraction),
+      vacationUsedHours: round2(totals.vacationUsedHours * fraction),
+      sickUsedHours: round2(totals.sickUsedHours * fraction),
+    };
+  });
+}
+
 /** Builds the contiguous [from, to] month sequence (inclusive), for filling gap months. */
 export function enumerateMonths(
   fromYear: number,
