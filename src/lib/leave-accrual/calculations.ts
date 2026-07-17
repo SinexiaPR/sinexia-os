@@ -49,6 +49,96 @@ export function yearsOfServiceFromMonths(monthsOfServiceValue: number): number {
   return round2(monthsOfServiceValue / 12);
 }
 
+function parseFullDate(dateStr: string): { year: number; month: number; day: number } {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return { year, month, day };
+}
+
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
+/** Lexicographic (year, month, day) comparison: negative if a < b, positive if a > b. */
+function compareDateParts(
+  a: { year: number; month: number; day: number },
+  b: { year: number; month: number; day: number },
+): number {
+  if (a.year !== b.year) return a.year - b.year;
+  if (a.month !== b.month) return a.month - b.month;
+  return a.day - b.day;
+}
+
+const TENURE_TIER_ANNIVERSARY_YEARS: Record<Exclude<TenureTier, "over_fifteen">, number> = {
+  under_1: 1,
+  one_to_five: 5,
+  five_to_fifteen: 15,
+};
+
+/**
+ * Exact-date tenure tier as of a specific calendar day (not just a
+ * year/month bucket) — e.g. hired 2025-08-15: still `under_1` on
+ * 2026-08-14, `one_to_five` starting exactly 2026-08-15. This is distinct
+ * from `tenureTierFromMonths` (used by `replayLeaveHistory` for the
+ * monthly accrual calculation itself, which only needs month-granularity
+ * because a payroll month's closing always falls on/after the last day of
+ * that month — by which point any anniversary landing inside that same
+ * month has already occurred). `tenureTierAsOfDate` exists for live "as of
+ * today" display, where "today" can be any day mid-month and showing the
+ * next tier a few days early would be legally wrong.
+ */
+export function tenureTierAsOfDate(hiringDate: string, asOfDate: string): TenureTier {
+  const hiring = parseFullDate(hiringDate);
+  const asOf = parseFullDate(asOfDate);
+  const anniversary = (years: number) => ({
+    year: hiring.year + years,
+    month: hiring.month,
+    day: hiring.day,
+  });
+  if (compareDateParts(asOf, anniversary(15)) >= 0) return "over_fifteen";
+  if (compareDateParts(asOf, anniversary(5)) >= 0) return "five_to_fifteen";
+  if (compareDateParts(asOf, anniversary(1)) >= 0) return "one_to_five";
+  return "under_1";
+}
+
+/**
+ * Exact calendar date of the next tier change (the hiring anniversary that
+ * starts the next tier), or null once an employee is already in the top
+ * tier.
+ */
+export function nextTierChangeDate(hiringDate: string, currentTier: TenureTier): string | null {
+  if (currentTier === "over_fifteen") return null;
+  const years = TENURE_TIER_ANNIVERSARY_YEARS[currentTier];
+  const hiring = parseFullDate(hiringDate);
+  return `${hiring.year + years}-${pad2(hiring.month)}-${pad2(hiring.day)}`;
+}
+
+/**
+ * Convenience snapshot of an employee's tenure "as of" any date (typically
+ * today, for live display in the admin UI) — the exact-date tier, its
+ * current monthly vacation rate, and the exact date of the next tier
+ * change. Pure composition of the functions above; not used by
+ * `replayLeaveHistory` itself.
+ */
+export function currentTenureSnapshot(
+  hiringDate: string,
+  asOfDate: string,
+): {
+  monthsOfService: number;
+  yearsOfService: number;
+  tier: TenureTier;
+  monthlyVacationRateHours: number;
+  nextTierChangeDate: string | null;
+} {
+  const asOf = parseYearMonth(asOfDate);
+  const months = monthsOfService(hiringDate, asOf.year, asOf.month);
+  const tier = tenureTierAsOfDate(hiringDate, asOfDate);
+  return {
+    monthsOfService: months,
+    yearsOfService: yearsOfServiceFromMonths(months),
+    tier,
+    monthlyVacationRateHours: VACATION_ACCRUAL_HOURS_BY_TIER[tier],
+    nextTierChangeDate: nextTierChangeDate(hiringDate, tier),
+  };
+}
+
 /** Raw hour categories for a single payroll entry, as entered on a weekly payroll. */
 export type HourCategoryInput = {
   regularHours: number;

@@ -20,6 +20,10 @@ function entryColumnFor(sourceSystem: SourceSystem) {
   return sourceSystem === "sibarita" ? "sibarita_entry_id" : "tresbe_entry_id";
 }
 
+function payrollColumnFor(sourceSystem: SourceSystem) {
+  return sourceSystem === "sibarita" ? "sibarita_payroll_id" : "tresbe_payroll_id";
+}
+
 async function getSickBalanceCapHours(
   supabase: SupabaseClient,
   companyId: string,
@@ -39,6 +43,7 @@ async function upsertLedgerRow(
     companyId: string;
     employeeId: string;
     entryId: string;
+    payrollId: string;
     periodYear: number;
     periodMonth: number;
     qualifyingHours: number;
@@ -51,6 +56,7 @@ async function upsertLedgerRow(
     source_system: sourceSystem,
     [employeeColumnFor(sourceSystem)]: row.employeeId,
     [entryColumnFor(sourceSystem)]: row.entryId,
+    [payrollColumnFor(sourceSystem)]: row.payrollId,
     period_year: row.periodYear,
     period_month: row.periodMonth,
     qualifying_hours: row.qualifyingHours,
@@ -92,11 +98,14 @@ async function replayAndPersistBalance(
   hiringDate: string,
 ) {
   const employeeColumn = employeeColumnFor(sourceSystem);
+  const payrollColumn = payrollColumnFor(sourceSystem);
 
-  const [ledgerResult, sickBalanceCapHours, openingResult] = await Promise.all([
+  const [ledgerResult, sickBalanceCapHours, openingResult, versionResult] = await Promise.all([
     supabase
       .from("employee_leave_ledger_entries")
-      .select("period_year,period_month,qualifying_hours,vacation_used_hours,sick_used_hours")
+      .select(
+        `period_year,period_month,qualifying_hours,vacation_used_hours,sick_used_hours,${payrollColumn}`,
+      )
       .eq("source_system", sourceSystem)
       .eq(employeeColumn, employeeId)
       .is("reversed_at", null),
@@ -107,12 +116,27 @@ async function replayAndPersistBalance(
       .eq("source_system", sourceSystem)
       .eq(employeeColumn, employeeId)
       .maybeSingle(),
+    supabase
+      .from("employee_leave_history")
+      .select("calculation_version")
+      .eq("source_system", sourceSystem)
+      .eq(employeeColumn, employeeId)
+      .order("calculation_version", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
   if (ledgerResult.error) throw ledgerResult.error;
   if (openingResult.error) throw openingResult.error;
+  if (versionResult.error) throw versionResult.error;
   const opening = openingResult.data;
+  // Every full recompute of this employee's history — whether triggered by
+  // new payroll activity or a correction to a past month — bumps the same
+  // version number across their entire history, so admins can see at a
+  // glance how many times a given month's row has been recalculated.
+  const calculationVersion = (versionResult.data?.calculation_version ?? 0) + 1;
 
   const byMonth = new Map<string, MonthLedgerInput>();
+  const payrollIdsByMonth = new Map<string, Set<string>>();
   for (const row of ledgerResult.data ?? []) {
     const key = `${row.period_year}-${row.period_month}`;
     const existing = byMonth.get(key) ?? {
@@ -126,6 +150,13 @@ async function replayAndPersistBalance(
     existing.vacationUsedHours += Number(row.vacation_used_hours);
     existing.sickUsedHours += Number(row.sick_used_hours);
     byMonth.set(key, existing);
+
+    const payrollId = (row as Record<string, unknown>)[payrollColumn] as string | null;
+    if (payrollId) {
+      const set = payrollIdsByMonth.get(key) ?? new Set<string>();
+      set.add(payrollId);
+      payrollIdsByMonth.set(key, set);
+    }
   }
 
   if (byMonth.size === 0) {
@@ -230,6 +261,11 @@ async function replayAndPersistBalance(
     vacation_balance_after_hours: result.vacationBalanceAfterHours,
     sick_balance_after_hours: result.sickBalanceAfterHours,
     sick_cap_hours_applied: result.sickCapHoursApplied,
+    calculation_version: calculationVersion,
+    hiring_date_used: hiringDate,
+    source_payroll_ids: Array.from(
+      payrollIdsByMonth.get(`${result.year}-${result.month}`) ?? [],
+    ),
   }));
   const historyOnConflict =
     sourceSystem === "sibarita"
@@ -328,6 +364,7 @@ export async function syncLeaveAccrualForSibaritaPayroll(payrollId: string) {
       companyId: payroll.company_id,
       employeeId: employee.id,
       entryId: entry.id,
+      payrollId: payroll.id,
       periodYear: year,
       periodMonth: month,
       qualifyingHours,
@@ -448,6 +485,7 @@ export async function syncLeaveAccrualForTresbePayroll(payrollId: string) {
       companyId: payroll.company_id,
       employeeId: employee.id,
       entryId: entry.id,
+      payrollId: payroll.id,
       periodYear: year,
       periodMonth: month,
       qualifyingHours,
