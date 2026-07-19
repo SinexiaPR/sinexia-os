@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
 import { saveLeaveAccrualSettings } from "@/actions/leave-accrual";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import type { TenureTier } from "@/lib/leave-accrual/calculations";
 import type { LeaveAccrualReportRow } from "@/services/leave-accrual";
 
 const shortDate = new Intl.DateTimeFormat("es", {
@@ -13,6 +15,13 @@ const shortDate = new Intl.DateTimeFormat("es", {
   month: "short",
   year: "numeric",
 });
+
+const TIER_LABELS: Record<TenureTier, string> = {
+  under_1: "Menos de 1 año",
+  one_to_five: "1 a 5 años",
+  five_to_fifteen: "5 a 15 años",
+  over_fifteen: "15 años o más",
+};
 
 type SortKey =
   | "employeeName"
@@ -122,13 +131,16 @@ export function LeaveAccrualReport({
           </Button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="w-full min-w-[1500px] text-left text-sm">
             <thead className="text-muted-foreground border-b text-xs uppercase">
               <tr>
                 {sortHeader("employeeName", "Empleado")}
                 <th className="px-3 py-3">Sistema</th>
                 {sortHeader("hiringDate", "Fecha de contratación")}
                 {sortHeader("yearsOfService", "Años de servicio")}
+                <th className="px-3 py-3">Categoría actual</th>
+                <th className="px-3 py-3">Tasa mensual vacaciones</th>
+                <th className="px-3 py-3">Próximo cambio de categoría</th>
                 {sortHeader("currentMonthHours", "Horas del mes actual")}
                 {sortHeader("vacationBalanceHours", "Balance vacaciones")}
                 {sortHeader("sickBalanceHours", "Balance enfermedad")}
@@ -139,12 +151,28 @@ export function LeaveAccrualReport({
               {visible.map((row) => (
                 <tr
                   key={`${row.sourceSystem}-${row.employeeId}`}
-                  className="border-b last:border-0"
+                  className="hover:bg-muted/50 border-b last:border-0"
                 >
-                  <td className="px-3 py-3 font-medium">{row.employeeName}</td>
+                  <td className="px-3 py-3 font-medium">
+                    <Link
+                      href={`/dashboard/admin/leave-accrual/${row.sourceSystem}/${row.employeeId}`}
+                      className="hover:underline"
+                    >
+                      {row.employeeName}
+                    </Link>
+                  </td>
                   <td className="capitalize">{row.sourceSystem}</td>
                   <td>{formatDate(row.hiringDate)}</td>
                   <td>{row.yearsOfService ?? "—"}</td>
+                  <td>{row.currentTier ? TIER_LABELS[row.currentTier] : "—"}</td>
+                  <td>
+                    {row.monthlyVacationRateHours != null
+                      ? `${row.monthlyVacationRateHours} h/mes`
+                      : "—"}
+                  </td>
+                  <td>
+                    {row.nextTierChangeDate ? formatDate(row.nextTierChangeDate) : "N/A"}
+                  </td>
                   <td>
                     {row.currentMonthHours.toFixed(2)}
                     {row.currentMonthQualifies ? (
@@ -169,7 +197,7 @@ export function LeaveAccrualReport({
               {!visible.length ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={11}
                     className="text-muted-foreground px-3 py-6 text-center"
                   >
                     No hay empleados que coincidan con el filtro.
