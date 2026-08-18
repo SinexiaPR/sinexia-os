@@ -285,12 +285,17 @@ const entrySchema = z.object({
 });
 export type TresbeEntryInput = z.infer<typeof entrySchema>;
 
+const salesSchema = z.number().min(0);
+
 export async function saveTresbePayrollDraft(params: {
   companyId: string;
   payrollId: string;
   adminNote: string | null;
   clientNote: string | null;
   emailRecipient: string | null;
+  salesTresbe: number;
+  salesCafeConCe: number;
+  salesCafeConCeCalleCerra: number;
   entries: TresbeEntryInput[];
 }) {
   let profile;
@@ -301,6 +306,15 @@ export async function saveTresbePayrollDraft(params: {
   }
   const parsed = z.array(entrySchema).safeParse(params.entries);
   if (!parsed.success) return { error: "Hay valores inválidos en la nómina." };
+  const salesParsed = z
+    .object({
+      salesTresbe: salesSchema,
+      salesCafeConCe: salesSchema,
+      salesCafeConCeCalleCerra: salesSchema,
+    })
+    .safeParse(params);
+  if (!salesParsed.success)
+    return { error: "Los valores de venta deben ser mayores o iguales a cero." };
   if (
     parsed.data.some(
       (entry) => entry.otherAdjustments < 0 && (entry.comment?.length ?? 0) < 5,
@@ -351,6 +365,9 @@ export async function saveTresbePayrollDraft(params: {
       admin_note: params.adminNote || null,
       client_note: params.clientNote || null,
       email_recipient: params.emailRecipient || null,
+      sales_tresbe: salesParsed.data.salesTresbe,
+      sales_cafe_con_ce: salesParsed.data.salesCafeConCe,
+      sales_cafe_con_ce_calle_cerra: salesParsed.data.salesCafeConCeCalleCerra,
       updated_by: profile.id,
     })
     .eq("id", params.payrollId)

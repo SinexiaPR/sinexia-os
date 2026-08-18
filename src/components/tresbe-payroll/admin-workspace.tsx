@@ -123,6 +123,15 @@ export function TresbePayrollAdminWorkspace({
   const [pending, startTransition] = useTransition();
   const [adminNote, setAdminNote] = useState(selected?.admin_note ?? "");
   const [clientNote, setClientNote] = useState(selected?.client_note ?? "");
+  const [salesTresbe, setSalesTresbe] = useState(
+    String(selected?.sales_tresbe ?? 0),
+  );
+  const [salesCafeConCe, setSalesCafeConCe] = useState(
+    String(selected?.sales_cafe_con_ce ?? 0),
+  );
+  const [salesCafeConCeCalleCerra, setSalesCafeConCeCalleCerra] = useState(
+    String(selected?.sales_cafe_con_ce_calle_cerra ?? 0),
+  );
   const [emailRecipient, setEmailRecipient] = useState(
     selected?.email_recipient ?? settings?.default_email_recipient ?? "",
   );
@@ -190,6 +199,9 @@ export function TresbePayrollAdminWorkspace({
     adminNote: adminNote || null,
     clientNote: clientNote || null,
     emailRecipient: emailRecipient || null,
+    salesTresbe: Number(salesTresbe || 0),
+    salesCafeConCe: Number(salesCafeConCe || 0),
+    salesCafeConCeCalleCerra: Number(salesCafeConCeCalleCerra || 0),
     entries: entryState.map((entry) => ({
       id: entry.id,
       totalWeeklyHours: Number(entry.total_weekly_hours),
@@ -401,6 +413,60 @@ export function TresbePayrollAdminWorkspace({
 
           {selected ? (
             <>
+              <SurfaceCard>
+                <h2 className="font-semibold">Venta de la semana</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <label className="text-sm">
+                    Tresbe
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={salesTresbe}
+                      disabled={!editable}
+                      onChange={(event) => setSalesTresbe(event.target.value)}
+                      className="mt-1"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Café con Ce
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={salesCafeConCe}
+                      disabled={!editable}
+                      onChange={(event) =>
+                        setSalesCafeConCe(event.target.value)
+                      }
+                      className="mt-1"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Café con Ce · Calle Cerra
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={salesCafeConCeCalleCerra}
+                      disabled={!editable}
+                      onChange={(event) =>
+                        setSalesCafeConCeCalleCerra(event.target.value)
+                      }
+                      className="mt-1"
+                    />
+                  </label>
+                </div>
+                <p className="text-muted-foreground mt-3 text-xs">
+                  Total venta de la semana:{" "}
+                  {money.format(
+                    Number(salesTresbe || 0) +
+                      Number(salesCafeConCe || 0) +
+                      Number(salesCafeConCeCalleCerra || 0),
+                  )}
+                </p>
+              </SurfaceCard>
+
               <SurfaceCard>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>

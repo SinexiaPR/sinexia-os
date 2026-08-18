@@ -49,6 +49,9 @@ export type TresbePayroll = {
   total_service_checks: number;
   total_adjustments: number;
   grand_total: number;
+  sales_tresbe: number;
+  sales_cafe_con_ce: number;
+  sales_cafe_con_ce_calle_cerra: number;
   admin_note: string | null;
   client_note: string | null;
   supporting_document_id: string | null;
