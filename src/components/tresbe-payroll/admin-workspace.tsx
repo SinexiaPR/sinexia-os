@@ -1122,7 +1122,7 @@ function PayrollSummary({ entries }: { entries: TresbePayrollEntry[] }) {
           <SummaryLine label="TOTAL TIPS" value={totals.tips} />
           <SummaryLine
             label="TOTAL CHEQUES DE SERVICIOS"
-            value={totals.services}
+            value={serviceCheckPayoutTotal}
           />
           <SummaryLine label="TOTAL AJUSTES" value={totals.adjustments} />
           <SummaryLine

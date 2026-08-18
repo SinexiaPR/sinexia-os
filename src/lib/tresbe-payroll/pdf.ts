@@ -10,6 +10,7 @@ import type {
   TresbePayroll,
   TresbePayrollEntry,
 } from "@/services/tresbe-payroll";
+import { getServiceCheckPayAmount } from "@/lib/tresbe-payroll/calculations";
 
 const WIDTH = 792;
 const HEIGHT = 612;
@@ -220,13 +221,26 @@ export async function buildTresbePayrollPdf(params: {
   entries: TresbePayrollEntry[];
 }) {
   const entries = params.entries.filter(hasTresbePayrollValue);
-  // Monetary totals come from the saved payroll header, which is recalculated
-  // by PostgreSQL before preview/send. The PDF never creates a second total.
+  // Hours/system/tips/adjustments/grand come from the saved payroll header,
+  // recalculated by PostgreSQL before preview/send. Servicios is computed
+  // here from each entry's real check payout (getServiceCheckPayAmount),
+  // which folds tips into the single check for "servicios completos"
+  // employees -- matching what actually goes out the door per check.
+  const servicePayoutTotal = entries.reduce((sum, e) => {
+    if (Number(e.service_check_amount) <= 0) return sum;
+    return (
+      sum +
+      getServiceCheckPayAmount(e.payroll_rule_snapshot, {
+        serviceCheckAmount: Number(e.service_check_amount),
+        employeeTotal: Number(e.employee_total),
+      })
+    );
+  }, 0);
   const visibleTotals = {
     hours: Number(params.payroll.total_weekly_hours),
     system: Number(params.payroll.total_system_pay),
     tips: Number(params.payroll.total_tips),
-    services: Number(params.payroll.total_service_checks),
+    services: servicePayoutTotal,
     adjustments: Number(params.payroll.total_adjustments),
     grand: Number(params.payroll.grand_total),
   };
@@ -289,7 +303,12 @@ export async function buildTresbePayrollPdf(params: {
       width: 104,
       value: (e) =>
         Number(e.service_check_amount) > 0
-          ? `${money(e.service_check_amount)} / ${number(e.service_hours)}h`
+          ? `${money(
+              getServiceCheckPayAmount(e.payroll_rule_snapshot, {
+                serviceCheckAmount: Number(e.service_check_amount),
+                employeeTotal: Number(e.employee_total),
+              }),
+            )} / ${number(e.service_hours)}h`
           : money(0),
     },
     {
