@@ -263,6 +263,22 @@ export async function buildTresbePayrollPdf(params: {
   drawHeader(page, bold, regular, params.payroll, params.companyName, false);
   let y = HEIGHT - 126;
 
+  const salesTresbe = Number(params.payroll.sales_tresbe);
+  const salesCafeConCe = Number(params.payroll.sales_cafe_con_ce);
+  const salesCalleCerra = Number(
+    params.payroll.sales_cafe_con_ce_calle_cerra,
+  );
+  const salesTotal = salesTresbe + salesCafeConCe + salesCalleCerra;
+  if (salesTotal > 0) {
+    page.drawText(
+      `VENTA DE LA SEMANA -- Tresbe + Cafe con Ce: ${money(
+        salesTresbe + salesCafeConCe,
+      )}   |   Cafe con Ce Calle Cerra: ${money(salesCalleCerra)}   |   Total: ${money(salesTotal)}`,
+      { x: MARGIN, y, size: 8, font: bold, color: NAVY },
+    );
+    y -= 15;
+  }
+
   page.drawText("RESUMEN DE PAGOS DE LA SEMANA", {
     x: MARGIN,
     y,
