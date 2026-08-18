@@ -221,11 +221,13 @@ export async function buildTresbePayrollPdf(params: {
   entries: TresbePayrollEntry[];
 }) {
   const entries = params.entries.filter(hasTresbePayrollValue);
-  // Hours/system/tips/adjustments/grand come from the saved payroll header,
+  // Hours/system/adjustments/grand come from the saved payroll header,
   // recalculated by PostgreSQL before preview/send. Servicios is computed
   // here from each entry's real check payout (getServiceCheckPayAmount),
   // which folds tips into the single check for "servicios completos"
-  // employees -- matching what actually goes out the door per check.
+  // employees -- matching what actually goes out the door per check. Tips
+  // is likewise recomputed excluding those same employees, so their tips
+  // aren't counted both there and inside Servicios.
   const servicePayoutTotal = entries.reduce((sum, e) => {
     if (Number(e.service_check_amount) <= 0) return sum;
     return (
@@ -236,10 +238,16 @@ export async function buildTresbePayrollPdf(params: {
       })
     );
   }, 0);
+  const tipsOutsideServices = entries.reduce(
+    (sum, e) =>
+      sum +
+      (e.payroll_rule_snapshot === "full_services" ? 0 : Number(e.tips)),
+    0,
+  );
   const visibleTotals = {
     hours: Number(params.payroll.total_weekly_hours),
     system: Number(params.payroll.total_system_pay),
-    tips: Number(params.payroll.total_tips),
+    tips: tipsOutsideServices,
     services: servicePayoutTotal,
     adjustments: Number(params.payroll.total_adjustments),
     grand: Number(params.payroll.grand_total),

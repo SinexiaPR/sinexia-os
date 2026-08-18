@@ -1070,7 +1070,15 @@ function PayrollSummary({ entries }: { entries: TresbePayrollEntry[] }) {
   const totals = rows.reduce(
     (sum, row) => ({
       system: sum.system + row.result.systemPay,
-      tips: sum.tips + Number(row.entry.tips),
+      // Tips for "servicios completos" employees go out inside their single
+      // services check (see getServiceCheckPayAmount), not as a separate
+      // payment -- exclude them here so they aren't counted twice against
+      // "TOTAL CHEQUES DE SERVICIOS" below.
+      tips:
+        sum.tips +
+        (row.entry.payroll_rule_snapshot === "full_services"
+          ? 0
+          : Number(row.entry.tips)),
       services: sum.services + row.result.serviceCheckAmount,
       adjustments: sum.adjustments + Number(row.entry.other_adjustments),
       grand: sum.grand + row.result.employeeTotal,
