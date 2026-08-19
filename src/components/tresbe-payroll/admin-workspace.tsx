@@ -34,6 +34,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { TresbeDailyEntriesTab } from "@/components/tresbe-payroll/daily-entries";
 import {
   calculateTresbeEntry,
   getServiceCheckPayAmount,
@@ -44,7 +45,9 @@ import type {
   TresbeEmployee,
   TresbePayroll,
   TresbePayrollAnalysis,
+  TresbePayrollDailyEntry,
   TresbePayrollEntry,
+  TresbePayrollShiftPool,
   TresbePayrollSettings,
   TresbeWageReviewItem,
 } from "@/services/tresbe-payroll";
@@ -106,6 +109,8 @@ export function TresbePayrollAdminWorkspace({
   selected,
   entries,
   analysis,
+  dailyEntries,
+  shiftPools,
   settings,
   wageReviews,
 }: {
@@ -115,10 +120,14 @@ export function TresbePayrollAdminWorkspace({
   selected: TresbePayroll | null;
   entries: TresbePayrollEntry[];
   analysis: TresbePayrollAnalysis | null;
+  dailyEntries: TresbePayrollDailyEntry[];
+  shiftPools: TresbePayrollShiftPool[];
   settings: TresbePayrollSettings | null;
   wageReviews: TresbeWageReviewItem[];
 }) {
-  const [tab, setTab] = useState<"weekly" | "employees" | "settings">("weekly");
+  const [tab, setTab] = useState<"weekly" | "daily" | "employees" | "settings">(
+    "weekly",
+  );
   const [entryState, setEntryState] = useState(entries);
   const [employeeForm, setEmployeeForm] = useState<
     TresbeEmployee | "new" | null
@@ -297,6 +306,7 @@ export function TresbePayrollAdminWorkspace({
         {(
           [
             ["weekly", "Nóminas"],
+            ["daily", "Carga Diaria"],
             ["employees", "Empleados"],
             ["settings", "Correo"],
           ] as const
@@ -790,6 +800,42 @@ export function TresbePayrollAdminWorkspace({
             </>
           ) : null}
         </div>
+      ) : null}
+
+      {tab === "daily" ? (
+        selected ? (
+          <div className="space-y-5">
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button
+                variant="outline"
+                disabled={pending}
+                onClick={() =>
+                  run(() => recalculateTresbePayroll(company.id, selected.id))
+                }
+              >
+                <RefreshCw className="size-4" /> Recalcular
+              </Button>
+              <Button variant="outline" disabled={pending} onClick={previewPdf}>
+                <FileText className="size-4" /> Vista previa PDF
+              </Button>
+            </div>
+            <TresbeDailyEntriesTab
+              company={company}
+              payroll={selected}
+              employees={employees}
+              dailyEntries={dailyEntries}
+              shiftPools={shiftPools}
+              editable={editable}
+            />
+          </div>
+        ) : (
+          <SurfaceCard>
+            <p className="text-muted-foreground text-sm">
+              Creá o elegí una nómina en la pestaña &quot;Nóminas&quot; para
+              cargar el detalle diario.
+            </p>
+          </SurfaceCard>
+        )
       ) : null}
 
       {tab === "employees" ? (

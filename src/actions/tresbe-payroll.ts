@@ -21,7 +21,10 @@ import {
 import {
   resolveTresbeCompany,
   type TresbePayroll,
+  type TresbePayrollDailyEntry,
   type TresbePayrollEntry,
+  type TresbePayrollShiftPool,
+  type TresbeShift,
 } from "@/services/tresbe-payroll";
 
 async function authorizeTresbeAdmin(companyId: string) {
@@ -852,4 +855,278 @@ export async function saveTresbePayrollAnalysis(params: {
       ? `Guardado, pero revisá esto antes de imprimir: ${warnings.join(" ")}`
       : `Guardado. Nómina sin propina de la semana: $${parsed.data.ajuste_total_nomina.nomina_sin_propina_semana.toFixed(2)}.`,
   };
+}
+
+// -- Carga Diaria (day-by-day / shift-by-shift hours and tip pools) --
+// All of the arithmetic (proportional tip split per shift, weekly rollup
+// into tresbe_payroll_entries, and that entry's pay) is done by database
+// triggers (recalc_tresbe_payroll_shift / rollup_tresbe_payroll_daily_entries
+// / calculate_tresbe_payroll_entry). These actions only write the row the
+// user edited and hand back the refreshed shift group -- the group is
+// re-read from the database, never recomputed here, since every other row
+// in the shift can change too (the pool gets re-split across everyone).
+
+type ShiftGroup = {
+  pool: TresbePayrollShiftPool | null;
+  entries: TresbePayrollDailyEntry[];
+};
+
+async function loadTresbeShiftGroup(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  payrollId: string,
+  workDate: string,
+  shift: string,
+): Promise<ShiftGroup> {
+  const [poolResult, entriesResult] = await Promise.all([
+    supabase
+      .from("tresbe_payroll_shift_pools")
+      .select("*")
+      .eq("payroll_id", payrollId)
+      .eq("work_date", workDate)
+      .eq("shift", shift)
+      .maybeSingle(),
+    supabase
+      .from("tresbe_payroll_daily_entries")
+      .select("*")
+      .eq("payroll_id", payrollId)
+      .eq("work_date", workDate)
+      .eq("shift", shift)
+      .order("created_at"),
+  ]);
+  if (poolResult.error) throw poolResult.error;
+  if (entriesResult.error) throw entriesResult.error;
+  return {
+    pool: poolResult.data as TresbePayrollShiftPool | null,
+    entries: (entriesResult.data ?? []) as TresbePayrollDailyEntry[],
+  };
+}
+
+export async function saveTresbeDailyEntryHours(params: {
+  companyId: string;
+  payrollId: string;
+  entryId: string;
+  hours: number;
+  tipCafeManual: number;
+  notes: string | null;
+}) {
+  try {
+    await authorizeTresbeAdmin(params.companyId);
+  } catch {
+    return { error: "No autorizado." };
+  }
+  if (!Number.isFinite(params.hours) || params.hours < 0)
+    return { error: "Las horas deben ser un número mayor o igual a cero." };
+  if (!Number.isFinite(params.tipCafeManual) || params.tipCafeManual < 0)
+    return {
+      error: "La propina individual debe ser un número mayor o igual a cero.",
+    };
+
+  const supabase = await createClient();
+  const current = await supabase
+    .from("tresbe_payroll_daily_entries")
+    .select("work_date,shift")
+    .eq("id", params.entryId)
+    .eq("payroll_id", params.payrollId)
+    .maybeSingle();
+  if (!current.data)
+    return { error: "La fila ya no existe. Recargá la pantalla." };
+
+  const { error } = await supabase
+    .from("tresbe_payroll_daily_entries")
+    .update({
+      hours: params.hours,
+      tip_cafe_manual: params.tipCafeManual,
+      notes: params.notes || null,
+    })
+    .eq("id", params.entryId)
+    .eq("payroll_id", params.payrollId);
+  if (error)
+    return {
+      error:
+        "No se pudo guardar -- puede que la nómina ya no esté abierta para editar.",
+    };
+
+  const group = await loadTresbeShiftGroup(
+    supabase,
+    params.payrollId,
+    current.data.work_date,
+    current.data.shift,
+  );
+  revalidatePath(`/dashboard/admin/companies/${params.companyId}/payroll`);
+  return { success: true as const, ...group };
+}
+
+export async function saveTresbeShiftPoolAmount(params: {
+  companyId: string;
+  payrollId: string;
+  workDate: string;
+  shift: TresbeShift;
+  tipPoolAmount: number;
+}) {
+  let profile;
+  try {
+    ({ profile } = await authorizeTresbeAdmin(params.companyId));
+  } catch {
+    return { error: "No autorizado." };
+  }
+  if (!Number.isFinite(params.tipPoolAmount) || params.tipPoolAmount < 0)
+    return {
+      error: "El pote de propina debe ser un número mayor o igual a cero.",
+    };
+
+  const supabase = await createClient();
+  const payroll = await supabase
+    .from("tresbe_payrolls")
+    .select("id")
+    .eq("id", params.payrollId)
+    .eq("company_id", params.companyId)
+    .maybeSingle();
+  if (!payroll.data) return { error: "Nómina no encontrada." };
+
+  const { error } = await supabase.from("tresbe_payroll_shift_pools").upsert(
+    {
+      payroll_id: params.payrollId,
+      company_id: params.companyId,
+      work_date: params.workDate,
+      shift: params.shift,
+      tip_pool_amount: params.tipPoolAmount,
+      updated_by: profile.id,
+    },
+    { onConflict: "payroll_id,work_date,shift" },
+  );
+  if (error)
+    return {
+      error:
+        "No se pudo guardar -- puede que la nómina ya no esté abierta para editar.",
+    };
+
+  const group = await loadTresbeShiftGroup(
+    supabase,
+    params.payrollId,
+    params.workDate,
+    params.shift,
+  );
+  revalidatePath(`/dashboard/admin/companies/${params.companyId}/payroll`);
+  return { success: true as const, ...group };
+}
+
+export async function createTresbeDailyEntry(params: {
+  companyId: string;
+  payrollId: string;
+  employeeId: string;
+  workDate: string;
+  shift: TresbeShift;
+  hours: number;
+  tipCafeManual: number;
+}) {
+  let profile;
+  try {
+    ({ profile } = await authorizeTresbeAdmin(params.companyId));
+  } catch {
+    return { error: "No autorizado." };
+  }
+  if (!Number.isFinite(params.hours) || params.hours < 0)
+    return { error: "Las horas deben ser un número mayor o igual a cero." };
+  if (!Number.isFinite(params.tipCafeManual) || params.tipCafeManual < 0)
+    return {
+      error: "La propina individual debe ser un número mayor o igual a cero.",
+    };
+
+  const supabase = await createClient();
+  const [payrollResult, employeeResult] = await Promise.all([
+    supabase
+      .from("tresbe_payrolls")
+      .select("id,week_start,week_end")
+      .eq("id", params.payrollId)
+      .eq("company_id", params.companyId)
+      .maybeSingle(),
+    supabase
+      .from("tresbe_employees")
+      .select("id,area,receives_proportional_tips")
+      .eq("id", params.employeeId)
+      .eq("company_id", params.companyId)
+      .maybeSingle(),
+  ]);
+  if (!payrollResult.data) return { error: "Nómina no encontrada." };
+  if (!employeeResult.data) return { error: "Empleado no encontrado." };
+  if (
+    params.workDate < payrollResult.data.week_start ||
+    params.workDate > payrollResult.data.week_end
+  )
+    return { error: "La fecha debe estar dentro de la semana de esta nómina." };
+
+  const { error } = await supabase.from("tresbe_payroll_daily_entries").insert({
+    payroll_id: params.payrollId,
+    company_id: params.companyId,
+    employee_id: params.employeeId,
+    work_date: params.workDate,
+    shift: params.shift,
+    area_snapshot: employeeResult.data.area,
+    receives_proportional_tips_snapshot:
+      employeeResult.data.receives_proportional_tips,
+    hours: params.hours,
+    tip_cafe_manual: params.tipCafeManual,
+    created_by: profile.id,
+    updated_by: profile.id,
+  });
+  if (error) {
+    if (error.code === "23505")
+      return {
+        error:
+          "Ese empleado ya tiene una fila cargada para esa fecha y turno -- editá la fila existente en vez de crear otra.",
+      };
+    return {
+      error:
+        "No se pudo agregar la fila -- puede que la nómina ya no esté abierta para editar.",
+    };
+  }
+
+  const group = await loadTresbeShiftGroup(
+    supabase,
+    params.payrollId,
+    params.workDate,
+    params.shift,
+  );
+  revalidatePath(`/dashboard/admin/companies/${params.companyId}/payroll`);
+  return { success: true as const, ...group };
+}
+
+export async function deleteTresbeDailyEntry(params: {
+  companyId: string;
+  payrollId: string;
+  entryId: string;
+}) {
+  try {
+    await authorizeTresbeAdmin(params.companyId);
+  } catch {
+    return { error: "No autorizado." };
+  }
+  const supabase = await createClient();
+  const current = await supabase
+    .from("tresbe_payroll_daily_entries")
+    .select("work_date,shift")
+    .eq("id", params.entryId)
+    .eq("payroll_id", params.payrollId)
+    .maybeSingle();
+  if (!current.data) return { error: "La fila ya no existe." };
+
+  const { error } = await supabase
+    .from("tresbe_payroll_daily_entries")
+    .delete()
+    .eq("id", params.entryId)
+    .eq("payroll_id", params.payrollId);
+  if (error)
+    return {
+      error:
+        "No se pudo eliminar -- puede que la nómina ya no esté abierta para editar.",
+    };
+
+  const group = await loadTresbeShiftGroup(
+    supabase,
+    params.payrollId,
+    current.data.work_date,
+    current.data.shift,
+  );
+  revalidatePath(`/dashboard/admin/companies/${params.companyId}/payroll`);
+  return { success: true as const, ...group };
 }

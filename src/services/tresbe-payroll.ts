@@ -104,6 +104,36 @@ export type TresbePayrollEntry = {
   comment: string | null;
 };
 
+export type TresbeShift = "AM" | "PM";
+
+export type TresbePayrollShiftPool = {
+  id: string;
+  payroll_id: string;
+  company_id: string;
+  work_date: string;
+  shift: TresbeShift;
+  tip_pool_amount: number;
+  source: string | null;
+  notes: string | null;
+};
+
+export type TresbePayrollDailyEntry = {
+  id: string;
+  payroll_id: string;
+  company_id: string;
+  employee_id: string;
+  work_date: string;
+  shift: TresbeShift;
+  area_snapshot: string;
+  receives_proportional_tips_snapshot: boolean;
+  hours: number;
+  tip_cafe_manual: number;
+  tip_proportional: number;
+  is_correction: boolean;
+  correction_reason: string | null;
+  notes: string | null;
+};
+
 export type TresbePayrollSettings = {
   id: string;
   company_id: string;
@@ -180,24 +210,43 @@ export async function getTresbeAdminWorkspace(
     null;
   let entries: TresbePayrollEntry[] = [];
   let analysis: TresbePayrollAnalysis | null = null;
+  let shiftPools: TresbePayrollShiftPool[] = [];
+  let dailyEntries: TresbePayrollDailyEntry[] = [];
   if (selected) {
-    const [entriesResult, analysisResult] = await Promise.all([
-      supabase
-        .from("tresbe_payroll_entries")
-        .select("*")
-        .eq("payroll_id", selected.id)
-        .order("area_snapshot")
-        .order("employee_name_snapshot"),
-      supabase
-        .from("tresbe_payroll_analysis")
-        .select("*")
-        .eq("payroll_id", selected.id)
-        .maybeSingle(),
-    ]);
+    const [entriesResult, analysisResult, shiftPoolsResult, dailyEntriesResult] =
+      await Promise.all([
+        supabase
+          .from("tresbe_payroll_entries")
+          .select("*")
+          .eq("payroll_id", selected.id)
+          .order("area_snapshot")
+          .order("employee_name_snapshot"),
+        supabase
+          .from("tresbe_payroll_analysis")
+          .select("*")
+          .eq("payroll_id", selected.id)
+          .maybeSingle(),
+        supabase
+          .from("tresbe_payroll_shift_pools")
+          .select("*")
+          .eq("payroll_id", selected.id)
+          .order("work_date")
+          .order("shift"),
+        supabase
+          .from("tresbe_payroll_daily_entries")
+          .select("*")
+          .eq("payroll_id", selected.id)
+          .order("work_date")
+          .order("shift"),
+      ]);
     if (entriesResult.error) throw entriesResult.error;
     entries = (entriesResult.data ?? []) as TresbePayrollEntry[];
     if (analysisResult.error) throw analysisResult.error;
     analysis = analysisResult.data as TresbePayrollAnalysis | null;
+    if (shiftPoolsResult.error) throw shiftPoolsResult.error;
+    shiftPools = (shiftPoolsResult.data ?? []) as TresbePayrollShiftPool[];
+    if (dailyEntriesResult.error) throw dailyEntriesResult.error;
+    dailyEntries = (dailyEntriesResult.data ?? []) as TresbePayrollDailyEntry[];
   }
   return {
     employees: (employeesResult.data ?? []) as TresbeEmployee[],
@@ -205,6 +254,8 @@ export async function getTresbeAdminWorkspace(
     selected,
     entries,
     analysis,
+    shiftPools,
+    dailyEntries,
     settings: settingsResult.data as TresbePayrollSettings | null,
     wageReviews: (wageReviewsResult.data ?? []) as TresbeWageReviewItem[],
   };
