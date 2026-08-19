@@ -14,7 +14,12 @@ import type {
   TresbeShift,
 } from "@/services/tresbe-payroll";
 import { getServiceCheckPayAmount } from "@/lib/tresbe-payroll/calculations";
-import { computeTresbeMarginAnalysis } from "@/lib/tresbe-payroll/margin-analysis";
+import {
+  CALLE_CERRA_AREA,
+  computeAreaHoursTips,
+  computeAreaPay,
+  computeTresbeAreaPercentages,
+} from "@/lib/tresbe-payroll/area-report";
 
 const WIDTH = 792;
 const HEIGHT = 612;
@@ -30,7 +35,7 @@ const printable = (value: string) =>
     .replace(/[–—]/g, "-")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/[^\u0020-\u00ff]/g, "?");
+    .replace(/[^ -ÿ]/g, "?");
 
 const money = (value: number | null | undefined) =>
   new Intl.NumberFormat("en-US", {
@@ -73,6 +78,15 @@ function fit(value: string, font: PDFFont, size: number, width: number) {
   )
     short = short.slice(0, -1);
   return `${short.trim()}...`;
+}
+
+function paymentTypeLabel(entry: TresbePayrollEntry) {
+  const hasSystem = Number(entry.system_pay) > 0;
+  const hasService = Number(entry.service_check_amount) > 0;
+  if (hasSystem && hasService) return "Sistema + Servicios";
+  if (hasService) return "Servicios";
+  if (hasSystem) return "Sistema";
+  return "-";
 }
 
 function drawHeader(
@@ -332,22 +346,26 @@ function drawCenteredBanner(page: PDFPage, bold: PDFFont, subtitle: string) {
   });
 }
 
-function drawTresbeMarginAnalysisPage(
+// -- "% de nomina" page: computed live from area_snapshot / e.area, never
+// from a hand-typed record. See src/lib/tresbe-payroll/area-report.ts for
+// the formulas and why weekly pay groups by tresbe_employees.area while
+// hours/tips group by the daily area_snapshot.
+function drawTresbeAreaPercentagesPage(
   pdf: PDFDocument,
   bold: PDFFont,
   regular: PDFFont,
   payroll: TresbePayroll,
   companyName: string,
   entries: TresbePayrollEntry[],
+  employeeAreas: { id: string; area: string }[],
 ) {
-  const analysis = computeTresbeMarginAnalysis(payroll, entries);
-  const paidEmployeeCount = entries.length;
+  const areaPay = computeAreaPay(entries, employeeAreas);
+  const percentages = computeTresbeAreaPercentages(payroll, areaPay);
+  const salesTresbe = Number(payroll.sales_tresbe);
+  const salesCalleCerra = Number(payroll.sales_cafe_con_ce_calle_cerra);
+
   const page = pdf.addPage([WIDTH, HEIGHT]);
-  drawCenteredBanner(
-    page,
-    bold,
-    "NOMINA SEMANAL TRESBE -- ANALISIS DE % SOBRE VENTA",
-  );
+  drawCenteredBanner(page, bold, "NOMINA SEMANAL TRESBE -- % DE NOMINA");
 
   let y = HEIGHT - BANNER_HEIGHT - 4 - 26;
   page.drawText(`Empresa: ${printable(companyName)}`, {
@@ -363,11 +381,9 @@ function drawTresbeMarginAnalysisPage(
   );
   y -= 24;
 
-  // Sales summary strip
   const salesCols = [
-    { label: "Venta TRESBE + Café con Ce", value: money(analysis.venta.tresbeCafeConCe) },
-    { label: "Venta Café con Ce Calle Cerra", value: money(analysis.venta.calleCerra) },
-    { label: "Venta Total", value: money(analysis.venta.total) },
+    { label: "Venta Tresbe", value: money(salesTresbe) },
+    { label: "Venta Cafe con Ce Calle Cerra", value: money(salesCalleCerra) },
   ];
   const salesColWidth = (WIDTH - MARGIN * 2) / salesCols.length;
   const salesHeaderH = 20;
@@ -415,85 +431,20 @@ function drawTresbeMarginAnalysisPage(
   });
   y -= salesHeaderH + salesValueH + 22;
 
-  // Section 1: this week's payroll cost, without tips, per business
-  page.drawText("1. Nomina de la semana (sin propina)", {
-    x: MARGIN,
-    y,
-    size: 10,
-    font: bold,
-    color: NAVY,
-  });
-  y -= 14;
-  const employeeLabel =
-    paidEmployeeCount === 1 ? "1 empleado" : `${paidEmployeeCount} empleados`;
-  page.drawText(`TRESBE (${employeeLabel} en Sinexia)`, {
-    x: MARGIN,
-    y,
-    size: 8.5,
-    font: bold,
-    color: MUTED,
-  });
-  y -= 12;
-  const table1Cols: AnalysisColumn[] = [
-    { label: "Concepto", width: 430, align: "left" },
-    { label: "Importe", width: 130, align: "right" },
-    { label: "Subtotal", width: 160, align: "right" },
-  ];
-  let running = analysis.tresbe.nominaBase;
-  const table1Rows: AnalysisRow[] = [
-    { cells: ["Total nomina en Sinexia (bruto, con propina)", "", money(running)] },
-    ...analysis.tresbe.deducciones.map((item) => {
-      running = Math.round((running + item.importe + Number.EPSILON) * 100) / 100;
-      return {
-        cells: [
-          fit(`No es nomina real: ${item.concepto}`, regular, 8, 420),
-          money(item.importe),
-          money(running),
-        ],
-      };
-    }),
-    ...(() => {
-      running = Math.round((running - analysis.tresbe.tips + Number.EPSILON) * 100) / 100;
-      return [
-        {
-          cells: ["Propina TRESBE", money(-analysis.tresbe.tips), money(running)],
-          bold: true,
-        },
-      ];
-    })(),
-  ];
-  y = drawAnalysisTable(page, bold, regular, y, table1Cols, table1Rows);
-  y -= 16;
   page.drawText(
-    `Nomina TRESBE sin propina: ${money(analysis.tresbe.nominaSinPropina)}`,
-    { x: MARGIN, y, size: 9, font: bold, color: NAVY },
-  );
-  y -= 20;
-
-  if (analysis.calleCerra.hasData) {
-    page.drawText("CAFE CON CE · CALLE CERRA (cargado a mano)", {
-      x: MARGIN,
-      y,
-      size: 8.5,
-      font: bold,
-      color: MUTED,
-    });
-    y -= 14;
-    page.drawText(
-      `Nomina sin propina: ${money(analysis.calleCerra.nominaSinPropina)}   |   Propina: ${money(analysis.calleCerra.tips)}`,
-      { x: MARGIN, y, size: 9, font: regular, color: NAVY },
-    );
-    y -= 22;
-  }
-
-  page.drawText(
-    `TOTAL NOMINA DE LA SEMANA (sin propina, ambos negocios): ${money(analysis.combinado.nominaSinPropina)}`,
+    `% de nomina TRESBE (sin Calle Cerra, sobre venta Tresbe): ${
+      percentages.nominaTresbePct == null ? "—" : pct(percentages.nominaTresbePct)
+    }`,
     { x: MARGIN, y, size: 10.5, font: bold, color: RED },
+  );
+  y -= 12;
+  page.drawText(
+    `Pagado sin propina (sin Calle Cerra): ${money(percentages.nonCalleCerraPaidNoTip)}`,
+    { x: MARGIN, y, size: 8, font: regular, color: MUTED },
   );
   y -= 26;
 
-  // Section 2: % sobre venta combinada
-  page.drawText("2. Nomina como % de la venta total", {
+  page.drawText("Incidencia de cada area sobre venta", {
     x: MARGIN,
     y,
     size: 10,
@@ -501,45 +452,39 @@ function drawTresbeMarginAnalysisPage(
     color: NAVY,
   });
   y -= 14;
-  const table2Cols: AnalysisColumn[] = [
-    { label: "", width: 260, align: "left" },
-    { label: "Nómina (sin propina)", width: 230, align: "right" },
-    { label: "% de venta total", width: 230, align: "right" },
+  const incidenciaCols: AnalysisColumn[] = [
+    { label: "Area", width: 260, align: "left" },
+    { label: "Pagado (sin propina)", width: 230, align: "right" },
+    { label: "% de venta", width: 230, align: "right" },
   ];
-  const table2Rows: AnalysisRow[] = [
-    {
-      cells: [
-        "TRESBE",
-        money(analysis.tresbe.nominaSinPropina),
-        pct(analysis.porcentajeSobreVentaTotalPorNegocio.tresbe),
-      ],
-    },
-    ...(analysis.calleCerra.hasData
-      ? [
-          {
-            cells: [
-              "Café con Ce Calle Cerra",
-              money(analysis.calleCerra.nominaSinPropina),
-              pct(analysis.porcentajeSobreVentaTotalPorNegocio.calleCerra),
-            ],
-          },
-        ]
-      : []),
-    {
-      cells: [
-        "TOTAL",
-        money(analysis.combinado.nominaSinPropina),
-        pct(analysis.combinado.porcentajeSobreVentaTotal),
-      ],
-      bold: true,
-      redCells: [2],
-    },
-  ];
-  y = drawAnalysisTable(page, bold, regular, y, table2Cols, table2Rows);
-  y -= 22;
+  const incidenciaRows: AnalysisRow[] = percentages.incidencia.map((row) => ({
+    cells: [
+      row.area === CALLE_CERRA_AREA ? "Cafe con Ce Calle Cerra" : row.area,
+      money(areaPay.find((a) => a.area === row.area)?.paidNoTip ?? 0),
+      row.pct == null ? "—" : pct(row.pct),
+    ],
+    bold: row.area === CALLE_CERRA_AREA,
+    redCells: [2],
+  }));
+  y = drawAnalysisTable(page, bold, regular, y, incidenciaCols, incidenciaRows);
+  y -= 12;
+  page.drawText(
+    "Nota: Cafe con Ce Calle Cerra se mide sobre SU PROPIA venta (Venta Cafe con Ce Calle Cerra), el resto sobre venta Tresbe.",
+    { x: MARGIN, y, size: 7, font: regular, color: MUTED },
+  );
+  y -= 24;
 
-  // Section 3: % sobre venta propia
-  page.drawText("3. Nomina de cada negocio como % de SU PROPIA venta", {
+  page.drawText(
+    `% de nomina de Cafe con Ce Calle Cerra: ${
+      percentages.calleCerraNominaPct == null
+        ? "— (sin venta cargada)"
+        : pct(percentages.calleCerraNominaPct)
+    }`,
+    { x: MARGIN, y, size: 9.5, font: bold, color: NAVY },
+  );
+  y -= 26;
+
+  page.drawText("Calculo final (peor caso, sin propina)", {
     x: MARGIN,
     y,
     size: 10,
@@ -547,51 +492,30 @@ function drawTresbeMarginAnalysisPage(
     color: NAVY,
   });
   y -= 14;
-  const table3Cols: AnalysisColumn[] = [
-    { label: "", width: 195, align: "left" },
-    { label: "Venta propia", width: 175, align: "right" },
-    { label: "Nómina (sin propina)", width: 175, align: "right" },
-    { label: "% propio", width: 175, align: "right" },
+  const worstCaseCols: AnalysisColumn[] = [
+    { label: "", width: 430, align: "left" },
+    { label: "", width: 290, align: "right" },
   ];
-  const table3Rows: AnalysisRow[] = [
+  const worstCaseRows: AnalysisRow[] = [
     {
       cells: [
-        "TRESBE",
-        money(analysis.venta.tresbeCafeConCe),
-        money(analysis.tresbe.nominaSinPropina),
-        analysis.porcentajePropio.tresbe == null
-          ? "—"
-          : pct(analysis.porcentajePropio.tresbe),
+        "Todas las areas pagadas, sin propina (incl. Calle Cerra)",
+        money(percentages.allAreasPaidNoTip),
+      ],
+    },
+    {
+      cells: ["Venta Tresbe (sin sumar Calle Cerra)", money(salesTresbe)],
+    },
+    {
+      cells: [
+        "% peor caso",
+        percentages.worstCasePct == null ? "—" : pct(percentages.worstCasePct),
       ],
       bold: true,
-      redCells: [3],
+      redCells: [1],
     },
-    ...(analysis.calleCerra.hasData
-      ? [
-          {
-            cells: [
-              "Café con Ce Calle Cerra",
-              money(analysis.venta.calleCerra),
-              money(analysis.calleCerra.nominaSinPropina),
-              analysis.porcentajePropio.calleCerra == null
-                ? "—"
-                : pct(analysis.porcentajePropio.calleCerra),
-            ],
-            bold: true,
-            redCells: [3],
-          },
-        ]
-      : []),
   ];
-  y = drawAnalysisTable(page, bold, regular, y, table3Cols, table3Rows);
-  y -= 16;
-
-  if (!analysis.calleCerra.hasData) {
-    page.drawText(
-      "Café con Ce Calle Cerra: sin datos de nomina cargados esta semana.",
-      { x: MARGIN, y, size: 7.5, font: regular, color: MUTED },
-    );
-  }
+  y = drawAnalysisTable(page, bold, regular, y, worstCaseCols, worstCaseRows);
 
   return page;
 }
@@ -626,68 +550,83 @@ type DailyRow = {
   isProportional: boolean;
 };
 
-const DAILY_ROW_HEIGHT = 13;
-const DAILY_BOTTOM_LIMIT = 50;
+// Compact layout: AM and PM side by side (half page width each) instead of
+// stacked, so a full week fits in one or two pages instead of three-plus.
+const DAILY_ROW_HEIGHT = 9;
+const DAILY_HEADER_HEIGHT = 11;
+const DAILY_BOTTOM_LIMIT = 46;
+const DAILY_GAP = 16;
+const DAILY_HALF_WIDTH = (WIDTH - MARGIN * 2 - DAILY_GAP) / 2;
+const DAILY_COLUMNS = [
+  { label: "Empleado", width: 148 },
+  { label: "Area", width: 58 },
+  { label: "Horas", width: 45 },
+  { label: "Propina", width: 85 },
+];
 
-function drawDailyEntriesTableHeader(page: PDFPage, bold: PDFFont, y: number) {
-  const columns = [
-    { label: "Empleado", width: 220 },
-    { label: "Area", width: 90 },
-    { label: "Horas", width: 90 },
-    { label: "Propina", width: 120 },
-  ];
+function drawDailyHalfBlock(
+  page: PDFPage,
+  bold: PDFFont,
+  regular: PDFFont,
+  x: number,
+  yStart: number,
+  shift: TresbeShift,
+  poolAmount: number,
+  rows: DailyRow[],
+) {
+  let y = yStart;
+  const label = `Turno ${shift}${poolAmount > 0 ? ` -- Pote: ${money(poolAmount)}` : ""}`;
+  page.drawText(label, { x, y, size: 7, font: bold, color: NAVY });
+  y -= DAILY_HEADER_HEIGHT;
+
   page.drawRectangle({
-    x: MARGIN,
-    y: y - 15,
-    width: WIDTH - MARGIN * 2,
-    height: 15,
+    x,
+    y: y - DAILY_HEADER_HEIGHT,
+    width: DAILY_HALF_WIDTH,
+    height: DAILY_HEADER_HEIGHT,
     color: rgb(0.9, 0.92, 0.94),
   });
-  let x = MARGIN;
-  for (const column of columns) {
+  let cx = x;
+  for (const column of DAILY_COLUMNS) {
     page.drawText(column.label, {
-      x: x + 4,
-      y: y - 11,
-      size: 6.5,
+      x: cx + 3,
+      y: y - DAILY_HEADER_HEIGHT + 3,
+      size: 5.5,
       font: bold,
       color: NAVY,
     });
-    x += column.width;
+    cx += column.width;
   }
-  return { y: y - 15, columns };
-}
+  y -= DAILY_HEADER_HEIGHT;
 
-function drawDailyEntriesRow(
-  page: PDFPage,
-  regular: PDFFont,
-  y: number,
-  columns: { label: string; width: number }[],
-  row: DailyRow,
-) {
-  let x = MARGIN;
-  const cells = [
-    row.name,
-    row.area,
-    number(row.hours),
-    `${money(row.tip)}${row.isProportional ? " (prop.)" : ""}`,
-  ];
-  cells.forEach((cell, index) => {
-    page.drawText(fit(cell, regular, 6.8, columns[index].width - 6), {
-      x: x + 4,
-      y: y - DAILY_ROW_HEIGHT + 3.5,
-      size: 6.8,
-      font: regular,
-      color: NAVY,
+  rows.forEach((row) => {
+    const cells = [
+      row.name,
+      row.area,
+      number(row.hours),
+      `${money(row.tip)}${row.isProportional ? " (p)" : ""}`,
+    ];
+    let rx = x;
+    cells.forEach((cell, index) => {
+      page.drawText(fit(cell, regular, 5.2, DAILY_COLUMNS[index].width - 4), {
+        x: rx + 3,
+        y: y - DAILY_ROW_HEIGHT + 2.5,
+        size: 5.2,
+        font: regular,
+        color: NAVY,
+      });
+      rx += DAILY_COLUMNS[index].width;
     });
-    x += columns[index].width;
+    page.drawLine({
+      start: { x, y: y - DAILY_ROW_HEIGHT },
+      end: { x: x + DAILY_HALF_WIDTH, y: y - DAILY_ROW_HEIGHT },
+      thickness: 0.2,
+      color: BORDER,
+    });
+    y -= DAILY_ROW_HEIGHT;
   });
-  page.drawLine({
-    start: { x: MARGIN, y: y - DAILY_ROW_HEIGHT },
-    end: { x: WIDTH - MARGIN, y: y - DAILY_ROW_HEIGHT },
-    thickness: 0.25,
-    color: BORDER,
-  });
-  return y - DAILY_ROW_HEIGHT;
+
+  return y;
 }
 
 function drawTresbeDailyEntriesPages(
@@ -722,82 +661,87 @@ function drawTresbeDailyEntriesPages(
 
   let page = pdf.addPage([WIDTH, HEIGHT]);
   drawCenteredBanner(page, bold, "NOMINA SEMANAL TRESBE -- CARGA DIARIA");
-  let y = HEIGHT - BANNER_HEIGHT - 4 - 26;
+  let y = HEIGHT - BANNER_HEIGHT - 4 - 20;
   page.drawText(`Empresa: ${printable(companyName)}`, {
     x: MARGIN,
     y,
-    size: 9,
+    size: 8,
     font: regular,
     color: MUTED,
   });
   page.drawText(
     `Periodo: ${date(payroll.week_start)} al ${date(payroll.week_end)}`,
-    { x: 200, y, size: 9, font: regular, color: MUTED },
+    { x: 200, y, size: 8, font: regular, color: MUTED },
   );
-  y -= 26;
+  y -= 18;
 
   const newContinuationPage = () => {
     page = pdf.addPage([WIDTH, HEIGHT]);
     drawHeader(page, bold, regular, payroll, companyName, true);
-    y = HEIGHT - 110;
+    y = HEIGHT - 108;
   };
 
-  for (const workDate of dates) {
-    const shiftBlocks = shifts
-      .map((shift) => ({
-        shift,
-        pool: poolByKey.get(`${workDate}|${shift}`) ?? null,
-        entries: entriesByKey.get(`${workDate}|${shift}`) ?? [],
-      }))
-      .filter((block) => block.entries.length > 0);
-    if (!shiftBlocks.length) continue;
+  const toRows = (dayEntries: TresbePayrollDailyEntry[]): DailyRow[] =>
+    dayEntries.map((entry) => ({
+      name: employeeNames.get(entry.employee_id) ?? "(empleado eliminado)",
+      area: entry.area_snapshot,
+      hours: Number(entry.hours),
+      tip: entry.receives_proportional_tips_snapshot
+        ? Number(entry.tip_proportional)
+        : Number(entry.tip_cafe_manual),
+      isProportional: entry.receives_proportional_tips_snapshot,
+    }));
 
-    if (y - 16 < DAILY_BOTTOM_LIMIT) newContinuationPage();
+  for (const workDate of dates) {
+    const amEntries = entriesByKey.get(`${workDate}|AM`) ?? [];
+    const pmEntries = entriesByKey.get(`${workDate}|PM`) ?? [];
+    if (!amEntries.length && !pmEntries.length) continue;
+
+    const maxRows = Math.max(amEntries.length, pmEntries.length);
+    const blockHeight =
+      11 + DAILY_HEADER_HEIGHT * 2 + maxRows * DAILY_ROW_HEIGHT + 6;
+    if (y - blockHeight < DAILY_BOTTOM_LIMIT) newContinuationPage();
+
     const label = capitalizeFirst(
       DAY_LABEL.format(new Date(`${workDate}T12:00:00Z`)),
     );
     page.drawText(printable(label), {
       x: MARGIN,
       y,
-      size: 10,
+      size: 9,
       font: bold,
       color: NAVY,
     });
-    y -= 14;
+    y -= 11;
 
-    for (const block of shiftBlocks) {
-      const rows: DailyRow[] = block.entries.map((entry) => ({
-        name: employeeNames.get(entry.employee_id) ?? "(empleado eliminado)",
-        area: entry.area_snapshot,
-        hours: Number(entry.hours),
-        tip: entry.receives_proportional_tips_snapshot
-          ? Number(entry.tip_proportional)
-          : Number(entry.tip_cafe_manual),
-        isProportional: entry.receives_proportional_tips_snapshot,
-      }));
-      const blockHeight = 14 + 15 + rows.length * DAILY_ROW_HEIGHT + 8;
-      if (y - blockHeight < DAILY_BOTTOM_LIMIT) newContinuationPage();
-
-      const poolAmount = Number(block.pool?.tip_pool_amount ?? 0);
-      const shiftLabel = `Turno ${block.shift}${
-        poolAmount > 0 ? ` -- Pote de propina: ${money(poolAmount)}` : ""
-      }`;
-      page.drawText(shiftLabel, {
-        x: MARGIN,
-        y,
-        size: 8.5,
-        font: bold,
-        color: NAVY,
-      });
-      y -= 14;
-      const header = drawDailyEntriesTableHeader(page, bold, y);
-      y = header.y;
-      rows.forEach((row) => {
-        y = drawDailyEntriesRow(page, regular, y, header.columns, row);
-      });
-      y -= 8;
-    }
-    y -= 6;
+    const amPool = poolByKey.get(`${workDate}|AM`);
+    const pmPool = poolByKey.get(`${workDate}|PM`);
+    const rightX = MARGIN + DAILY_HALF_WIDTH + DAILY_GAP;
+    const yAfterAm = amEntries.length
+      ? drawDailyHalfBlock(
+          page,
+          bold,
+          regular,
+          MARGIN,
+          y,
+          "AM",
+          Number(amPool?.tip_pool_amount ?? 0),
+          toRows(amEntries),
+        )
+      : y;
+    const yAfterPm = pmEntries.length
+      ? drawDailyHalfBlock(
+          page,
+          bold,
+          regular,
+          rightX,
+          y,
+          "PM",
+          Number(pmPool?.tip_pool_amount ?? 0),
+          toRows(pmEntries),
+        )
+      : y;
+    y = Math.min(yAfterAm, yAfterPm) - 6;
   }
 }
 
@@ -807,16 +751,16 @@ export async function buildTresbePayrollPdf(params: {
   entries: TresbePayrollEntry[];
   dailyEntries?: TresbePayrollDailyEntry[];
   shiftPools?: TresbePayrollShiftPool[];
-  employees?: { id: string; display_name: string }[];
+  employees?: { id: string; display_name: string; area: string }[];
 }) {
   const entries = params.entries.filter(hasTresbePayrollValue);
+  const dailyEntries = params.dailyEntries ?? [];
+  const employees = params.employees ?? [];
   // Hours/system/adjustments/grand come from the saved payroll header,
   // recalculated by PostgreSQL before preview/send. Servicios is computed
   // here from each entry's real check payout (getServiceCheckPayAmount),
   // which folds tips into the single check for "servicios completos"
-  // employees -- matching what actually goes out the door per check. Tips
-  // is likewise recomputed excluding those same employees, so their tips
-  // aren't counted both there and inside Servicios.
+  // employees -- matching what actually goes out the door per check.
   const servicePayoutTotal = entries.reduce((sum, e) => {
     if (Number(e.service_check_amount) <= 0) return sum;
     return (
@@ -827,17 +771,21 @@ export async function buildTresbePayrollPdf(params: {
       })
     );
   }, 0);
-  const tipsOutsideServices = entries.reduce(
-    (sum, e) =>
-      sum +
-      (e.payroll_rule_snapshot === "full_services" ? 0 : Number(e.tips)),
-    0,
+
+  const areaHoursTips = computeAreaHoursTips(dailyEntries);
+  const tipsTresbe = round2(
+    areaHoursTips
+      .filter((a) => a.area === "BOH" || a.area === "FOH")
+      .reduce((sum, a) => sum + a.tips, 0),
   );
+  const tipsCafeConCe =
+    areaHoursTips.find((a) => a.area === "CAFE CON CE")?.tips ?? 0;
+  const tipsCalleCerra =
+    areaHoursTips.find((a) => a.area === CALLE_CERRA_AREA)?.tips ?? 0;
+
   const visibleTotals = {
     hours: Number(params.payroll.total_weekly_hours),
     system: Number(params.payroll.total_system_pay),
-    tips: tipsOutsideServices,
-    tipsCalleCerra: Number(params.payroll.calle_cerra_tips ?? 0),
     services: servicePayoutTotal,
     adjustments: Number(params.payroll.total_adjustments),
     grand: Number(params.payroll.grand_total),
@@ -881,8 +829,9 @@ export async function buildTresbePayrollPdf(params: {
     ["Empleados", String(entries.length)],
     ["Horas", number(visibleTotals.hours)],
     ["Sistema (+ impuestos)", money(visibleTotals.system)],
-    ["Tips Tresbe", money(visibleTotals.tips)],
-    ["Tips Calle Cerra", money(visibleTotals.tipsCalleCerra)],
+    ["Tips Tresbe", money(tipsTresbe)],
+    ["Tips Cafe con Ce", money(tipsCafeConCe)],
+    ["Tips Calle Cerra", money(tipsCalleCerra)],
     ["Servicios", money(visibleTotals.services)],
     ["Ajustes", money(visibleTotals.adjustments)],
     ["TOTAL A PAGAR", money(visibleTotals.grand)],
@@ -893,56 +842,36 @@ export async function buildTresbePayrollPdf(params: {
     page.drawText(label, {
       x,
       y,
-      size: 6.5,
+      size: 6.2,
       font: bold,
       color: MUTED,
     });
     page.drawText(value, {
       x,
       y: y - 13,
-      size: index === summary.length - 1 ? 10.5 : 8.5,
+      size: index === summary.length - 1 ? 10 : 8,
       font: bold,
       color: index === summary.length - 1 ? RED : NAVY,
     });
   });
   y -= 42;
 
+  const areaByEmployeeId = new Map(employees.map((e) => [e.id, e.area]));
   const detailColumns: Column[] = [
-    { label: "Empleado", width: 116, value: (e) => e.employee_name_snapshot },
-    { label: "Area", width: 48, value: (e) => e.area_snapshot },
-    { label: "Horas", width: 38, value: (e) => number(e.total_weekly_hours) },
-    { label: "Sistema", width: 68, value: (e) => money(e.system_pay) },
-    { label: "Tips", width: 52, value: (e) => money(e.tips) },
     {
-      label: "Servicios",
-      width: 104,
-      value: (e) =>
-        Number(e.service_check_amount) > 0
-          ? `${money(
-              getServiceCheckPayAmount(e.payroll_rule_snapshot, {
-                serviceCheckAmount: Number(e.service_check_amount),
-                employeeTotal: Number(e.employee_total),
-              }),
-            )} / ${number(e.service_hours)}h`
-          : money(0),
+      label: "Empleado (area)",
+      width: 260,
+      value: (e) => {
+        const area = areaByEmployeeId.get(e.employee_id) ?? e.area_snapshot;
+        return `${e.employee_name_snapshot} (${area})`;
+      },
     },
+    { label: "Tipo de pago", width: 130, value: (e) => paymentTypeLabel(e) },
+    { label: "Horas", width: 60, value: (e) => number(e.total_weekly_hours) },
+    { label: "Tips", width: 90, value: (e) => money(e.tips) },
     {
-      label: "Motivo / comentario",
-      width: 154,
-      value: (e) =>
-        [
-          Number(e.service_check_amount) > 0
-            ? (e.service_reason ?? "Otro")
-            : null,
-          e.comment,
-        ]
-          .filter(Boolean)
-          .join(" - ") || "-",
-    },
-    { label: "Ajustes", width: 62, value: (e) => money(e.other_adjustments) },
-    {
-      label: "Total a pagar",
-      width: 78,
+      label: "Total",
+      width: 100,
       value: (e) => money(e.employee_total),
     },
   ];
@@ -985,31 +914,28 @@ export async function buildTresbePayrollPdf(params: {
     );
   }
 
-  if (params.dailyEntries?.length) {
+  if (dailyEntries.length) {
     drawTresbeDailyEntriesPages(
       pdf,
       bold,
       regular,
       params.payroll,
       params.companyName,
-      params.employees ?? [],
-      params.dailyEntries,
+      employees,
+      dailyEntries,
       params.shiftPools ?? [],
     );
   }
 
-  const marginAnalysisSalesTotal =
-    Number(params.payroll.sales_tresbe) +
-    Number(params.payroll.sales_cafe_con_ce) +
-    Number(params.payroll.sales_cafe_con_ce_calle_cerra);
-  if (marginAnalysisSalesTotal > 0) {
-    drawTresbeMarginAnalysisPage(
+  if (salesTresbe > 0 || salesCalleCerra > 0) {
+    drawTresbeAreaPercentagesPage(
       pdf,
       bold,
       regular,
       params.payroll,
       params.companyName,
       entries,
+      employees,
     );
   }
 
@@ -1025,4 +951,8 @@ export async function buildTresbePayrollPdf(params: {
     );
   });
   return pdf.save();
+}
+
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }

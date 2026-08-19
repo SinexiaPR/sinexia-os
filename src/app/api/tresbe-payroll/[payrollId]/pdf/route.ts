@@ -67,7 +67,7 @@ export async function GET(
       .eq("payroll_id", typedPayroll.id),
     supabase
       .from("tresbe_employees")
-      .select("id,display_name")
+      .select("id,display_name,area")
       .eq("company_id", typedPayroll.company_id),
   ]);
   if (company?.slug !== "tresbe" || entriesError)

@@ -229,8 +229,8 @@ async function main() {
     dailyEntries,
     shiftPools,
     employees: [
-      { id: "employee-1", display_name: "Lee Pierre" },
-      { id: "employee-2", display_name: "Nashely" },
+      { id: "employee-1", display_name: "Lee Pierre", area: "BOH" },
+      { id: "employee-2", display_name: "Nashely", area: "FOH" },
     ],
   });
   const withDailyPdf = await PDFDocument.load(withDailyBytes);
@@ -240,31 +240,45 @@ async function main() {
     "daily entries must add a Carga Diaria page when present",
   );
 
-  const busyDailyEntries: TresbePayrollDailyEntry[] = Array.from(
-    { length: 60 },
+  // A full realistic week's worth of daily entries (58 rows across all 7
+  // days, matching the real production payroll's actual scale) must still
+  // fit in at most 2 Carga Diaria pages -- the whole point of the
+  // side-by-side AM/PM compaction.
+  const weekDates = [
+    "2026-07-06",
+    "2026-07-07",
+    "2026-07-08",
+    "2026-07-09",
+    "2026-07-10",
+    "2026-07-11",
+    "2026-07-12",
+  ];
+  const fullWeekDailyEntries: TresbePayrollDailyEntry[] = Array.from(
+    { length: 58 },
     (_, index) =>
       makeDailyEntry({
-        id: `daily-busy-${index}`,
+        id: `daily-week-${index}`,
         employee_id: `employee-${index}`,
-        work_date: index % 2 === 0 ? "2026-07-06" : "2026-07-07",
-        shift: index % 4 < 2 ? "AM" : "PM",
+        work_date: weekDates[index % 7],
+        shift: index % 2 === 0 ? "AM" : "PM",
       }),
   );
-  const busyBytes = await buildTresbePayrollPdf({
+  const fullWeekBytes = await buildTresbePayrollPdf({
     companyName: "Tresbe",
     payroll,
     entries: [makeEntry({})],
-    dailyEntries: busyDailyEntries,
+    dailyEntries: fullWeekDailyEntries,
     shiftPools: [],
-    employees: busyDailyEntries.map((entry) => ({
+    employees: fullWeekDailyEntries.map((entry) => ({
       id: entry.employee_id,
       display_name: `Empleado ${entry.employee_id}`,
+      area: "BOH",
     })),
   });
-  const busyPdf = await PDFDocument.load(busyBytes);
+  const fullWeekPdf = await PDFDocument.load(fullWeekBytes);
   assert.ok(
-    busyPdf.getPageCount() > 2,
-    "a busy week's daily entries must overflow onto continuation pages",
+    fullWeekPdf.getPageCount() <= 3,
+    `a full realistic week (58 daily entries) must fit in at most 2 Carga Diaria pages (+1 summary page) -- got ${fullWeekPdf.getPageCount()} pages`,
   );
 
   // The live "% sobre venta" page only appears when there's sales data to
