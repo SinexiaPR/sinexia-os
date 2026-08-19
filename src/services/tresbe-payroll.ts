@@ -59,6 +59,8 @@ export type TresbePayroll = {
   sales_tresbe: number;
   sales_cafe_con_ce: number;
   sales_cafe_con_ce_calle_cerra: number;
+  calle_cerra_nomina_sin_propina: number | null;
+  calle_cerra_tips: number | null;
   admin_note: string | null;
   client_note: string | null;
   supporting_document_id: string | null;

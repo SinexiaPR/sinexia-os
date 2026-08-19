@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { buildTresbePayrollPdf } from "@/lib/tresbe-payroll/pdf";
-import { tresbePayrollAnalysisSchema } from "@/lib/tresbe-payroll/analysis";
 import type {
   TresbePayroll,
   TresbePayrollDailyEntry,
@@ -43,7 +42,6 @@ export async function GET(
   const [
     { data: company },
     { data: entries, error: entriesError },
-    analysisResult,
     { data: dailyEntries },
     { data: shiftPools },
     { data: employees },
@@ -59,13 +57,6 @@ export async function GET(
       .eq("payroll_id", typedPayroll.id)
       .order("area_snapshot")
       .order("employee_name_snapshot"),
-    profile.role === "client"
-      ? Promise.resolve({ data: null })
-      : supabase
-          .from("tresbe_payroll_analysis")
-          .select("data")
-          .eq("payroll_id", typedPayroll.id)
-          .maybeSingle(),
     supabase
       .from("tresbe_payroll_daily_entries")
       .select("*")
@@ -84,9 +75,6 @@ export async function GET(
       { error: "Nómina no encontrada" },
       { status: 404 },
     );
-  const analysisParsed = analysisResult.data
-    ? tresbePayrollAnalysisSchema.safeParse(analysisResult.data.data)
-    : null;
 
   if (profile.role === "client") {
     await supabase.rpc("mark_tresbe_payroll_viewed", {
@@ -104,7 +92,6 @@ export async function GET(
     companyName: company.name,
     payroll: typedPayroll,
     entries: (entries ?? []) as TresbePayrollEntry[],
-    analysis: analysisParsed?.success ? analysisParsed.data : null,
     dailyEntries: (dailyEntries ?? []) as TresbePayrollDailyEntry[],
     shiftPools: (shiftPools ?? []) as TresbePayrollShiftPool[],
     employees: employees ?? [],
