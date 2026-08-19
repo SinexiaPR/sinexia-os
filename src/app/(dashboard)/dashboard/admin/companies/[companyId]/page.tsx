@@ -272,9 +272,6 @@ export default async function AdminCompanyPage({
                           <th className="py-1.5 pr-3 text-right font-medium">
                             Propinas
                           </th>
-                          <th className="py-1.5 pr-3 text-right font-medium">
-                            Otros pagos
-                          </th>
                           <th className="py-1.5 text-right font-medium">
                             Total
                           </th>
@@ -293,10 +290,9 @@ export default async function AdminCompanyPage({
                               {Number(row.total_hours).toFixed(2)}
                             </td>
                             <td className="py-1.5 pr-3 text-right tabular-nums">
-                              {currencyFormat.format(row.tips)}
-                            </td>
-                            <td className="py-1.5 pr-3 text-right tabular-nums">
-                              {currencyFormat.format(row.other_pay)}
+                              {currencyFormat.format(
+                                Number(row.tips) + Number(row.other_pay),
+                              )}
                             </td>
                             <td className="py-1.5 text-right font-medium tabular-nums">
                               {currencyFormat.format(row.weekly_payroll)}

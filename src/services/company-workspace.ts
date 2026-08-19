@@ -406,7 +406,9 @@ export async function getSibaritaPayrollHistory(companyId: string) {
     };
     existing.rows.push(row);
     existing.totalHours += Number(row.total_hours);
-    existing.totalTips += Number(row.tips);
+    // "other_pay" is where Sibarita's own weekly sheet actually records
+    // tips for most employees -- the "tips" column is rarely used.
+    existing.totalTips += Number(row.tips) + Number(row.other_pay);
     existing.totalPay += Number(row.weekly_payroll);
     weeks.set(row.week_start, existing);
   }
