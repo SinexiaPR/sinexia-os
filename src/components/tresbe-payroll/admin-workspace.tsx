@@ -24,7 +24,6 @@ import {
   reopenTresbePayroll,
   resetTresbePayrollDraft,
   saveTresbeEmployee,
-  saveTresbePayrollAnalysis,
   saveTresbePayrollDraft,
   saveTresbePayrollSettings,
   sendTresbePayrollToClient,
@@ -44,13 +43,13 @@ import {
 import type {
   TresbeEmployee,
   TresbePayroll,
-  TresbePayrollAnalysis,
   TresbePayrollDailyEntry,
   TresbePayrollEntry,
   TresbePayrollShiftPool,
   TresbePayrollSettings,
   TresbeWageReviewItem,
 } from "@/services/tresbe-payroll";
+import { TresbeAreaReportCard } from "@/components/tresbe-payroll/area-report-card";
 
 type Company = { id: string; name: string; slug: string };
 const money = new Intl.NumberFormat("en-US", {
@@ -108,7 +107,6 @@ export function TresbePayrollAdminWorkspace({
   payrolls,
   selected,
   entries,
-  analysis,
   dailyEntries,
   shiftPools,
   settings,
@@ -119,7 +117,6 @@ export function TresbePayrollAdminWorkspace({
   payrolls: TresbePayroll[];
   selected: TresbePayroll | null;
   entries: TresbePayrollEntry[];
-  analysis: TresbePayrollAnalysis | null;
   dailyEntries: TresbePayrollDailyEntry[];
   shiftPools: TresbePayrollShiftPool[];
   settings: TresbePayrollSettings | null;
@@ -144,18 +141,6 @@ export function TresbePayrollAdminWorkspace({
   );
   const [salesCafeConCeCalleCerra, setSalesCafeConCeCalleCerra] = useState(
     String(selected?.sales_cafe_con_ce_calle_cerra ?? 0),
-  );
-  const [calleCerraNominaSinPropina, setCalleCerraNominaSinPropina] =
-    useState(
-      selected?.calle_cerra_nomina_sin_propina == null
-        ? ""
-        : String(selected.calle_cerra_nomina_sin_propina),
-    );
-  const [calleCerraTips, setCalleCerraTips] = useState(
-    selected?.calle_cerra_tips == null ? "" : String(selected.calle_cerra_tips),
-  );
-  const [analysisJson, setAnalysisJson] = useState(
-    analysis?.data ? JSON.stringify(analysis.data, null, 2) : "",
   );
   const [emailRecipient, setEmailRecipient] = useState(
     selected?.email_recipient ?? settings?.default_email_recipient ?? "",
@@ -227,12 +212,6 @@ export function TresbePayrollAdminWorkspace({
     salesTresbe: Number(salesTresbe || 0),
     salesCafeConCe: Number(salesCafeConCe || 0),
     salesCafeConCeCalleCerra: Number(salesCafeConCeCalleCerra || 0),
-    calleCerraNominaSinPropina:
-      calleCerraNominaSinPropina.trim() === ""
-        ? null
-        : Number(calleCerraNominaSinPropina),
-    calleCerraTips:
-      calleCerraTips.trim() === "" ? null : Number(calleCerraTips),
     entries: entryState.map((entry) => ({
       id: entry.id,
       totalWeeklyHours: Number(entry.total_weekly_hours),
@@ -497,97 +476,14 @@ export function TresbePayrollAdminWorkspace({
                       Number(salesCafeConCeCalleCerra || 0),
                   )}
                 </p>
-                <div className="mt-5 border-t pt-4">
-                  <h3 className="text-sm font-semibold">
-                    Nómina de Café con Ce · Calle Cerra
-                  </h3>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    Calle Cerra es un negocio aparte (Clover y horas propios)
-                    que no pasa por esta nómina -- cargá acá sus números de la
-                    semana a mano, igual que la venta de arriba.
-                  </p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <label className="text-sm">
-                      Nómina sin propina
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Sin cargar"
-                        value={calleCerraNominaSinPropina}
-                        disabled={!editable}
-                        onChange={(event) =>
-                          setCalleCerraNominaSinPropina(event.target.value)
-                        }
-                        className="mt-1"
-                      />
-                    </label>
-                    <label className="text-sm">
-                      Propina
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Sin cargar"
-                        value={calleCerraTips}
-                        disabled={!editable}
-                        onChange={(event) =>
-                          setCalleCerraTips(event.target.value)
-                        }
-                        className="mt-1"
-                      />
-                    </label>
-                  </div>
-                </div>
               </SurfaceCard>
 
-              <SurfaceCard>
-                <h2 className="font-semibold">
-                  Análisis de % sobre venta (legado)
-                </h2>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  La página de % sobre venta del PDF ahora se calcula sola a
-                  partir de la nómina, la venta y los campos de Calle Cerra de
-                  arriba -- ya no depende de este JSON. Este cuadro queda solo
-                  como respaldo del análisis manual de semanas anteriores; no
-                  hace falta llenarlo.
-                </p>
-                <textarea
-                  value={analysisJson}
-                  onChange={(event) => setAnalysisJson(event.target.value)}
-                  placeholder='{"venta": {...}, "ajuste_total_nomina": {...}, ...}'
-                  rows={10}
-                  className="border-input bg-background mt-3 w-full rounded-md border px-3 py-2 font-mono text-xs"
-                />
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <Button
-                    size="sm"
-                    disabled={pending || !analysisJson.trim()}
-                    onClick={() =>
-                      run(() =>
-                        saveTresbePayrollAnalysis({
-                          companyId: company.id,
-                          payrollId: selected.id,
-                          json: analysisJson,
-                        }),
-                      )
-                    }
-                  >
-                    <Save className="size-4" />
-                    Guardar análisis
-                  </Button>
-                  {analysis ? (
-                    <p className="text-muted-foreground text-xs">
-                      Guardado {shortDate.format(new Date(analysis.updated_at))}
-                      -- ya se incluye en el PDF.
-                    </p>
-                  ) : (
-                    <p className="text-muted-foreground text-xs">
-                      Sin análisis guardado -- el PDF sale sin esa página.
-                    </p>
-                  )}
-                </div>
-              </SurfaceCard>
+              <TresbeAreaReportCard
+                payroll={selected}
+                entries={entryState}
+                dailyEntries={dailyEntries}
+                employees={employees}
+              />
 
               <SurfaceCard>
                 <div className="flex flex-wrap items-start justify-between gap-4">
