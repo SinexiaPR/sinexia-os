@@ -50,23 +50,6 @@ const date = (value: string) =>
 
 const pct = (value: number) => `${value.toFixed(2)}%`;
 
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
-  const words = printable(text).split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
 function wrapTextWithFirstLineOffset(
   text: string,
   font: PDFFont,
