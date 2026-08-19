@@ -1,5 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import type { TresbePayrollRule } from "@/lib/tresbe-payroll/calculations";
+import type { TresbePayrollAnalysisJson } from "@/lib/tresbe-payroll/analysis";
+
+export type TresbePayrollAnalysis = {
+  payroll_id: string;
+  data: TresbePayrollAnalysisJson;
+  updated_at: string;
+};
 
 export type TresbePayrollStatus =
   "draft" | "calculated" | "sent" | "viewed" | "corrected" | "cancelled";
@@ -172,21 +179,32 @@ export async function getTresbeAdminWorkspace(
     payrolls[0] ??
     null;
   let entries: TresbePayrollEntry[] = [];
+  let analysis: TresbePayrollAnalysis | null = null;
   if (selected) {
-    const { data, error } = await supabase
-      .from("tresbe_payroll_entries")
-      .select("*")
-      .eq("payroll_id", selected.id)
-      .order("area_snapshot")
-      .order("employee_name_snapshot");
-    if (error) throw error;
-    entries = (data ?? []) as TresbePayrollEntry[];
+    const [entriesResult, analysisResult] = await Promise.all([
+      supabase
+        .from("tresbe_payroll_entries")
+        .select("*")
+        .eq("payroll_id", selected.id)
+        .order("area_snapshot")
+        .order("employee_name_snapshot"),
+      supabase
+        .from("tresbe_payroll_analysis")
+        .select("*")
+        .eq("payroll_id", selected.id)
+        .maybeSingle(),
+    ]);
+    if (entriesResult.error) throw entriesResult.error;
+    entries = (entriesResult.data ?? []) as TresbePayrollEntry[];
+    if (analysisResult.error) throw analysisResult.error;
+    analysis = analysisResult.data as TresbePayrollAnalysis | null;
   }
   return {
     employees: (employeesResult.data ?? []) as TresbeEmployee[],
     payrolls,
     selected,
     entries,
+    analysis,
     settings: settingsResult.data as TresbePayrollSettings | null,
     wageReviews: (wageReviewsResult.data ?? []) as TresbeWageReviewItem[],
   };

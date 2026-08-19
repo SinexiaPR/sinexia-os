@@ -15,6 +15,10 @@ import {
 } from "@/lib/tresbe-payroll/email";
 import { buildTresbePayrollPdf } from "@/lib/tresbe-payroll/pdf";
 import {
+  checkTresbeAnalysisConsistency,
+  tresbePayrollAnalysisSchema,
+} from "@/lib/tresbe-payroll/analysis";
+import {
   resolveTresbeCompany,
   type TresbePayroll,
   type TresbePayrollEntry,
@@ -788,4 +792,64 @@ export async function emailTresbePayroll(
   } finally {
     revalidatePath(`/dashboard/admin/companies/${companyId}/payroll`);
   }
+}
+
+export async function saveTresbePayrollAnalysis(params: {
+  companyId: string;
+  payrollId: string;
+  json: string;
+}) {
+  let profile;
+  try {
+    ({ profile } = await authorizeTresbeAdmin(params.companyId));
+  } catch {
+    return { error: "No autorizado." };
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(params.json);
+  } catch {
+    return {
+      error:
+        "El JSON no es válido -- revisá comas, comillas y llaves antes de guardar.",
+    };
+  }
+  const parsed = tresbePayrollAnalysisSchema.safeParse(raw);
+  if (!parsed.success) {
+    const fields = parsed.error.issues
+      .map((issue) => issue.path.join(".") || "(raíz)")
+      .join(", ");
+    return { error: `Faltan o están mal estos campos: ${fields}.` };
+  }
+
+  const supabase = await createClient();
+  const payrollResult = await supabase
+    .from("tresbe_payrolls")
+    .select("id")
+    .eq("id", params.payrollId)
+    .eq("company_id", params.companyId)
+    .maybeSingle();
+  if (!payrollResult.data) return { error: "Nómina no encontrada." };
+
+  const warnings = checkTresbeAnalysisConsistency(parsed.data);
+
+  const { error } = await supabase.from("tresbe_payroll_analysis").upsert(
+    {
+      payroll_id: params.payrollId,
+      data: parsed.data,
+      created_by: profile.id,
+      updated_by: profile.id,
+    },
+    { onConflict: "payroll_id" },
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath(`/dashboard/admin/companies/${params.companyId}/payroll`);
+  return {
+    success: true,
+    message: warnings.length
+      ? `Guardado, pero revisá esto antes de imprimir: ${warnings.join(" ")}`
+      : `Guardado. Nómina sin propina de la semana: $${parsed.data.ajuste_total_nomina.nomina_sin_propina_semana.toFixed(2)}.`,
+  };
 }

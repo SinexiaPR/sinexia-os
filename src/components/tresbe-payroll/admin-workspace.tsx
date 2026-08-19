@@ -24,6 +24,7 @@ import {
   reopenTresbePayroll,
   resetTresbePayrollDraft,
   saveTresbeEmployee,
+  saveTresbePayrollAnalysis,
   saveTresbePayrollDraft,
   saveTresbePayrollSettings,
   sendTresbePayrollToClient,
@@ -42,6 +43,7 @@ import {
 import type {
   TresbeEmployee,
   TresbePayroll,
+  TresbePayrollAnalysis,
   TresbePayrollEntry,
   TresbePayrollSettings,
   TresbeWageReviewItem,
@@ -103,6 +105,7 @@ export function TresbePayrollAdminWorkspace({
   payrolls,
   selected,
   entries,
+  analysis,
   settings,
   wageReviews,
 }: {
@@ -111,6 +114,7 @@ export function TresbePayrollAdminWorkspace({
   payrolls: TresbePayroll[];
   selected: TresbePayroll | null;
   entries: TresbePayrollEntry[];
+  analysis: TresbePayrollAnalysis | null;
   settings: TresbePayrollSettings | null;
   wageReviews: TresbeWageReviewItem[];
 }) {
@@ -131,6 +135,9 @@ export function TresbePayrollAdminWorkspace({
   );
   const [salesCafeConCeCalleCerra, setSalesCafeConCeCalleCerra] = useState(
     String(selected?.sales_cafe_con_ce_calle_cerra ?? 0),
+  );
+  const [analysisJson, setAnalysisJson] = useState(
+    analysis?.data ? JSON.stringify(analysis.data, null, 2) : "",
   );
   const [emailRecipient, setEmailRecipient] = useState(
     selected?.email_recipient ?? settings?.default_email_recipient ?? "",
@@ -465,6 +472,51 @@ export function TresbePayrollAdminWorkspace({
                       Number(salesCafeConCeCalleCerra || 0),
                   )}
                 </p>
+              </SurfaceCard>
+
+              <SurfaceCard>
+                <h2 className="font-semibold">Análisis de % sobre venta</h2>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Pegá acá el JSON del análisis que calculás aparte (con
+                  Claude Cowork) cada semana. Sinexia no recalcula nada de
+                  esto -- solo guarda tus números y los agrega como una
+                  página extra al PDF de esta nómina.
+                </p>
+                <textarea
+                  value={analysisJson}
+                  onChange={(event) => setAnalysisJson(event.target.value)}
+                  placeholder='{"venta": {...}, "ajuste_total_nomina": {...}, ...}'
+                  rows={10}
+                  className="border-input bg-background mt-3 w-full rounded-md border px-3 py-2 font-mono text-xs"
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <Button
+                    size="sm"
+                    disabled={pending || !analysisJson.trim()}
+                    onClick={() =>
+                      run(() =>
+                        saveTresbePayrollAnalysis({
+                          companyId: company.id,
+                          payrollId: selected.id,
+                          json: analysisJson,
+                        }),
+                      )
+                    }
+                  >
+                    <Save className="size-4" />
+                    Guardar análisis
+                  </Button>
+                  {analysis ? (
+                    <p className="text-muted-foreground text-xs">
+                      Guardado {shortDate.format(new Date(analysis.updated_at))}
+                      -- ya se incluye en el PDF.
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">
+                      Sin análisis guardado -- el PDF sale sin esa página.
+                    </p>
+                  )}
+                </div>
               </SurfaceCard>
 
               <SurfaceCard>

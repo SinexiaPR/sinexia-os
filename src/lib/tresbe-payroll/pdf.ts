@@ -11,6 +11,7 @@ import type {
   TresbePayrollEntry,
 } from "@/services/tresbe-payroll";
 import { getServiceCheckPayAmount } from "@/lib/tresbe-payroll/calculations";
+import type { TresbePayrollAnalysisJson } from "@/lib/tresbe-payroll/analysis";
 
 const WIDTH = 792;
 const HEIGHT = 612;
@@ -46,6 +47,51 @@ const date = (value: string) =>
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${value}T12:00:00Z`));
+
+const pct = (value: number) => `${value.toFixed(2)}%`;
+
+function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
+  const words = printable(text).split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function wrapTextWithFirstLineOffset(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number,
+  firstLineOffset: number,
+) {
+  const words = printable(text).split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  let firstLine = true;
+  for (const word of words) {
+    const available = firstLine ? maxWidth - firstLineOffset : maxWidth;
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= available) {
+      current = candidate;
+    } else {
+      lines.push(current);
+      firstLine = false;
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
 
 export function hasTresbePayrollValue(entry: TresbePayrollEntry) {
   return [
@@ -215,10 +261,328 @@ function drawCompactTableRow(
   return y - rowHeight;
 }
 
+type AnalysisColumn = { label: string; width: number; align: "left" | "right" };
+type AnalysisRow = { cells: string[]; bold?: boolean; redCells?: number[] };
+
+function drawAnalysisTable(
+  page: PDFPage,
+  bold: PDFFont,
+  regular: PDFFont,
+  yStart: number,
+  columns: AnalysisColumn[],
+  rows: AnalysisRow[],
+) {
+  const rowHeight = 18;
+  let y = yStart;
+  page.drawRectangle({
+    x: MARGIN,
+    y: y - rowHeight,
+    width: WIDTH - MARGIN * 2,
+    height: rowHeight,
+    color: NAVY,
+  });
+  let x = MARGIN;
+  for (const column of columns) {
+    if (column.label) {
+      const w = bold.widthOfTextAtSize(column.label, 7.5);
+      const tx =
+        column.align === "right" ? x + column.width - w - 6 : x + 6;
+      page.drawText(column.label, {
+        x: tx,
+        y: y - 12.5,
+        size: 7.5,
+        font: bold,
+        color: rgb(1, 1, 1),
+      });
+    }
+    x += column.width;
+  }
+  y -= rowHeight;
+
+  rows.forEach((row, rowIndex) => {
+    if (rowIndex % 2 === 1)
+      page.drawRectangle({
+        x: MARGIN,
+        y: y - rowHeight,
+        width: WIDTH - MARGIN * 2,
+        height: rowHeight,
+        color: ALT,
+      });
+    let cx = MARGIN;
+    row.cells.forEach((cell, cellIndex) => {
+      const font = row.bold ? bold : regular;
+      const color = row.redCells?.includes(cellIndex) ? RED : NAVY;
+      const w = font.widthOfTextAtSize(cell, 8);
+      const column = columns[cellIndex];
+      const tx = column.align === "right" ? cx + column.width - w - 6 : cx + 6;
+      page.drawText(cell, {
+        x: tx,
+        y: y - rowHeight + 5.5,
+        size: 8,
+        font,
+        color,
+      });
+      cx += column.width;
+    });
+    y -= rowHeight;
+  });
+
+  page.drawRectangle({
+    x: MARGIN,
+    y,
+    width: WIDTH - MARGIN * 2,
+    height: yStart - y,
+    borderColor: BORDER,
+    borderWidth: 0.5,
+  });
+  return y;
+}
+
+function drawTresbeAnalysisPage(
+  pdf: PDFDocument,
+  bold: PDFFont,
+  regular: PDFFont,
+  payroll: TresbePayroll,
+  companyName: string,
+  analysis: TresbePayrollAnalysisJson,
+) {
+  const page = pdf.addPage([WIDTH, HEIGHT]);
+
+  const bannerHeight = 86;
+  page.drawRectangle({
+    x: 0,
+    y: HEIGHT - bannerHeight,
+    width: WIDTH,
+    height: bannerHeight,
+    color: NAVY,
+  });
+  page.drawRectangle({
+    x: 0,
+    y: HEIGHT - bannerHeight - 4,
+    width: WIDTH,
+    height: 4,
+    color: RED,
+  });
+  const title = "SINEXIA";
+  page.drawText(title, {
+    x: (WIDTH - bold.widthOfTextAtSize(title, 20)) / 2,
+    y: HEIGHT - 40,
+    size: 20,
+    font: bold,
+    color: rgb(1, 1, 1),
+  });
+  const subtitle = "NOMINA SEMANAL TRESBE -- ANALISIS DE % SOBRE VENTA";
+  page.drawText(subtitle, {
+    x: (WIDTH - bold.widthOfTextAtSize(subtitle, 10)) / 2,
+    y: HEIGHT - 62,
+    size: 10,
+    font: bold,
+    color: rgb(1, 1, 1),
+  });
+
+  let y = HEIGHT - bannerHeight - 4 - 26;
+  page.drawText(`Empresa: ${printable(companyName)}`, {
+    x: MARGIN,
+    y,
+    size: 9,
+    font: regular,
+    color: MUTED,
+  });
+  page.drawText(
+    `Periodo: ${date(payroll.week_start)} al ${date(payroll.week_end)}`,
+    { x: 200, y, size: 9, font: regular, color: MUTED },
+  );
+  y -= 24;
+
+  // Sales summary strip
+  const salesCols = [
+    { label: "Venta TRESBE + Café con Ce", value: money(analysis.venta.tresbe_cafe_con_ce) },
+    { label: "Venta Café con Ce Calle Cerra", value: money(analysis.venta.cafe_con_ce_calle_cerra) },
+    { label: "Venta Total", value: money(analysis.venta.total) },
+  ];
+  const salesColWidth = (WIDTH - MARGIN * 2) / salesCols.length;
+  const salesHeaderH = 20;
+  const salesValueH = 28;
+  page.drawRectangle({
+    x: MARGIN,
+    y: y - salesHeaderH,
+    width: WIDTH - MARGIN * 2,
+    height: salesHeaderH,
+    color: ALT,
+  });
+  salesCols.forEach((col, i) => {
+    const cx = MARGIN + i * salesColWidth;
+    const labelW = bold.widthOfTextAtSize(col.label, 8);
+    page.drawText(col.label, {
+      x: cx + (salesColWidth - labelW) / 2,
+      y: y - 14,
+      size: 8,
+      font: bold,
+      color: NAVY,
+    });
+    const valW = bold.widthOfTextAtSize(col.value, 11);
+    page.drawText(col.value, {
+      x: cx + (salesColWidth - valW) / 2,
+      y: y - salesHeaderH - 18,
+      size: 11,
+      font: bold,
+      color: NAVY,
+    });
+    if (i > 0)
+      page.drawLine({
+        start: { x: cx, y },
+        end: { x: cx, y: y - salesHeaderH - salesValueH },
+        thickness: 0.5,
+        color: BORDER,
+      });
+  });
+  page.drawRectangle({
+    x: MARGIN,
+    y: y - salesHeaderH - salesValueH,
+    width: WIDTH - MARGIN * 2,
+    height: salesHeaderH + salesValueH,
+    borderColor: BORDER,
+    borderWidth: 0.5,
+  });
+  y -= salesHeaderH + salesValueH + 22;
+
+  // Section 1: adjustments
+  page.drawText("1. Ajuste del total de nómina", {
+    x: MARGIN,
+    y,
+    size: 10,
+    font: bold,
+    color: NAVY,
+  });
+  y -= 14;
+  const table1Cols: AnalysisColumn[] = [
+    { label: "Concepto", width: 430, align: "left" },
+    { label: "Importe", width: 130, align: "right" },
+    { label: "Subtotal", width: 160, align: "right" },
+  ];
+  const table1Rows: AnalysisRow[] = [
+    {
+      cells: [
+        analysis.ajuste_total_nomina.total_nomina_sinexia.detalle,
+        "",
+        money(analysis.ajuste_total_nomina.total_nomina_sinexia.subtotal),
+      ],
+    },
+    ...analysis.ajuste_total_nomina.deducciones.map((item, index, all) => ({
+      cells: [item.concepto, money(item.importe), money(item.subtotal)],
+      bold: index === all.length - 1,
+    })),
+  ];
+  y = drawAnalysisTable(page, bold, regular, y, table1Cols, table1Rows);
+  y -= 14;
+  const resultLine = `Nómina sin propina de la semana: ${money(analysis.ajuste_total_nomina.nomina_sin_propina_semana)}`;
+  page.drawText(resultLine, {
+    x: MARGIN,
+    y,
+    size: 9,
+    font: bold,
+    color: NAVY,
+  });
+  y -= 22;
+
+  // Section 2: % sobre venta combinada
+  page.drawText("2. % sobre venta combinada (ambos negocios)", {
+    x: MARGIN,
+    y,
+    size: 10,
+    font: bold,
+    color: NAVY,
+  });
+  y -= 14;
+  const table2Cols: AnalysisColumn[] = [
+    { label: "", width: 260, align: "left" },
+    { label: "Nómina (sin propina)", width: 230, align: "right" },
+    { label: "% de venta total", width: 230, align: "right" },
+  ];
+  const table2Rows: AnalysisRow[] = [
+    ...analysis.porcentaje_sobre_venta_combinada.negocios.map((item) => ({
+      cells: [
+        item.negocio,
+        money(item.nomina_sin_propina),
+        `${item.porcentaje_venta_total_pts.toFixed(2)} pts`,
+      ],
+    })),
+    {
+      cells: [
+        "TOTAL",
+        money(analysis.porcentaje_sobre_venta_combinada.total.nomina_sin_propina),
+        pct(analysis.porcentaje_sobre_venta_combinada.total.porcentaje_venta_total),
+      ],
+      bold: true,
+      redCells: [2],
+    },
+  ];
+  y = drawAnalysisTable(page, bold, regular, y, table2Cols, table2Rows);
+  y -= 22;
+
+  // Section 3: % sobre venta propia
+  page.drawText("3. % de cada negocio sobre SU PROPIA venta", {
+    x: MARGIN,
+    y,
+    size: 10,
+    font: bold,
+    color: NAVY,
+  });
+  y -= 14;
+  const table3Cols: AnalysisColumn[] = [
+    { label: "", width: 195, align: "left" },
+    { label: "Venta propia", width: 175, align: "right" },
+    { label: "Nómina (sin propina)", width: 175, align: "right" },
+    { label: "% propio", width: 175, align: "right" },
+  ];
+  const table3Rows: AnalysisRow[] = analysis.porcentaje_sobre_venta_propia.negocios.map(
+    (item) => ({
+      cells: [
+        item.negocio,
+        money(item.venta_propia),
+        money(item.nomina_sin_propina),
+        pct(item.porcentaje_propio),
+      ],
+      bold: true,
+      redCells: [3],
+    }),
+  );
+  y = drawAnalysisTable(page, bold, regular, y, table3Cols, table3Rows);
+  y -= 20;
+
+  // Comparison note
+  const noteText = analysis.nota_ajuste_vs_analisis_anterior?.texto;
+  if (noteText) {
+    const prefix = "Ajuste vs. análisis anterior: ";
+    page.drawText(prefix, { x: MARGIN, y, size: 8, font: bold, color: NAVY });
+    const prefixWidth = bold.widthOfTextAtSize(prefix, 8);
+    const lines = wrapTextWithFirstLineOffset(
+      noteText,
+      regular,
+      8,
+      WIDTH - MARGIN * 2,
+      prefixWidth,
+    );
+    lines.forEach((line, index) => {
+      page.drawText(line, {
+        x: index === 0 ? MARGIN + prefixWidth : MARGIN,
+        y,
+        size: 8,
+        font: regular,
+        color: MUTED,
+      });
+      y -= 11;
+    });
+  }
+
+  return page;
+}
+
 export async function buildTresbePayrollPdf(params: {
   companyName: string;
   payroll: TresbePayroll;
   entries: TresbePayrollEntry[];
+  analysis?: TresbePayrollAnalysisJson | null;
 }) {
   const entries = params.entries.filter(hasTresbePayrollValue);
   // Hours/system/adjustments/grand come from the saved payroll header,
@@ -391,6 +755,17 @@ export async function buildTresbePayrollPdf(params: {
     page.drawText(
       fit(params.payroll.client_note, regular, 7, WIDTH - MARGIN * 2 - 90),
       { x: MARGIN + 90, y: 38, size: 7, font: regular, color: MUTED },
+    );
+  }
+
+  if (params.analysis) {
+    drawTresbeAnalysisPage(
+      pdf,
+      bold,
+      regular,
+      params.payroll,
+      params.companyName,
+      params.analysis,
     );
   }
 
