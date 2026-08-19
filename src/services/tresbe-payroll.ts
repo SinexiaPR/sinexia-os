@@ -1,12 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import type { TresbePayrollRule } from "@/lib/tresbe-payroll/calculations";
-import type { TresbePayrollAnalysisJson } from "@/lib/tresbe-payroll/analysis";
-
-export type TresbePayrollAnalysis = {
-  payroll_id: string;
-  data: TresbePayrollAnalysisJson;
-  updated_at: string;
-};
 
 export type TresbePayrollStatus =
   "draft" | "calculated" | "sent" | "viewed" | "corrected" | "cancelled";
@@ -211,11 +204,10 @@ export async function getTresbeAdminWorkspace(
     payrolls[0] ??
     null;
   let entries: TresbePayrollEntry[] = [];
-  let analysis: TresbePayrollAnalysis | null = null;
   let shiftPools: TresbePayrollShiftPool[] = [];
   let dailyEntries: TresbePayrollDailyEntry[] = [];
   if (selected) {
-    const [entriesResult, analysisResult, shiftPoolsResult, dailyEntriesResult] =
+    const [entriesResult, shiftPoolsResult, dailyEntriesResult] =
       await Promise.all([
         supabase
           .from("tresbe_payroll_entries")
@@ -223,11 +215,6 @@ export async function getTresbeAdminWorkspace(
           .eq("payroll_id", selected.id)
           .order("area_snapshot")
           .order("employee_name_snapshot"),
-        supabase
-          .from("tresbe_payroll_analysis")
-          .select("*")
-          .eq("payroll_id", selected.id)
-          .maybeSingle(),
         supabase
           .from("tresbe_payroll_shift_pools")
           .select("*")
@@ -243,8 +230,6 @@ export async function getTresbeAdminWorkspace(
       ]);
     if (entriesResult.error) throw entriesResult.error;
     entries = (entriesResult.data ?? []) as TresbePayrollEntry[];
-    if (analysisResult.error) throw analysisResult.error;
-    analysis = analysisResult.data as TresbePayrollAnalysis | null;
     if (shiftPoolsResult.error) throw shiftPoolsResult.error;
     shiftPools = (shiftPoolsResult.data ?? []) as TresbePayrollShiftPool[];
     if (dailyEntriesResult.error) throw dailyEntriesResult.error;
@@ -255,7 +240,6 @@ export async function getTresbeAdminWorkspace(
     payrolls,
     selected,
     entries,
-    analysis,
     shiftPools,
     dailyEntries,
     settings: settingsResult.data as TresbePayrollSettings | null,
