@@ -5,7 +5,10 @@ import { ArrowLeft, CalendarClock, FileText, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MetricCard, SurfaceCard } from "@/components/ui/surface-card";
 import { requireAdmin } from "@/lib/auth/session";
-import { getAdminCompanyWorkspace } from "@/services/company-workspace";
+import {
+  getAdminCompanyWorkspace,
+  getSibaritaPayrollHistory,
+} from "@/services/company-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +20,19 @@ const dateFormat = new Intl.DateTimeFormat("es", {
 });
 function formatDate(value: string | null) {
   return value ? dateFormat.format(new Date(value)) : "Sin actividad";
+}
+
+const currencyFormat = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+const weekRangeFormat = new Intl.DateTimeFormat("es", {
+  day: "numeric",
+  month: "short",
+  timeZone: "America/Puerto_Rico",
+});
+function formatWeekRange(weekStart: string, weekEnd: string) {
+  return `${weekRangeFormat.format(new Date(`${weekStart}T12:00:00`))} – ${weekRangeFormat.format(new Date(`${weekEnd}T12:00:00`))}`;
 }
 
 const invoiceStatusLabels: Record<string, string> = {
@@ -39,6 +55,10 @@ export default async function AdminCompanyPage({
   if (!workspace) notFound();
   const { company, summary, categories, activity } = workspace;
   const empty = summary.documents === 0 && summary.reports === 0;
+  const payrollHistory =
+    company.slug === "sibarita"
+      ? await getSibaritaPayrollHistory(company.id)
+      : null;
 
   return (
     <div className="space-y-10">
@@ -212,6 +232,92 @@ export default async function AdminCompanyPage({
           </div>
         )}
       </section>
+
+      {payrollHistory ? (
+        <section aria-labelledby="historial-nomina">
+          <h2 id="historial-nomina" className="text-lg font-semibold">
+            Historial de nómina (archivo)
+          </h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Cargado desde las planillas semanales de Sibarita en Google
+            Drive. Solo de referencia, no editable desde acá.
+          </p>
+          {payrollHistory.length ? (
+            <div className="mt-4 space-y-4">
+              {payrollHistory.map((week) => (
+                <SurfaceCard key={week.weekStart}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="font-semibold">
+                      {formatWeekRange(week.weekStart, week.weekEnd)}
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
+                      {currencyFormat.format(week.totalPay)} total ·{" "}
+                      {currencyFormat.format(week.totalTips)} propinas ·{" "}
+                      {week.totalHours.toFixed(2)}h
+                    </p>
+                  </div>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-muted-foreground border-b text-left text-xs uppercase">
+                          <th className="py-1.5 pr-3 font-medium">
+                            Empleado
+                          </th>
+                          <th className="py-1.5 pr-3 font-medium">
+                            Sección
+                          </th>
+                          <th className="py-1.5 pr-3 text-right font-medium">
+                            Horas
+                          </th>
+                          <th className="py-1.5 pr-3 text-right font-medium">
+                            Propinas
+                          </th>
+                          <th className="py-1.5 pr-3 text-right font-medium">
+                            Otros pagos
+                          </th>
+                          <th className="py-1.5 text-right font-medium">
+                            Total
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {week.rows.map((row) => (
+                          <tr key={row.id} className="border-b last:border-0">
+                            <td className="py-1.5 pr-3">
+                              {row.employee_name}
+                            </td>
+                            <td className="text-muted-foreground py-1.5 pr-3">
+                              {row.section ?? "—"}
+                            </td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">
+                              {Number(row.total_hours).toFixed(2)}
+                            </td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">
+                              {currencyFormat.format(row.tips)}
+                            </td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">
+                              {currencyFormat.format(row.other_pay)}
+                            </td>
+                            <td className="py-1.5 text-right font-medium tabular-nums">
+                              {currencyFormat.format(row.weekly_payroll)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </SurfaceCard>
+              ))}
+            </div>
+          ) : (
+            <SurfaceCard className="mt-4">
+              <p className="text-muted-foreground text-sm">
+                Todavía no hay nóminas cargadas en el historial.
+              </p>
+            </SurfaceCard>
+          )}
+        </section>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-5">
         <SurfaceCard className="lg:col-span-3">

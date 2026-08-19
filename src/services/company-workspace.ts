@@ -359,3 +359,56 @@ export async function getAdminCompanyReportIntelligence(
   }
   return { processing, profiles };
 }
+
+export type SibaritaPayrollHistoryRow = {
+  id: string;
+  week_start: string;
+  week_end: string;
+  section: string | null;
+  employee_name: string;
+  total_hours: number;
+  tips: number;
+  other_pay: number;
+  weekly_payroll: number;
+};
+
+export type SibaritaPayrollHistoryWeek = {
+  weekStart: string;
+  weekEnd: string;
+  rows: SibaritaPayrollHistoryRow[];
+  totalHours: number;
+  totalTips: number;
+  totalPay: number;
+};
+
+export async function getSibaritaPayrollHistory(companyId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("sibarita_payroll_history")
+    .select(
+      "id,week_start,week_end,section,employee_name,total_hours,tips,other_pay,weekly_payroll",
+    )
+    .eq("company_id", companyId)
+    .order("week_start", { ascending: false })
+    .order("section")
+    .order("employee_name");
+  if (error) throw error;
+  const rows = (data ?? []) as SibaritaPayrollHistoryRow[];
+  const weeks = new Map<string, SibaritaPayrollHistoryWeek>();
+  for (const row of rows) {
+    const existing = weeks.get(row.week_start) ?? {
+      weekStart: row.week_start,
+      weekEnd: row.week_end,
+      rows: [],
+      totalHours: 0,
+      totalTips: 0,
+      totalPay: 0,
+    };
+    existing.rows.push(row);
+    existing.totalHours += Number(row.total_hours);
+    existing.totalTips += Number(row.tips);
+    existing.totalPay += Number(row.weekly_payroll);
+    weeks.set(row.week_start, existing);
+  }
+  return Array.from(weeks.values());
+}
