@@ -8,7 +8,10 @@ import {
 
 import type {
   TresbePayroll,
+  TresbePayrollDailyEntry,
   TresbePayrollEntry,
+  TresbePayrollShiftPool,
+  TresbeShift,
 } from "@/services/tresbe-payroll";
 import { getServiceCheckPayAmount } from "@/lib/tresbe-payroll/calculations";
 import type { TresbePayrollAnalysisJson } from "@/lib/tresbe-payroll/analysis";
@@ -321,27 +324,19 @@ function drawAnalysisTable(
   return y;
 }
 
-function drawTresbeAnalysisPage(
-  pdf: PDFDocument,
-  bold: PDFFont,
-  regular: PDFFont,
-  payroll: TresbePayroll,
-  companyName: string,
-  analysis: TresbePayrollAnalysisJson,
-) {
-  const page = pdf.addPage([WIDTH, HEIGHT]);
+const BANNER_HEIGHT = 86;
 
-  const bannerHeight = 86;
+function drawCenteredBanner(page: PDFPage, bold: PDFFont, subtitle: string) {
   page.drawRectangle({
     x: 0,
-    y: HEIGHT - bannerHeight,
+    y: HEIGHT - BANNER_HEIGHT,
     width: WIDTH,
-    height: bannerHeight,
+    height: BANNER_HEIGHT,
     color: NAVY,
   });
   page.drawRectangle({
     x: 0,
-    y: HEIGHT - bannerHeight - 4,
+    y: HEIGHT - BANNER_HEIGHT - 4,
     width: WIDTH,
     height: 4,
     color: RED,
@@ -354,7 +349,6 @@ function drawTresbeAnalysisPage(
     font: bold,
     color: rgb(1, 1, 1),
   });
-  const subtitle = "NOMINA SEMANAL TRESBE -- ANALISIS DE % SOBRE VENTA";
   page.drawText(subtitle, {
     x: (WIDTH - bold.widthOfTextAtSize(subtitle, 10)) / 2,
     y: HEIGHT - 62,
@@ -362,8 +356,24 @@ function drawTresbeAnalysisPage(
     font: bold,
     color: rgb(1, 1, 1),
   });
+}
 
-  let y = HEIGHT - bannerHeight - 4 - 26;
+function drawTresbeAnalysisPage(
+  pdf: PDFDocument,
+  bold: PDFFont,
+  regular: PDFFont,
+  payroll: TresbePayroll,
+  companyName: string,
+  analysis: TresbePayrollAnalysisJson,
+) {
+  const page = pdf.addPage([WIDTH, HEIGHT]);
+  drawCenteredBanner(
+    page,
+    bold,
+    "NOMINA SEMANAL TRESBE -- ANALISIS DE % SOBRE VENTA",
+  );
+
+  let y = HEIGHT - BANNER_HEIGHT - 4 - 26;
   page.drawText(`Empresa: ${printable(companyName)}`, {
     x: MARGIN,
     y,
@@ -561,11 +571,219 @@ function drawTresbeAnalysisPage(
   return page;
 }
 
+const DAY_LABEL = new Intl.DateTimeFormat("es-PR", {
+  weekday: "long",
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+function capitalizeFirst(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function weekDatesList(weekStart: string) {
+  const dates: string[] = [];
+  const base = new Date(`${weekStart}T12:00:00Z`);
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(base);
+    d.setUTCDate(base.getUTCDate() + i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+type DailyRow = {
+  name: string;
+  area: string;
+  hours: number;
+  tip: number;
+  isProportional: boolean;
+};
+
+const DAILY_ROW_HEIGHT = 13;
+const DAILY_BOTTOM_LIMIT = 50;
+
+function drawDailyEntriesTableHeader(page: PDFPage, bold: PDFFont, y: number) {
+  const columns = [
+    { label: "Empleado", width: 220 },
+    { label: "Area", width: 90 },
+    { label: "Horas", width: 90 },
+    { label: "Propina", width: 120 },
+  ];
+  page.drawRectangle({
+    x: MARGIN,
+    y: y - 15,
+    width: WIDTH - MARGIN * 2,
+    height: 15,
+    color: rgb(0.9, 0.92, 0.94),
+  });
+  let x = MARGIN;
+  for (const column of columns) {
+    page.drawText(column.label, {
+      x: x + 4,
+      y: y - 11,
+      size: 6.5,
+      font: bold,
+      color: NAVY,
+    });
+    x += column.width;
+  }
+  return { y: y - 15, columns };
+}
+
+function drawDailyEntriesRow(
+  page: PDFPage,
+  regular: PDFFont,
+  y: number,
+  columns: { label: string; width: number }[],
+  row: DailyRow,
+) {
+  let x = MARGIN;
+  const cells = [
+    row.name,
+    row.area,
+    number(row.hours),
+    `${money(row.tip)}${row.isProportional ? " (prop.)" : ""}`,
+  ];
+  cells.forEach((cell, index) => {
+    page.drawText(fit(cell, regular, 6.8, columns[index].width - 6), {
+      x: x + 4,
+      y: y - DAILY_ROW_HEIGHT + 3.5,
+      size: 6.8,
+      font: regular,
+      color: NAVY,
+    });
+    x += columns[index].width;
+  });
+  page.drawLine({
+    start: { x: MARGIN, y: y - DAILY_ROW_HEIGHT },
+    end: { x: WIDTH - MARGIN, y: y - DAILY_ROW_HEIGHT },
+    thickness: 0.25,
+    color: BORDER,
+  });
+  return y - DAILY_ROW_HEIGHT;
+}
+
+function drawTresbeDailyEntriesPages(
+  pdf: PDFDocument,
+  bold: PDFFont,
+  regular: PDFFont,
+  payroll: TresbePayroll,
+  companyName: string,
+  employees: { id: string; display_name: string }[],
+  dailyEntries: TresbePayrollDailyEntry[],
+  shiftPools: TresbePayrollShiftPool[],
+) {
+  const employeeNames = new Map(employees.map((e) => [e.id, e.display_name]));
+  const poolByKey = new Map(
+    shiftPools.map((pool) => [`${pool.work_date}|${pool.shift}`, pool]),
+  );
+  const entriesByKey = new Map<string, TresbePayrollDailyEntry[]>();
+  for (const entry of dailyEntries) {
+    const key = `${entry.work_date}|${entry.shift}`;
+    const list = entriesByKey.get(key) ?? [];
+    list.push(entry);
+    entriesByKey.set(key, list);
+  }
+
+  const shifts: TresbeShift[] = ["AM", "PM"];
+  const dates = weekDatesList(payroll.week_start).filter((workDate) =>
+    shifts.some(
+      (shift) => (entriesByKey.get(`${workDate}|${shift}`) ?? []).length > 0,
+    ),
+  );
+  if (!dates.length) return;
+
+  let page = pdf.addPage([WIDTH, HEIGHT]);
+  drawCenteredBanner(page, bold, "NOMINA SEMANAL TRESBE -- CARGA DIARIA");
+  let y = HEIGHT - BANNER_HEIGHT - 4 - 26;
+  page.drawText(`Empresa: ${printable(companyName)}`, {
+    x: MARGIN,
+    y,
+    size: 9,
+    font: regular,
+    color: MUTED,
+  });
+  page.drawText(
+    `Periodo: ${date(payroll.week_start)} al ${date(payroll.week_end)}`,
+    { x: 200, y, size: 9, font: regular, color: MUTED },
+  );
+  y -= 26;
+
+  const newContinuationPage = () => {
+    page = pdf.addPage([WIDTH, HEIGHT]);
+    drawHeader(page, bold, regular, payroll, companyName, true);
+    y = HEIGHT - 110;
+  };
+
+  for (const workDate of dates) {
+    const shiftBlocks = shifts
+      .map((shift) => ({
+        shift,
+        pool: poolByKey.get(`${workDate}|${shift}`) ?? null,
+        entries: entriesByKey.get(`${workDate}|${shift}`) ?? [],
+      }))
+      .filter((block) => block.entries.length > 0);
+    if (!shiftBlocks.length) continue;
+
+    if (y - 16 < DAILY_BOTTOM_LIMIT) newContinuationPage();
+    const label = capitalizeFirst(
+      DAY_LABEL.format(new Date(`${workDate}T12:00:00Z`)),
+    );
+    page.drawText(printable(label), {
+      x: MARGIN,
+      y,
+      size: 10,
+      font: bold,
+      color: NAVY,
+    });
+    y -= 14;
+
+    for (const block of shiftBlocks) {
+      const rows: DailyRow[] = block.entries.map((entry) => ({
+        name: employeeNames.get(entry.employee_id) ?? "(empleado eliminado)",
+        area: entry.area_snapshot,
+        hours: Number(entry.hours),
+        tip: entry.receives_proportional_tips_snapshot
+          ? Number(entry.tip_proportional)
+          : Number(entry.tip_cafe_manual),
+        isProportional: entry.receives_proportional_tips_snapshot,
+      }));
+      const blockHeight = 14 + 15 + rows.length * DAILY_ROW_HEIGHT + 8;
+      if (y - blockHeight < DAILY_BOTTOM_LIMIT) newContinuationPage();
+
+      const poolAmount = Number(block.pool?.tip_pool_amount ?? 0);
+      const shiftLabel = `Turno ${block.shift}${
+        poolAmount > 0 ? ` -- Pote de propina: ${money(poolAmount)}` : ""
+      }`;
+      page.drawText(shiftLabel, {
+        x: MARGIN,
+        y,
+        size: 8.5,
+        font: bold,
+        color: NAVY,
+      });
+      y -= 14;
+      const header = drawDailyEntriesTableHeader(page, bold, y);
+      y = header.y;
+      rows.forEach((row) => {
+        y = drawDailyEntriesRow(page, regular, y, header.columns, row);
+      });
+      y -= 8;
+    }
+    y -= 6;
+  }
+}
+
 export async function buildTresbePayrollPdf(params: {
   companyName: string;
   payroll: TresbePayroll;
   entries: TresbePayrollEntry[];
   analysis?: TresbePayrollAnalysisJson | null;
+  dailyEntries?: TresbePayrollDailyEntry[];
+  shiftPools?: TresbePayrollShiftPool[];
+  employees?: { id: string; display_name: string }[];
 }) {
   const entries = params.entries.filter(hasTresbePayrollValue);
   // Hours/system/adjustments/grand come from the saved payroll header,
@@ -738,6 +956,19 @@ export async function buildTresbePayrollPdf(params: {
     page.drawText(
       fit(params.payroll.client_note, regular, 7, WIDTH - MARGIN * 2 - 90),
       { x: MARGIN + 90, y: 38, size: 7, font: regular, color: MUTED },
+    );
+  }
+
+  if (params.dailyEntries?.length) {
+    drawTresbeDailyEntriesPages(
+      pdf,
+      bold,
+      regular,
+      params.payroll,
+      params.companyName,
+      params.employees ?? [],
+      params.dailyEntries,
+      params.shiftPools ?? [],
     );
   }
 

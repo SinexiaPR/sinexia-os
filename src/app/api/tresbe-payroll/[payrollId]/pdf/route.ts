@@ -6,7 +6,9 @@ import { buildTresbePayrollPdf } from "@/lib/tresbe-payroll/pdf";
 import { tresbePayrollAnalysisSchema } from "@/lib/tresbe-payroll/analysis";
 import type {
   TresbePayroll,
+  TresbePayrollDailyEntry,
   TresbePayrollEntry,
+  TresbePayrollShiftPool,
 } from "@/services/tresbe-payroll";
 
 export const runtime = "nodejs";
@@ -38,27 +40,45 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const [{ data: company }, { data: entries, error: entriesError }, analysisResult] =
-    await Promise.all([
-      supabase
-        .from("companies")
-        .select("name,slug")
-        .eq("id", typedPayroll.company_id)
-        .maybeSingle(),
-      supabase
-        .from("tresbe_payroll_entries")
-        .select("*")
-        .eq("payroll_id", typedPayroll.id)
-        .order("area_snapshot")
-        .order("employee_name_snapshot"),
-      profile.role === "client"
-        ? Promise.resolve({ data: null })
-        : supabase
-            .from("tresbe_payroll_analysis")
-            .select("data")
-            .eq("payroll_id", typedPayroll.id)
-            .maybeSingle(),
-    ]);
+  const [
+    { data: company },
+    { data: entries, error: entriesError },
+    analysisResult,
+    { data: dailyEntries },
+    { data: shiftPools },
+    { data: employees },
+  ] = await Promise.all([
+    supabase
+      .from("companies")
+      .select("name,slug")
+      .eq("id", typedPayroll.company_id)
+      .maybeSingle(),
+    supabase
+      .from("tresbe_payroll_entries")
+      .select("*")
+      .eq("payroll_id", typedPayroll.id)
+      .order("area_snapshot")
+      .order("employee_name_snapshot"),
+    profile.role === "client"
+      ? Promise.resolve({ data: null })
+      : supabase
+          .from("tresbe_payroll_analysis")
+          .select("data")
+          .eq("payroll_id", typedPayroll.id)
+          .maybeSingle(),
+    supabase
+      .from("tresbe_payroll_daily_entries")
+      .select("*")
+      .eq("payroll_id", typedPayroll.id),
+    supabase
+      .from("tresbe_payroll_shift_pools")
+      .select("*")
+      .eq("payroll_id", typedPayroll.id),
+    supabase
+      .from("tresbe_employees")
+      .select("id,display_name")
+      .eq("company_id", typedPayroll.company_id),
+  ]);
   if (company?.slug !== "tresbe" || entriesError)
     return NextResponse.json(
       { error: "Nómina no encontrada" },
@@ -85,6 +105,9 @@ export async function GET(
     payroll: typedPayroll,
     entries: (entries ?? []) as TresbePayrollEntry[],
     analysis: analysisParsed?.success ? analysisParsed.data : null,
+    dailyEntries: (dailyEntries ?? []) as TresbePayrollDailyEntry[],
+    shiftPools: (shiftPools ?? []) as TresbePayrollShiftPool[],
+    employees: employees ?? [],
   });
   return new NextResponse(Buffer.from(bytes), {
     headers: {
