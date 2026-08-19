@@ -9,7 +9,9 @@ import {
 } from "../src/lib/tresbe-payroll/pdf";
 import type {
   TresbePayroll,
+  TresbePayrollDailyEntry,
   TresbePayrollEntry,
+  TresbePayrollShiftPool,
 } from "../src/services/tresbe-payroll";
 
 const payroll = {
@@ -172,6 +174,96 @@ async function main() {
   if (process.env.TRESBE_PDF_OUTPUT) {
     await writeFile(process.env.TRESBE_PDF_OUTPUT, crowdedBytes);
   }
+
+  const makeDailyEntry = (
+    overrides: Partial<TresbePayrollDailyEntry>,
+  ): TresbePayrollDailyEntry => ({
+    id: "daily-1",
+    payroll_id: payroll.id,
+    company_id: payroll.company_id,
+    employee_id: "employee-1",
+    work_date: "2026-07-06",
+    shift: "AM",
+    area_snapshot: "FOH",
+    receives_proportional_tips_snapshot: true,
+    hours: 6,
+    tip_cafe_manual: 0,
+    tip_proportional: 42,
+    is_correction: false,
+    correction_reason: null,
+    notes: null,
+    ...overrides,
+  });
+
+  const dailyEntries: TresbePayrollDailyEntry[] = [
+    makeDailyEntry({ id: "daily-1", employee_id: "employee-1" }),
+    makeDailyEntry({
+      id: "daily-2",
+      employee_id: "employee-2",
+      shift: "PM",
+      area_snapshot: "CAFE CON CE",
+      receives_proportional_tips_snapshot: false,
+      tip_cafe_manual: 15,
+      tip_proportional: 0,
+      hours: 5,
+    }),
+  ];
+  const shiftPools: TresbePayrollShiftPool[] = [
+    {
+      id: "pool-1",
+      payroll_id: payroll.id,
+      company_id: payroll.company_id,
+      work_date: "2026-07-06",
+      shift: "AM",
+      tip_pool_amount: 42,
+      source: null,
+      notes: null,
+    },
+  ];
+  const withDailyBytes = await buildTresbePayrollPdf({
+    companyName: "Tresbe",
+    payroll,
+    entries: [makeEntry({})],
+    dailyEntries,
+    shiftPools,
+    employees: [
+      { id: "employee-1", display_name: "Lee Pierre" },
+      { id: "employee-2", display_name: "Nashely" },
+    ],
+  });
+  const withDailyPdf = await PDFDocument.load(withDailyBytes);
+  assert.equal(
+    withDailyPdf.getPageCount(),
+    2,
+    "daily entries must add a Carga Diaria page when present",
+  );
+
+  const busyDailyEntries: TresbePayrollDailyEntry[] = Array.from(
+    { length: 60 },
+    (_, index) =>
+      makeDailyEntry({
+        id: `daily-busy-${index}`,
+        employee_id: `employee-${index}`,
+        work_date: index % 2 === 0 ? "2026-07-06" : "2026-07-07",
+        shift: index % 4 < 2 ? "AM" : "PM",
+      }),
+  );
+  const busyBytes = await buildTresbePayrollPdf({
+    companyName: "Tresbe",
+    payroll,
+    entries: [makeEntry({})],
+    dailyEntries: busyDailyEntries,
+    shiftPools: [],
+    employees: busyDailyEntries.map((entry) => ({
+      id: entry.employee_id,
+      display_name: `Empleado ${entry.employee_id}`,
+    })),
+  });
+  const busyPdf = await PDFDocument.load(busyBytes);
+  assert.ok(
+    busyPdf.getPageCount() > 2,
+    "a busy week's daily entries must overflow onto continuation pages",
+  );
 
   console.log("TRESBE payroll PDF generation: PASS");
 }
