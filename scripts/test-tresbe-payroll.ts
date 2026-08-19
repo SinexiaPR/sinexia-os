@@ -94,6 +94,23 @@ assert.equal(hourlyOverride.systemHours, 40);
 assert.equal(hourlyOverride.serviceHours, 7.5);
 assert.equal(hourlyOverride.serviceCheckAmount, 175);
 
+// A flat services check must not require overtime hours to exist --
+// e.g. a fixed weekly reimbursement paid via a separate services check
+// on top of an exact-40-hours system paycheck (real case: Fernando
+// Almonte, $650 system pay + $280 flat services, 0 overtime hours).
+const fixedServiceNoOvertime = calculateTresbeEntry({
+  ...base,
+  payrollRule: "preset_40_hourly",
+  totalWeeklyHours: 40,
+  regularRate: 16.25,
+  fixedServiceAmount: 280,
+});
+assert.equal(fixedServiceNoOvertime.systemHours, 40);
+assert.equal(fixedServiceNoOvertime.serviceHours, 0);
+assert.equal(fixedServiceNoOvertime.systemPay, 650);
+assert.equal(fixedServiceNoOvertime.serviceCheckAmount, 280);
+assert.equal(fixedServiceNoOvertime.employeeTotal, 930);
+
 const fullService = calculateTresbeEntry({
   ...base,
   payrollRule: "full_services",
