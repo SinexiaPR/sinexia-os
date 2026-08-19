@@ -293,6 +293,7 @@ const entrySchema = z.object({
 export type TresbeEntryInput = z.infer<typeof entrySchema>;
 
 const salesSchema = z.number().min(0);
+const calleCerraSchema = z.number().min(0).nullable();
 
 export async function saveTresbePayrollDraft(params: {
   companyId: string;
@@ -303,6 +304,8 @@ export async function saveTresbePayrollDraft(params: {
   salesTresbe: number;
   salesCafeConCe: number;
   salesCafeConCeCalleCerra: number;
+  calleCerraNominaSinPropina: number | null;
+  calleCerraTips: number | null;
   entries: TresbeEntryInput[];
 }) {
   let profile;
@@ -318,6 +321,8 @@ export async function saveTresbePayrollDraft(params: {
       salesTresbe: salesSchema,
       salesCafeConCe: salesSchema,
       salesCafeConCeCalleCerra: salesSchema,
+      calleCerraNominaSinPropina: calleCerraSchema,
+      calleCerraTips: calleCerraSchema,
     })
     .safeParse(params);
   if (!salesParsed.success)
@@ -375,6 +380,9 @@ export async function saveTresbePayrollDraft(params: {
       sales_tresbe: salesParsed.data.salesTresbe,
       sales_cafe_con_ce: salesParsed.data.salesCafeConCe,
       sales_cafe_con_ce_calle_cerra: salesParsed.data.salesCafeConCeCalleCerra,
+      calle_cerra_nomina_sin_propina:
+        salesParsed.data.calleCerraNominaSinPropina,
+      calle_cerra_tips: salesParsed.data.calleCerraTips,
       updated_by: profile.id,
     })
     .eq("id", params.payrollId)

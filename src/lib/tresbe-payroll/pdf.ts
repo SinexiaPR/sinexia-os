@@ -14,7 +14,7 @@ import type {
   TresbeShift,
 } from "@/services/tresbe-payroll";
 import { getServiceCheckPayAmount } from "@/lib/tresbe-payroll/calculations";
-import type { TresbePayrollAnalysisJson } from "@/lib/tresbe-payroll/analysis";
+import { computeTresbeMarginAnalysis } from "@/lib/tresbe-payroll/margin-analysis";
 
 const WIDTH = 792;
 const HEIGHT = 612;
@@ -52,32 +52,6 @@ const date = (value: string) =>
   }).format(new Date(`${value}T12:00:00Z`));
 
 const pct = (value: number) => `${value.toFixed(2)}%`;
-
-function wrapTextWithFirstLineOffset(
-  text: string,
-  font: PDFFont,
-  size: number,
-  maxWidth: number,
-  firstLineOffset: number,
-) {
-  const words = printable(text).split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  let firstLine = true;
-  for (const word of words) {
-    const available = firstLine ? maxWidth - firstLineOffset : maxWidth;
-    const candidate = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= available) {
-      current = candidate;
-    } else {
-      lines.push(current);
-      firstLine = false;
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
 
 export function hasTresbePayrollValue(entry: TresbePayrollEntry) {
   return [
@@ -358,14 +332,16 @@ function drawCenteredBanner(page: PDFPage, bold: PDFFont, subtitle: string) {
   });
 }
 
-function drawTresbeAnalysisPage(
+function drawTresbeMarginAnalysisPage(
   pdf: PDFDocument,
   bold: PDFFont,
   regular: PDFFont,
   payroll: TresbePayroll,
   companyName: string,
-  analysis: TresbePayrollAnalysisJson,
+  entries: TresbePayrollEntry[],
 ) {
+  const analysis = computeTresbeMarginAnalysis(payroll, entries);
+  const paidEmployeeCount = entries.length;
   const page = pdf.addPage([WIDTH, HEIGHT]);
   drawCenteredBanner(
     page,
@@ -389,8 +365,8 @@ function drawTresbeAnalysisPage(
 
   // Sales summary strip
   const salesCols = [
-    { label: "Venta TRESBE + Café con Ce", value: money(analysis.venta.tresbe_cafe_con_ce) },
-    { label: "Venta Café con Ce Calle Cerra", value: money(analysis.venta.cafe_con_ce_calle_cerra) },
+    { label: "Venta TRESBE + Café con Ce", value: money(analysis.venta.tresbeCafeConCe) },
+    { label: "Venta Café con Ce Calle Cerra", value: money(analysis.venta.calleCerra) },
     { label: "Venta Total", value: money(analysis.venta.total) },
   ];
   const salesColWidth = (WIDTH - MARGIN * 2) / salesCols.length;
@@ -439,8 +415,8 @@ function drawTresbeAnalysisPage(
   });
   y -= salesHeaderH + salesValueH + 22;
 
-  // Section 1: adjustments
-  page.drawText("1. Ajuste del total de nómina", {
+  // Section 1: this week's payroll cost, without tips, per business
+  page.drawText("1. Nomina de la semana (sin propina)", {
     x: MARGIN,
     y,
     size: 10,
@@ -448,38 +424,76 @@ function drawTresbeAnalysisPage(
     color: NAVY,
   });
   y -= 14;
+  const employeeLabel =
+    paidEmployeeCount === 1 ? "1 empleado" : `${paidEmployeeCount} empleados`;
+  page.drawText(`TRESBE (${employeeLabel} en Sinexia)`, {
+    x: MARGIN,
+    y,
+    size: 8.5,
+    font: bold,
+    color: MUTED,
+  });
+  y -= 12;
   const table1Cols: AnalysisColumn[] = [
     { label: "Concepto", width: 430, align: "left" },
     { label: "Importe", width: 130, align: "right" },
     { label: "Subtotal", width: 160, align: "right" },
   ];
+  let running = analysis.tresbe.nominaBase;
   const table1Rows: AnalysisRow[] = [
-    {
-      cells: [
-        analysis.ajuste_total_nomina.total_nomina_sinexia.detalle,
-        "",
-        money(analysis.ajuste_total_nomina.total_nomina_sinexia.subtotal),
-      ],
-    },
-    ...analysis.ajuste_total_nomina.deducciones.map((item, index, all) => ({
-      cells: [item.concepto, money(item.importe), money(item.subtotal)],
-      bold: index === all.length - 1,
-    })),
+    { cells: ["Total nomina en Sinexia (bruto, con propina)", "", money(running)] },
+    ...analysis.tresbe.deducciones.map((item) => {
+      running = Math.round((running + item.importe + Number.EPSILON) * 100) / 100;
+      return {
+        cells: [
+          fit(`No es nomina real: ${item.concepto}`, regular, 8, 420),
+          money(item.importe),
+          money(running),
+        ],
+      };
+    }),
+    ...(() => {
+      running = Math.round((running - analysis.tresbe.tips + Number.EPSILON) * 100) / 100;
+      return [
+        {
+          cells: ["Propina TRESBE", money(-analysis.tresbe.tips), money(running)],
+          bold: true,
+        },
+      ];
+    })(),
   ];
   y = drawAnalysisTable(page, bold, regular, y, table1Cols, table1Rows);
-  y -= 14;
-  const resultLine = `Nómina sin propina de la semana: ${money(analysis.ajuste_total_nomina.nomina_sin_propina_semana)}`;
-  page.drawText(resultLine, {
-    x: MARGIN,
-    y,
-    size: 9,
-    font: bold,
-    color: NAVY,
-  });
-  y -= 22;
+  y -= 16;
+  page.drawText(
+    `Nomina TRESBE sin propina: ${money(analysis.tresbe.nominaSinPropina)}`,
+    { x: MARGIN, y, size: 9, font: bold, color: NAVY },
+  );
+  y -= 20;
+
+  if (analysis.calleCerra.hasData) {
+    page.drawText("CAFE CON CE · CALLE CERRA (cargado a mano)", {
+      x: MARGIN,
+      y,
+      size: 8.5,
+      font: bold,
+      color: MUTED,
+    });
+    y -= 14;
+    page.drawText(
+      `Nomina sin propina: ${money(analysis.calleCerra.nominaSinPropina)}   |   Propina: ${money(analysis.calleCerra.tips)}`,
+      { x: MARGIN, y, size: 9, font: regular, color: NAVY },
+    );
+    y -= 22;
+  }
+
+  page.drawText(
+    `TOTAL NOMINA DE LA SEMANA (sin propina, ambos negocios): ${money(analysis.combinado.nominaSinPropina)}`,
+    { x: MARGIN, y, size: 10.5, font: bold, color: RED },
+  );
+  y -= 26;
 
   // Section 2: % sobre venta combinada
-  page.drawText("2. % sobre venta combinada (ambos negocios)", {
+  page.drawText("2. Nomina como % de la venta total", {
     x: MARGIN,
     y,
     size: 10,
@@ -493,18 +507,29 @@ function drawTresbeAnalysisPage(
     { label: "% de venta total", width: 230, align: "right" },
   ];
   const table2Rows: AnalysisRow[] = [
-    ...analysis.porcentaje_sobre_venta_combinada.negocios.map((item) => ({
+    {
       cells: [
-        item.negocio,
-        money(item.nomina_sin_propina),
-        `${item.porcentaje_venta_total_pts.toFixed(2)} pts`,
+        "TRESBE",
+        money(analysis.tresbe.nominaSinPropina),
+        pct(analysis.porcentajeSobreVentaTotalPorNegocio.tresbe),
       ],
-    })),
+    },
+    ...(analysis.calleCerra.hasData
+      ? [
+          {
+            cells: [
+              "Café con Ce Calle Cerra",
+              money(analysis.calleCerra.nominaSinPropina),
+              pct(analysis.porcentajeSobreVentaTotalPorNegocio.calleCerra),
+            ],
+          },
+        ]
+      : []),
     {
       cells: [
         "TOTAL",
-        money(analysis.porcentaje_sobre_venta_combinada.total.nomina_sin_propina),
-        pct(analysis.porcentaje_sobre_venta_combinada.total.porcentaje_venta_total),
+        money(analysis.combinado.nominaSinPropina),
+        pct(analysis.combinado.porcentajeSobreVentaTotal),
       ],
       bold: true,
       redCells: [2],
@@ -514,7 +539,7 @@ function drawTresbeAnalysisPage(
   y -= 22;
 
   // Section 3: % sobre venta propia
-  page.drawText("3. % de cada negocio sobre SU PROPIA venta", {
+  page.drawText("3. Nomina de cada negocio como % de SU PROPIA venta", {
     x: MARGIN,
     y,
     size: 10,
@@ -528,44 +553,44 @@ function drawTresbeAnalysisPage(
     { label: "Nómina (sin propina)", width: 175, align: "right" },
     { label: "% propio", width: 175, align: "right" },
   ];
-  const table3Rows: AnalysisRow[] = analysis.porcentaje_sobre_venta_propia.negocios.map(
-    (item) => ({
+  const table3Rows: AnalysisRow[] = [
+    {
       cells: [
-        item.negocio,
-        money(item.venta_propia),
-        money(item.nomina_sin_propina),
-        pct(item.porcentaje_propio),
+        "TRESBE",
+        money(analysis.venta.tresbeCafeConCe),
+        money(analysis.tresbe.nominaSinPropina),
+        analysis.porcentajePropio.tresbe == null
+          ? "—"
+          : pct(analysis.porcentajePropio.tresbe),
       ],
       bold: true,
       redCells: [3],
-    }),
-  );
+    },
+    ...(analysis.calleCerra.hasData
+      ? [
+          {
+            cells: [
+              "Café con Ce Calle Cerra",
+              money(analysis.venta.calleCerra),
+              money(analysis.calleCerra.nominaSinPropina),
+              analysis.porcentajePropio.calleCerra == null
+                ? "—"
+                : pct(analysis.porcentajePropio.calleCerra),
+            ],
+            bold: true,
+            redCells: [3],
+          },
+        ]
+      : []),
+  ];
   y = drawAnalysisTable(page, bold, regular, y, table3Cols, table3Rows);
-  y -= 20;
+  y -= 16;
 
-  // Comparison note
-  const noteText = analysis.nota_ajuste_vs_analisis_anterior?.texto;
-  if (noteText) {
-    const prefix = "Ajuste vs. análisis anterior: ";
-    page.drawText(prefix, { x: MARGIN, y, size: 8, font: bold, color: NAVY });
-    const prefixWidth = bold.widthOfTextAtSize(prefix, 8);
-    const lines = wrapTextWithFirstLineOffset(
-      noteText,
-      regular,
-      8,
-      WIDTH - MARGIN * 2,
-      prefixWidth,
+  if (!analysis.calleCerra.hasData) {
+    page.drawText(
+      "Café con Ce Calle Cerra: sin datos de nomina cargados esta semana.",
+      { x: MARGIN, y, size: 7.5, font: regular, color: MUTED },
     );
-    lines.forEach((line, index) => {
-      page.drawText(line, {
-        x: index === 0 ? MARGIN + prefixWidth : MARGIN,
-        y,
-        size: 8,
-        font: regular,
-        color: MUTED,
-      });
-      y -= 11;
-    });
   }
 
   return page;
@@ -780,7 +805,6 @@ export async function buildTresbePayrollPdf(params: {
   companyName: string;
   payroll: TresbePayroll;
   entries: TresbePayrollEntry[];
-  analysis?: TresbePayrollAnalysisJson | null;
   dailyEntries?: TresbePayrollDailyEntry[];
   shiftPools?: TresbePayrollShiftPool[];
   employees?: { id: string; display_name: string }[];
@@ -813,6 +837,7 @@ export async function buildTresbePayrollPdf(params: {
     hours: Number(params.payroll.total_weekly_hours),
     system: Number(params.payroll.total_system_pay),
     tips: tipsOutsideServices,
+    tipsCalleCerra: Number(params.payroll.calle_cerra_tips ?? 0),
     services: servicePayoutTotal,
     adjustments: Number(params.payroll.total_adjustments),
     grand: Number(params.payroll.grand_total),
@@ -855,8 +880,9 @@ export async function buildTresbePayrollPdf(params: {
   const summary = [
     ["Empleados", String(entries.length)],
     ["Horas", number(visibleTotals.hours)],
-    ["Sistema", money(visibleTotals.system)],
-    ["Tips", money(visibleTotals.tips)],
+    ["Sistema (+ impuestos)", money(visibleTotals.system)],
+    ["Tips Tresbe", money(visibleTotals.tips)],
+    ["Tips Calle Cerra", money(visibleTotals.tipsCalleCerra)],
     ["Servicios", money(visibleTotals.services)],
     ["Ajustes", money(visibleTotals.adjustments)],
     ["TOTAL A PAGAR", money(visibleTotals.grand)],
@@ -972,14 +998,18 @@ export async function buildTresbePayrollPdf(params: {
     );
   }
 
-  if (params.analysis) {
-    drawTresbeAnalysisPage(
+  const marginAnalysisSalesTotal =
+    Number(params.payroll.sales_tresbe) +
+    Number(params.payroll.sales_cafe_con_ce) +
+    Number(params.payroll.sales_cafe_con_ce_calle_cerra);
+  if (marginAnalysisSalesTotal > 0) {
+    drawTresbeMarginAnalysisPage(
       pdf,
       bold,
       regular,
       params.payroll,
       params.companyName,
-      params.analysis,
+      entries,
     );
   }
 

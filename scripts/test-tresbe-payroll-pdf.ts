@@ -32,6 +32,8 @@ const payroll = {
   sales_tresbe: 0,
   sales_cafe_con_ce: 0,
   sales_cafe_con_ce_calle_cerra: 0,
+  calle_cerra_nomina_sin_propina: null,
+  calle_cerra_tips: null,
   admin_note: null,
   client_note: "Nómina preparada para revisión.",
   supporting_document_id: null,
@@ -263,6 +265,63 @@ async function main() {
   assert.ok(
     busyPdf.getPageCount() > 2,
     "a busy week's daily entries must overflow onto continuation pages",
+  );
+
+  // The live "% sobre venta" page only appears when there's sales data to
+  // compute it from, and reflects a non-payroll deduction (reimbursement)
+  // plus Calle Cerra's manually-entered numbers.
+  const marginPayroll = {
+    ...payroll,
+    sales_tresbe: 7000,
+    sales_cafe_con_ce: 3673.98,
+    sales_cafe_con_ce_calle_cerra: 4403.14,
+    calle_cerra_nomina_sin_propina: 1271.84,
+    calle_cerra_tips: 494.48,
+    total_tips: 1613.88,
+    grand_total: 3193.88,
+  };
+  const marginEntries = [
+    makeEntry({
+      id: "entry-reimbursement",
+      employee_id: "employee-reimbursement",
+      employee_name_snapshot: "Empleado Reembolso",
+      payroll_rule_snapshot: "preset_40_hourly",
+      total_weekly_hours: 40,
+      system_hours: 40,
+      service_hours: 0,
+      system_pay: 650,
+      tips: 0,
+      service_check_amount: 280,
+      employee_total: 930,
+      service_reason: "Empleado por servicios",
+      comment: "Reembolso de $280.00 por compras",
+    }),
+  ];
+  const marginBytes = await buildTresbePayrollPdf({
+    companyName: "Tresbe",
+    payroll: marginPayroll,
+    entries: marginEntries,
+  });
+  const marginPdf = await PDFDocument.load(marginBytes);
+  assert.equal(
+    marginPdf.getPageCount(),
+    2,
+    "sales data present must add the live % sobre venta page",
+  );
+  if (process.env.TRESBE_MARGIN_PDF_OUTPUT) {
+    await writeFile(process.env.TRESBE_MARGIN_PDF_OUTPUT, marginBytes);
+  }
+
+  const noSalesBytes = await buildTresbePayrollPdf({
+    companyName: "Tresbe",
+    payroll,
+    entries: [makeEntry({})],
+  });
+  const noSalesPdf = await PDFDocument.load(noSalesBytes);
+  assert.equal(
+    noSalesPdf.getPageCount(),
+    1,
+    "no sales data must not add an empty % sobre venta page",
   );
 
   console.log("TRESBE payroll PDF generation: PASS");

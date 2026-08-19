@@ -145,6 +145,15 @@ export function TresbePayrollAdminWorkspace({
   const [salesCafeConCeCalleCerra, setSalesCafeConCeCalleCerra] = useState(
     String(selected?.sales_cafe_con_ce_calle_cerra ?? 0),
   );
+  const [calleCerraNominaSinPropina, setCalleCerraNominaSinPropina] =
+    useState(
+      selected?.calle_cerra_nomina_sin_propina == null
+        ? ""
+        : String(selected.calle_cerra_nomina_sin_propina),
+    );
+  const [calleCerraTips, setCalleCerraTips] = useState(
+    selected?.calle_cerra_tips == null ? "" : String(selected.calle_cerra_tips),
+  );
   const [analysisJson, setAnalysisJson] = useState(
     analysis?.data ? JSON.stringify(analysis.data, null, 2) : "",
   );
@@ -218,6 +227,12 @@ export function TresbePayrollAdminWorkspace({
     salesTresbe: Number(salesTresbe || 0),
     salesCafeConCe: Number(salesCafeConCe || 0),
     salesCafeConCeCalleCerra: Number(salesCafeConCeCalleCerra || 0),
+    calleCerraNominaSinPropina:
+      calleCerraNominaSinPropina.trim() === ""
+        ? null
+        : Number(calleCerraNominaSinPropina),
+    calleCerraTips:
+      calleCerraTips.trim() === "" ? null : Number(calleCerraTips),
     entries: entryState.map((entry) => ({
       id: entry.id,
       totalWeeklyHours: Number(entry.total_weekly_hours),
@@ -482,15 +497,60 @@ export function TresbePayrollAdminWorkspace({
                       Number(salesCafeConCeCalleCerra || 0),
                   )}
                 </p>
+                <div className="mt-5 border-t pt-4">
+                  <h3 className="text-sm font-semibold">
+                    Nómina de Café con Ce · Calle Cerra
+                  </h3>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Calle Cerra es un negocio aparte (Clover y horas propios)
+                    que no pasa por esta nómina -- cargá acá sus números de la
+                    semana a mano, igual que la venta de arriba.
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm">
+                      Nómina sin propina
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Sin cargar"
+                        value={calleCerraNominaSinPropina}
+                        disabled={!editable}
+                        onChange={(event) =>
+                          setCalleCerraNominaSinPropina(event.target.value)
+                        }
+                        className="mt-1"
+                      />
+                    </label>
+                    <label className="text-sm">
+                      Propina
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Sin cargar"
+                        value={calleCerraTips}
+                        disabled={!editable}
+                        onChange={(event) =>
+                          setCalleCerraTips(event.target.value)
+                        }
+                        className="mt-1"
+                      />
+                    </label>
+                  </div>
+                </div>
               </SurfaceCard>
 
               <SurfaceCard>
-                <h2 className="font-semibold">Análisis de % sobre venta</h2>
+                <h2 className="font-semibold">
+                  Análisis de % sobre venta (legado)
+                </h2>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  Pegá acá el JSON del análisis que calculás aparte (con
-                  Claude Cowork) cada semana. Sinexia no recalcula nada de
-                  esto -- solo guarda tus números y los agrega como una
-                  página extra al PDF de esta nómina.
+                  La página de % sobre venta del PDF ahora se calcula sola a
+                  partir de la nómina, la venta y los campos de Calle Cerra de
+                  arriba -- ya no depende de este JSON. Este cuadro queda solo
+                  como respaldo del análisis manual de semanas anteriores; no
+                  hace falta llenarlo.
                 </p>
                 <textarea
                   value={analysisJson}
