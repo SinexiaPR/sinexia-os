@@ -53,7 +53,7 @@ export function calculateTresbeEntry(
       serviceHours = Math.max(hours - 40, 0);
       systemPay = cents(systemHours * regularRate);
       serviceCheckAmount =
-        serviceHours > 0 && input.fixedServiceAmount > 0
+        input.fixedServiceAmount > 0
           ? cents(input.fixedServiceAmount)
           : cents(serviceHours * serviceRate);
       break;

@@ -1174,6 +1174,30 @@ function CompactPayrollEntries({
                           Calculado: {money.format(result.serviceCheckAmount)}
                         </div>
                       ) : null}
+                      {Number(entry.fixed_service_amount) > 0 ? (
+                        <select
+                          aria-label={`Motivo del cheque de servicios de ${entry.employee_name_snapshot}`}
+                          value={entry.service_reason ?? "Empleado por servicios"}
+                          disabled={!editable}
+                          onChange={(event) =>
+                            updateEntry(
+                              entry.id,
+                              "service_reason",
+                              event.target.value,
+                            )
+                          }
+                          className="border-input bg-background mt-1 h-6 w-full rounded border px-1 text-[10px] disabled:opacity-70"
+                        >
+                          <option value="Empleado por servicios">
+                            Servicios
+                          </option>
+                          <option value="Horas sobre 40">
+                            Horas sobre 40
+                          </option>
+                          <option value="Ajuste manual">Ajuste manual</option>
+                          <option value="Otro">Otro</option>
+                        </select>
+                      ) : null}
                     </div>
                   ) : (
                     money.format(result.serviceCheckAmount)
