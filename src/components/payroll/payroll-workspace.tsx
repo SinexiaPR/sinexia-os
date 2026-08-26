@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  ChevronDown,
   FileText,
   Plus,
   RotateCcw,
@@ -61,6 +62,14 @@ export function PayrollWorkspace({
   >(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [pending, startTransition] = useTransition();
   const total = useMemo(
     () =>
@@ -216,196 +225,181 @@ export function PayrollWorkspace({
                   </div>
                 </div>
               </SurfaceCard>
-              <div className="space-y-4">
-                {entryState.map((entry) => (
-                  <SurfaceCard key={entry.id} padding="sm">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-medium">
-                          {entry.employee_name_snapshot}
-                        </h3>
-                        <p className="text-muted-foreground text-xs">
-                          {entry.section_snapshot} ·{" "}
-                          {entry.compensation_type_snapshot ??
-                            "Compensación pendiente"}
-                        </p>
-                        {entry.requires_review_snapshot ? (
-                          <p className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700">
-                            <AlertTriangle className="size-3" />
-                            Requiere revisión de compensación
+              <SurfaceCard padding="sm">
+                <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-3 py-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <div>Empleado</div>
+                  <div className="text-right">Rate</div>
+                  <div className="text-right">Horas</div>
+                  <div className="text-right">Tips</div>
+                  <div className="text-right">Total</div>
+                  <div />
+                </div>
+                <div className="divide-y">
+                  {entryState.map((entry) => {
+                    const isFixed =
+                      entry.compensation_type_snapshot === "fixed_weekly";
+                    const isOpen = expanded.has(entry.id);
+                    return (
+                      <div key={entry.id} className="px-3 py-2">
+                        <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] items-center gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {entry.employee_name_snapshot}
+                            </p>
+                            {entry.requires_review_snapshot ? (
+                              <p className="flex items-center gap-1 text-[11px] font-medium text-amber-700">
+                                <AlertTriangle className="size-3" />
+                                Revisar tarifa
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="text-muted-foreground text-right text-xs">
+                            {isFixed
+                              ? `Fijo ${money.format(entry.fixed_salary_snapshot ?? 0)}`
+                              : entry.regular_rate_snapshot == null
+                                ? "—"
+                                : `${money.format(entry.regular_rate_snapshot)}/h`}
+                          </div>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={entry.regular_hours}
+                            disabled={selected.status !== "draft" || isFixed}
+                            onChange={(e) =>
+                              updateEntry(
+                                entry.id,
+                                "regular_hours",
+                                e.target.value,
+                              )
+                            }
+                            className="h-8 text-right text-sm"
+                          />
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={entry.other_payments}
+                            disabled={selected.status !== "draft"}
+                            onChange={(e) =>
+                              updateEntry(
+                                entry.id,
+                                "other_payments",
+                                e.target.value,
+                              )
+                            }
+                            className="h-8 text-right text-sm"
+                          />
+                          <p className="text-right text-sm font-semibold">
+                            {money.format(calculatePayrollEntry(entry))}
                           </p>
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(entry.id)}
+                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-7 items-center justify-center rounded-md"
+                          >
+                            <ChevronDown
+                              className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                        </div>
+                        {isOpen ? (
+                          <div className="mt-2 grid gap-3 border-t pt-3 text-xs sm:grid-cols-5">
+                            <label className="text-muted-foreground">
+                              Horas entrenamiento
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={entry.training_hours}
+                                disabled={selected.status !== "draft"}
+                                onChange={(e) =>
+                                  updateEntry(
+                                    entry.id,
+                                    "training_hours",
+                                    e.target.value,
+                                  )
+                                }
+                                className="mt-1 h-8"
+                              />
+                            </label>
+                            <label className="text-muted-foreground">
+                              Vacaciones
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={entry.vacation_paid_hours}
+                                disabled={selected.status !== "draft"}
+                                onChange={(e) =>
+                                  updateEntry(
+                                    entry.id,
+                                    "vacation_paid_hours",
+                                    e.target.value,
+                                  )
+                                }
+                                className="mt-1 h-8"
+                              />
+                            </label>
+                            <label className="text-muted-foreground">
+                              Enfermedad
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={entry.sick_paid_hours}
+                                disabled={selected.status !== "draft"}
+                                onChange={(e) =>
+                                  updateEntry(
+                                    entry.id,
+                                    "sick_paid_hours",
+                                    e.target.value,
+                                  )
+                                }
+                                className="mt-1 h-8"
+                              />
+                            </label>
+                            <label className="text-muted-foreground">
+                              Feriado / Jurado / Duelo
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={entry.holiday_paid_hours}
+                                disabled={selected.status !== "draft"}
+                                onChange={(e) =>
+                                  updateEntry(
+                                    entry.id,
+                                    "holiday_paid_hours",
+                                    e.target.value,
+                                  )
+                                }
+                                className="mt-1 h-8"
+                              />
+                            </label>
+                            <label className="text-muted-foreground">
+                              Comentario
+                              <Input
+                                value={entry.comment ?? ""}
+                                maxLength={500}
+                                disabled={selected.status !== "draft"}
+                                onChange={(e) =>
+                                  updateEntry(
+                                    entry.id,
+                                    "comment",
+                                    e.target.value,
+                                  )
+                                }
+                                className="mt-1 h-8"
+                              />
+                            </label>
+                          </div>
                         ) : null}
                       </div>
-                      <p className="font-semibold">
-                        {money.format(calculatePayrollEntry(entry))}
-                      </p>
-                    </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                      <label className="text-muted-foreground text-xs">
-                        Horas regulares
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.regular_hours}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "regular_hours",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <label className="text-muted-foreground text-xs">
-                        Horas entrenamiento
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.training_hours}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "training_hours",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <label className="text-muted-foreground text-xs">
-                        Otros pagos
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.other_payments}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "other_payments",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <label className="text-muted-foreground text-xs">
-                        Comentario
-                        <Input
-                          value={entry.comment ?? ""}
-                          maxLength={500}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(entry.id, "comment", e.target.value)
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                    </div>
-                    <p className="text-muted-foreground mt-4 text-xs font-medium tracking-wide uppercase">
-                      Licencias (solo para acumulación de vacaciones/enfermedad)
-                    </p>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-5">
-                      <label className="text-muted-foreground text-xs">
-                        Vacaciones pagadas
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.vacation_paid_hours}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "vacation_paid_hours",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <label className="text-muted-foreground text-xs">
-                        Enfermedad pagada
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.sick_paid_hours}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "sick_paid_hours",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <label className="text-muted-foreground text-xs">
-                        Feriado pagado
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.holiday_paid_hours}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "holiday_paid_hours",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <label className="text-muted-foreground text-xs">
-                        Jurado
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.jury_duty_hours}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "jury_duty_hours",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <label className="text-muted-foreground text-xs">
-                        Duelo
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.bereavement_hours}
-                          disabled={selected.status !== "draft"}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "bereavement_hours",
-                              e.target.value,
-                            )
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                    </div>
-                  </SurfaceCard>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              </SurfaceCard>
               {selected.status === "draft" ? (
                 <div className="flex flex-wrap justify-end gap-3">
                   <Button

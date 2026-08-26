@@ -8,7 +8,13 @@ import {
   reverseLeaveAccrualForSibaritaPayroll,
   syncLeaveAccrualForSibaritaPayroll,
 } from "@/lib/leave-accrual/processing";
+import { calculatePayrollEntry } from "@/lib/payroll/calculations";
+import { buildPayrollPdf, type PayrollPdfEntry } from "@/lib/payroll/pdf";
 import { createClient } from "@/lib/supabase/server";
+import {
+  isPayrollEmailConfigured,
+  sendPayrollEmail,
+} from "@/lib/tresbe-payroll/email";
 import { resolveSibaritaCompany } from "@/services/payroll";
 
 async function authorizeCompany(requestedCompanyId: string) {
@@ -233,8 +239,80 @@ export async function submitWeeklyPayroll(
         ? "Configura las tarifas y revisiones pendientes antes de enviar."
         : error.message,
     };
+
+  // Best-effort: si el correo falla, la nómina ya quedó enviada igual --
+  // no bloquear al gerente por un problema de email. Queda la notificación
+  // in-app como respaldo.
+  try {
+    await notifyAdminByEmail(companyId, payrollId);
+  } catch (emailError) {
+    console.error("submitWeeklyPayroll.email", emailError);
+  }
+
   revalidatePath("/dashboard/payroll");
   return { success: true };
+}
+
+async function notifyAdminByEmail(companyId: string, payrollId: string) {
+  if (!isPayrollEmailConfigured()) return;
+  const supabase = await createClient();
+  const [{ data: admins }, { data: payroll }, { data: company }, { data: entries }] =
+    await Promise.all([
+      supabase.from("profiles").select("email").eq("role", "admin"),
+      supabase
+        .from("weekly_payrolls")
+        .select("week_start,week_end,status,submitted_at")
+        .eq("id", payrollId)
+        .single(),
+      supabase.from("companies").select("name").eq("id", companyId).single(),
+      supabase
+        .from("weekly_payroll_entries")
+        .select(
+          "employee_name_snapshot,section_snapshot,compensation_type_snapshot,regular_rate_snapshot,training_rate_snapshot,fixed_salary_snapshot,regular_hours,training_hours,other_payments,comment",
+        )
+        .eq("payroll_id", payrollId)
+        .order("section_snapshot")
+        .order("employee_name_snapshot"),
+    ]);
+  const adminEmails = (admins ?? [])
+    .map((a) => a.email)
+    .filter((email): email is string => Boolean(email));
+  if (!adminEmails.length || !payroll || !company) return;
+
+  const pdf = await buildPayrollPdf({
+    companyName: company.name,
+    weekStart: payroll.week_start,
+    weekEnd: payroll.week_end,
+    status: "submitted",
+    submittedAt: payroll.submitted_at,
+    entries: (entries ?? []) as PayrollPdfEntry[],
+  });
+  const total = (entries ?? []).reduce(
+    (sum, entry) => sum + calculatePayrollEntry(entry as PayrollPdfEntry),
+    0,
+  );
+  const period = `${payroll.week_start} al ${payroll.week_end}`;
+  const text = [
+    "Hola,",
+    "",
+    `El gerente de ${company.name} envió la nómina del ${period}.`,
+    `Total: $${total.toFixed(2)}`,
+    "",
+    "Adjunto el PDF. También queda disponible dentro de Sinexia OS.",
+    "",
+    "Saludos,",
+    "Sinexia",
+  ].join("\n");
+
+  for (const to of adminEmails) {
+    await sendPayrollEmail({
+      to,
+      subject: `Nómina ${company.name} enviada — ${period}`,
+      filename: `nomina-sibarita-${payroll.week_start}.pdf`,
+      pdf,
+      text,
+    });
+  }
 }
 
 export async function approveWeeklyPayroll(
