@@ -2,28 +2,30 @@ import { createClient } from "@/lib/supabase/server";
 import { getSibaritaPayrollHistory } from "@/services/company-workspace";
 import type { Company } from "@/types";
 
-const TRESBE_PENDING_STATUSES = ["draft", "calculated", "corrected"];
-const SIBARITA_PENDING_STATUSES = ["draft", "submitted"];
-
+// Maria only wants payroll status here -- invoice payment/due-date state is
+// reconciled outside Sinexia OS and is deliberately not surfaced.
 const SIBARITA_STATUS_LABELS: Record<string, string> = {
   draft: "Borrador",
   submitted: "Enviada",
-  approved: "Aprobada",
+  approved: "Al día",
 };
+const SIBARITA_PENDING_STATUSES = ["draft", "submitted"];
 
 const TRESBE_STATUS_LABELS: Record<string, string> = {
   draft: "Borrador",
   calculated: "Calculada",
-  sent: "Enviada",
-  viewed: "Vista por cliente",
   corrected: "Corregida",
-  cancelled: "Cancelada",
+  sent: "Enviada",
+  viewed: "Enviada",
+  cancelled: "Al día",
 };
+const TRESBE_PENDING_STATUSES = ["draft", "calculated", "corrected"];
 
 export type CompanyActionStatus = {
   company: Company;
-  payrollPending: { label: string } | null;
-  invoiceOverdueCount: number;
+  /** null for companies without their own payroll module. */
+  payrollStatusLabel: string | null;
+  payrollUrgent: boolean;
   lastSibaritaPayroll: {
     weekStart: string;
     weekEnd: string;
@@ -35,7 +37,7 @@ export async function getCompanyActionStatuses(): Promise<
   CompanyActionStatus[]
 > {
   const supabase = await createClient();
-  const [companiesRes, weeklyPayrollsRes, tresbePayrollsRes, overdueRes] =
+  const [companiesRes, weeklyPayrollsRes, tresbePayrollsRes] =
     await Promise.all([
       supabase.from("companies").select("*").order("name"),
       supabase
@@ -46,16 +48,10 @@ export async function getCompanyActionStatuses(): Promise<
         .from("tresbe_payrolls")
         .select("company_id,status,week_start,week_end")
         .order("week_start", { ascending: false }),
-      supabase
-        .from("invoices")
-        .select("company_id")
-        .eq("status", "overdue")
-        .eq("is_legacy_import", false),
     ]);
   if (companiesRes.error) throw companiesRes.error;
   if (weeklyPayrollsRes.error) throw weeklyPayrollsRes.error;
   if (tresbePayrollsRes.error) throw tresbePayrollsRes.error;
-  if (overdueRes.error) throw overdueRes.error;
 
   const companies = (companiesRes.data ?? []) as Company[];
   const latestWeeklyByCompany = new Map<
@@ -74,13 +70,6 @@ export async function getCompanyActionStatuses(): Promise<
     if (!latestTresbeByCompany.has(row.company_id))
       latestTresbeByCompany.set(row.company_id, row);
   }
-  const overdueCountByCompany = new Map<string, number>();
-  for (const row of overdueRes.data ?? []) {
-    overdueCountByCompany.set(
-      row.company_id,
-      (overdueCountByCompany.get(row.company_id) ?? 0) + 1,
-    );
-  }
 
   const sibarita = companies.find((company) => company.slug === "sibarita");
   const lastSibaritaWeek = sibarita
@@ -88,27 +77,30 @@ export async function getCompanyActionStatuses(): Promise<
     : null;
 
   return companies.map((company) => {
-    let payrollPending: CompanyActionStatus["payrollPending"] = null;
+    let payrollStatusLabel: string | null = null;
+    let payrollUrgent = false;
     if (company.slug === "sibarita") {
       const latest = latestWeeklyByCompany.get(company.id);
-      if (latest && SIBARITA_PENDING_STATUSES.includes(latest.status)) {
-        payrollPending = {
-          label: `Nómina ${SIBARITA_STATUS_LABELS[latest.status] ?? latest.status}`,
-        };
-      }
+      payrollStatusLabel = latest
+        ? (SIBARITA_STATUS_LABELS[latest.status] ?? "Al día")
+        : "Al día";
+      payrollUrgent = Boolean(
+        latest && SIBARITA_PENDING_STATUSES.includes(latest.status),
+      );
     } else if (company.slug === "tresbe") {
       const latest = latestTresbeByCompany.get(company.id);
-      if (latest && TRESBE_PENDING_STATUSES.includes(latest.status)) {
-        payrollPending = {
-          label: `Nómina ${TRESBE_STATUS_LABELS[latest.status] ?? latest.status}`,
-        };
-      }
+      payrollStatusLabel = latest
+        ? (TRESBE_STATUS_LABELS[latest.status] ?? "Al día")
+        : "Al día";
+      payrollUrgent = Boolean(
+        latest && TRESBE_PENDING_STATUSES.includes(latest.status),
+      );
     }
 
     return {
       company,
-      payrollPending,
-      invoiceOverdueCount: overdueCountByCompany.get(company.id) ?? 0,
+      payrollStatusLabel,
+      payrollUrgent,
       lastSibaritaPayroll:
         company.slug === "sibarita" && lastSibaritaWeek
           ? {

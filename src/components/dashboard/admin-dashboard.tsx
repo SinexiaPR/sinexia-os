@@ -74,11 +74,10 @@ export async function AdminDashboard() {
             {companyStatuses.map(
               ({
                 company,
-                payrollPending,
-                invoiceOverdueCount,
+                payrollStatusLabel,
+                payrollUrgent,
                 lastSibaritaPayroll,
               }) => {
-                const urgent = Boolean(payrollPending) || invoiceOverdueCount > 0;
                 return (
                   <Link
                     key={company.id}
@@ -104,16 +103,13 @@ export async function AdminDashboard() {
                       ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-2 text-right">
-                      {urgent ? (
+                      {payrollUrgent ? (
                         <span className="size-2 rounded-full bg-red-500/90" />
                       ) : null}
                       <p
-                        className={`text-sm font-medium ${urgent ? "text-red-700" : "text-muted-foreground"}`}
+                        className={`text-sm font-medium ${payrollUrgent ? "text-red-700" : "text-muted-foreground"}`}
                       >
-                        {payrollPending?.label ??
-                          (invoiceOverdueCount > 0
-                            ? `${invoiceOverdueCount} factura${invoiceOverdueCount === 1 ? "" : "s"} vencida${invoiceOverdueCount === 1 ? "" : "s"}`
-                            : "Al día")}
+                        {payrollStatusLabel ?? "Sin actividad reciente"}
                       </p>
                     </div>
                   </Link>
