@@ -32,6 +32,7 @@ import {
 } from "@/actions/tresbe-payroll";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PayrollStatusHeader } from "@/components/payroll/payroll-status-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { TresbeDailyEntriesTab } from "@/components/tresbe-payroll/daily-entries";
 import {
@@ -86,6 +87,13 @@ const reviewLabel = (reason: string) => {
     return "Requiere tarifa";
   return "Configuración incompleta";
 };
+
+const TAB_DEFS = [
+  ["weekly", "Nóminas"],
+  ["daily", "Carga Diaria"],
+  ["employees", "Empleados"],
+  ["settings", "Correo"],
+] as const;
 
 function toCalculation(entry: TresbePayrollEntry) {
   return calculateTresbeEntry({
@@ -296,25 +304,31 @@ export function TresbePayrollAdminWorkspace({
         </div>
       </header>
 
-      <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-1 sm:w-fit">
-        {(
-          [
-            ["weekly", "Nóminas"],
-            ["daily", "Carga Diaria"],
-            ["employees", "Empleados"],
-            ["settings", "Correo"],
-          ] as const
-        ).map(([value, label]) => (
-          <Button
-            key={value}
-            size="sm"
-            variant={tab === value ? "default" : "ghost"}
-            onClick={() => setTab(value)}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
+      {selected ? (
+        <PayrollStatusHeader
+          weekLabel={`${selected.week_start} — ${selected.week_end}`}
+          statusLabel={statusLabel[selected.status]}
+          total={editable ? totals.grand : selected.grand_total}
+          tabs={TAB_DEFS.map(([value, label]) => ({
+            label,
+            active: tab === value,
+            onSelect: () => setTab(value),
+          }))}
+        />
+      ) : (
+        <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-1 sm:w-fit">
+          {TAB_DEFS.map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={tab === value ? "default" : "ghost"}
+              onClick={() => setTab(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      )}
       {message ? (
         <p
           className={`rounded-lg px-4 py-3 text-sm ${message.includes("correctamente") ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}

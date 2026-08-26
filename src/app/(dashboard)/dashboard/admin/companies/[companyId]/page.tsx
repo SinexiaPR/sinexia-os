@@ -54,7 +54,39 @@ export default async function AdminCompanyPage({
   const workspace = await getAdminCompanyWorkspace(companyId);
   if (!workspace) notFound();
   const { company, summary, categories, activity } = workspace;
-  const empty = summary.documents === 0 && summary.reports === 0;
+  const recentActivityCutoff = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Puerto_Rico",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  const hasRecentActivity =
+    (summary.lastDocumentAt ?? "") >= recentActivityCutoff ||
+    (summary.lastReportAt ?? "") >= recentActivityCutoff;
+  const operationalSummary = (
+    <>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <MetricCard
+          label="Documentos"
+          value={summary.documents}
+          hint={`Último: ${formatDate(summary.lastDocumentAt)}`}
+        />
+        <MetricCard label="Pendientes" value={summary.pending} />
+        <MetricCard label="En revisión" value={summary.reviewing} />
+        <MetricCard label="Procesados" value={summary.processed} />
+        <MetricCard
+          label="Reportes publicados"
+          value={summary.reports}
+          hint={`Último: ${formatDate(summary.lastReportAt)}`}
+        />
+      </div>
+      {summary.lastAnalysisAt ? (
+        <p className="text-muted-foreground mt-3 text-sm">
+          Último análisis de SinexIA: {formatDate(summary.lastAnalysisAt)}
+        </p>
+      ) : null}
+    </>
+  );
   const payrollHistory =
     company.slug === "sibarita"
       ? await getSibaritaPayrollHistory(company.id)
@@ -112,29 +144,22 @@ export default async function AdminCompanyPage({
       </header>
 
       <section aria-labelledby="resumen-operativo">
-        <h2 id="resumen-operativo" className="text-lg font-semibold">
-          Resumen operativo
-        </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <MetricCard
-            label="Documentos"
-            value={summary.documents}
-            hint={`Último: ${formatDate(summary.lastDocumentAt)}`}
-          />
-          <MetricCard label="Pendientes" value={summary.pending} />
-          <MetricCard label="En revisión" value={summary.reviewing} />
-          <MetricCard label="Procesados" value={summary.processed} />
-          <MetricCard
-            label="Reportes publicados"
-            value={summary.reports}
-            hint={`Último: ${formatDate(summary.lastReportAt)}`}
-          />
-        </div>
-        {summary.lastAnalysisAt ? (
-          <p className="text-muted-foreground mt-3 text-sm">
-            Último análisis de SinexIA: {formatDate(summary.lastAnalysisAt)}
-          </p>
-        ) : null}
+        {hasRecentActivity ? (
+          <h2 id="resumen-operativo" className="text-lg font-semibold">
+            Resumen operativo
+          </h2>
+        ) : (
+          <details className="group">
+            <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium">
+              Sin actividad de documentos esta semana
+              <span className="transition-transform group-open:rotate-90">
+                ▸
+              </span>
+            </summary>
+            {operationalSummary}
+          </details>
+        )}
+        {hasRecentActivity ? operationalSummary : null}
       </section>
 
       <SurfaceCard>
@@ -177,20 +202,14 @@ export default async function AdminCompanyPage({
         </div>
       </SurfaceCard>
 
-      <section aria-labelledby="categorias">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="text-muted-foreground size-5" />
-          <h2 id="categorias" className="text-lg font-semibold">
-            Categorías operativas
-          </h2>
-        </div>
-        {empty ? (
-          <SurfaceCard className="mt-4">
-            <p className="text-muted-foreground text-sm">
-              Esta empresa todavía no tiene documentos ni reportes publicados.
-            </p>
-          </SurfaceCard>
-        ) : (
+      {categories.length ? (
+        <section aria-labelledby="categorias">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="text-muted-foreground size-5" />
+            <h2 id="categorias" className="text-lg font-semibold">
+              Categorías operativas
+            </h2>
+          </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {categories.map((category) => (
               <Link
@@ -230,8 +249,8 @@ export default async function AdminCompanyPage({
               </Link>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       {payrollHistory ? (
         <section aria-labelledby="historial-nomina">
