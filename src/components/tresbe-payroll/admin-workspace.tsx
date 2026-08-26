@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import {
   ArrowLeft,
+  ChevronDown,
   FileText,
   Mail,
+  Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -51,6 +53,10 @@ import type {
   TresbeWageReviewItem,
 } from "@/services/tresbe-payroll";
 import { TresbeAreaReportCard } from "@/components/tresbe-payroll/area-report-card";
+import {
+  FIXED_SALARY_GROUP_LABEL,
+  groupTresbeEntriesForGrid,
+} from "@/lib/tresbe-payroll/area-report";
 
 type Company = { id: string; name: string; slug: string };
 const money = new Intl.NumberFormat("en-US", {
@@ -94,6 +100,21 @@ const TAB_DEFS = [
   ["employees", "Empleados"],
   ["settings", "Correo"],
 ] as const;
+
+function nextTresbeWeekStart(payrolls: TresbePayroll[]) {
+  if (payrolls.length) {
+    const nextStart = new Date(`${payrolls[0].week_end}T12:00:00Z`);
+    nextStart.setUTCDate(nextStart.getUTCDate() + 1);
+    return nextStart.toISOString().slice(0, 10);
+  }
+  const today = new Date();
+  const mostRecentMonday = new Date(
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12),
+  );
+  const daysSinceMonday = (mostRecentMonday.getUTCDay() + 6) % 7;
+  mostRecentMonday.setUTCDate(mostRecentMonday.getUTCDate() - daysSinceMonday);
+  return mostRecentMonday.toISOString().slice(0, 10);
+}
 
 function toCalculation(entry: TresbePayrollEntry) {
   return calculateTresbeEntry({
@@ -153,9 +174,14 @@ export function TresbePayrollAdminWorkspace({
   const [emailRecipient, setEmailRecipient] = useState(
     selected?.email_recipient ?? settings?.default_email_recipient ?? "",
   );
+  const [manualEditUnlock, setManualEditUnlock] = useState(false);
+  const [showManualDateForm, setShowManualDateForm] = useState(false);
   const editable = Boolean(
     selected && ["draft", "calculated", "corrected"].includes(selected.status),
   );
+  const isDraft = selected?.status === "draft";
+  const canManuallyUnlock = editable && !isDraft;
+  const gridEditable = isDraft || (canManuallyUnlock && manualEditUnlock);
   const calculated = useMemo(
     () => entryState.map((entry) => ({ entry, ...toCalculation(entry) })),
     [entryState],
@@ -339,11 +365,36 @@ export function TresbePayrollAdminWorkspace({
 
       {tab === "weekly" ? (
         <div className="space-y-6">
-          {!selected || !editable ? (
-            <SurfaceCard>
-              <h2 className="font-semibold">Crear nómina semanal</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Semanas</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  run(() =>
+                    createTresbePayroll(
+                      company.id,
+                      nextTresbeWeekStart(payrolls),
+                    ),
+                  )
+                }
+              >
+                <Plus className="size-4" /> Nueva nómina
+              </Button>
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+                onClick={() => setShowManualDateForm((current) => !current)}
+              >
+                Elegir otra fecha
+              </button>
+            </div>
+          </div>
+
+          {showManualDateForm ? (
+            <SurfaceCard padding="sm">
               <form
-                className="mt-4 flex flex-wrap items-end gap-3"
+                className="flex flex-wrap items-end gap-3"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const weekStart = String(
@@ -386,119 +437,66 @@ export function TresbePayrollAdminWorkspace({
                   </Button>
                 ))}
               </div>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[1080px] text-left text-xs">
-                  <thead className="border-b">
-                    <tr>
-                      <th className="py-2">Periodo</th>
-                      <th>Estado</th>
-                      <th>Creada</th>
-                      <th>Enviada</th>
-                      <th>Vista</th>
-                      <th>Empleados</th>
-                      <th>Horas</th>
-                      <th>Sistema</th>
-                      <th>Tips</th>
-                      <th>Servicios</th>
-                      <th>Total</th>
-                      <th>Correo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payrolls.map((payroll) => (
-                      <tr key={payroll.id} className="border-b last:border-0">
-                        <td className="py-2">
-                          <Link
-                            className="font-medium underline-offset-4 hover:underline"
-                            href={`?payroll=${payroll.id}`}
-                          >
-                            {payroll.week_start} — {payroll.week_end}
-                          </Link>
-                        </td>
-                        <td>{statusLabel[payroll.status]}</td>
-                        <td>{payroll.created_at.slice(0, 10)}</td>
-                        <td>{payroll.sent_at?.slice(0, 10) ?? "—"}</td>
-                        <td>{payroll.viewed_at?.slice(0, 10) ?? "—"}</td>
-                        <td>{payroll.employee_count}</td>
-                        <td>{payroll.total_weekly_hours}</td>
-                        <td>{money.format(payroll.total_system_pay)}</td>
-                        <td>{money.format(payroll.total_tips)}</td>
-                        <td>{money.format(payroll.total_service_checks)}</td>
-                        <td className="font-medium">
-                          {money.format(payroll.grand_total)}
-                        </td>
-                        <td>{payroll.email_status ?? "—"}</td>
+              <details className="group mt-4">
+                <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium">
+                  Ver historial completo
+                  <span className="transition-transform group-open:rotate-90">
+                    ▸
+                  </span>
+                </summary>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full min-w-[1080px] text-left text-xs">
+                    <thead className="border-b">
+                      <tr>
+                        <th className="py-2">Periodo</th>
+                        <th>Estado</th>
+                        <th>Creada</th>
+                        <th>Enviada</th>
+                        <th>Vista</th>
+                        <th>Empleados</th>
+                        <th>Horas</th>
+                        <th>Sistema</th>
+                        <th>Tips</th>
+                        <th>Servicios</th>
+                        <th>Total</th>
+                        <th>Correo</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {payrolls.map((payroll) => (
+                        <tr key={payroll.id} className="border-b last:border-0">
+                          <td className="py-2">
+                            <Link
+                              className="font-medium underline-offset-4 hover:underline"
+                              href={`?payroll=${payroll.id}`}
+                            >
+                              {payroll.week_start} — {payroll.week_end}
+                            </Link>
+                          </td>
+                          <td>{statusLabel[payroll.status]}</td>
+                          <td>{payroll.created_at.slice(0, 10)}</td>
+                          <td>{payroll.sent_at?.slice(0, 10) ?? "—"}</td>
+                          <td>{payroll.viewed_at?.slice(0, 10) ?? "—"}</td>
+                          <td>{payroll.employee_count}</td>
+                          <td>{payroll.total_weekly_hours}</td>
+                          <td>{money.format(payroll.total_system_pay)}</td>
+                          <td>{money.format(payroll.total_tips)}</td>
+                          <td>{money.format(payroll.total_service_checks)}</td>
+                          <td className="font-medium">
+                            {money.format(payroll.grand_total)}
+                          </td>
+                          <td>{payroll.email_status ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </SurfaceCard>
           ) : null}
 
           {selected ? (
             <>
-              <SurfaceCard>
-                <h2 className="font-semibold">Venta de la semana</h2>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <label className="text-sm">
-                    Tresbe
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={salesTresbe}
-                      disabled={!editable}
-                      onChange={(event) => setSalesTresbe(event.target.value)}
-                      className="mt-1"
-                    />
-                  </label>
-                  <label className="text-sm">
-                    Café con Ce
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={salesCafeConCe}
-                      disabled={!editable}
-                      onChange={(event) =>
-                        setSalesCafeConCe(event.target.value)
-                      }
-                      className="mt-1"
-                    />
-                  </label>
-                  <label className="text-sm">
-                    Café con Ce · Calle Cerra
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={salesCafeConCeCalleCerra}
-                      disabled={!editable}
-                      onChange={(event) =>
-                        setSalesCafeConCeCalleCerra(event.target.value)
-                      }
-                      className="mt-1"
-                    />
-                  </label>
-                </div>
-                <p className="text-muted-foreground mt-3 text-xs">
-                  Total venta de la semana:{" "}
-                  {money.format(
-                    Number(salesTresbe || 0) +
-                      Number(salesCafeConCe || 0) +
-                      Number(salesCafeConCeCalleCerra || 0),
-                  )}
-                </p>
-              </SurfaceCard>
-
-              <TresbeAreaReportCard
-                payroll={selected}
-                entries={entryState}
-                dailyEntries={dailyEntries}
-                employees={employees}
-              />
-
               <SurfaceCard>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -523,46 +521,136 @@ export function TresbePayrollAdminWorkspace({
                     </p>
                   </div>
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm">
-                    Nota interna
-                    <textarea
-                      value={adminNote}
-                      onChange={(event) => setAdminNote(event.target.value)}
-                      disabled={!editable}
-                      maxLength={2000}
-                      rows={3}
-                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <label className="text-sm">
-                    Mensaje visible para Tresbe
-                    <textarea
-                      value={clientNote}
-                      onChange={(event) => setClientNote(event.target.value)}
-                      disabled={!editable}
-                      maxLength={2000}
-                      rows={3}
-                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                    />
-                  </label>
-                </div>
               </SurfaceCard>
 
+              <details className="group" open={isDraft}>
+                <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium">
+                  Ver resumen
+                  <span className="transition-transform group-open:rotate-90">
+                    ▸
+                  </span>
+                </summary>
+                <div className="mt-4 space-y-6">
+                  <SurfaceCard>
+                    <h2 className="font-semibold">Venta de la semana</h2>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <label className="text-sm">
+                        Tresbe
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={salesTresbe}
+                          disabled={!editable}
+                          onChange={(event) =>
+                            setSalesTresbe(event.target.value)
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="text-sm">
+                        Café con Ce
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={salesCafeConCe}
+                          disabled={!editable}
+                          onChange={(event) =>
+                            setSalesCafeConCe(event.target.value)
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="text-sm">
+                        Café con Ce · Calle Cerra
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={salesCafeConCeCalleCerra}
+                          disabled={!editable}
+                          onChange={(event) =>
+                            setSalesCafeConCeCalleCerra(event.target.value)
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                    </div>
+                    <p className="text-muted-foreground mt-3 text-xs">
+                      Total venta de la semana:{" "}
+                      {money.format(
+                        Number(salesTresbe || 0) +
+                          Number(salesCafeConCe || 0) +
+                          Number(salesCafeConCeCalleCerra || 0),
+                      )}
+                    </p>
+                  </SurfaceCard>
+
+                  <TresbeAreaReportCard
+                    payroll={selected}
+                    entries={entryState}
+                    dailyEntries={dailyEntries}
+                    employees={employees}
+                  />
+
+                  <SurfaceCard>
+                    <h2 className="font-semibold">Notas</h2>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <label className="text-sm">
+                        Nota interna
+                        <textarea
+                          value={adminNote}
+                          onChange={(event) =>
+                            setAdminNote(event.target.value)
+                          }
+                          disabled={!editable}
+                          maxLength={2000}
+                          rows={3}
+                          className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                        />
+                      </label>
+                      <label className="text-sm">
+                        Mensaje visible para Tresbe
+                        <textarea
+                          value={clientNote}
+                          onChange={(event) =>
+                            setClientNote(event.target.value)
+                          }
+                          disabled={!editable}
+                          maxLength={2000}
+                          rows={3}
+                          className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                        />
+                      </label>
+                    </div>
+                  </SurfaceCard>
+                </div>
+              </details>
+
               <div className="space-y-2">
-                {editable ? (
-                  <div className="flex justify-end">
+                <div className="flex flex-wrap justify-end gap-2">
+                  {isDraft ? (
                     <Button
                       variant="outline"
                       onClick={() => setEmployeeForm("new")}
                     >
                       <Plus className="size-4" /> Agregar empleado al borrador
                     </Button>
-                  </div>
-                ) : null}
+                  ) : null}
+                  {canManuallyUnlock && !manualEditUnlock ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setManualEditUnlock(true)}
+                    >
+                      <Pencil className="size-4" /> Editar nómina
+                    </Button>
+                  ) : null}
+                </div>
                 <CompactPayrollEntries
                   entries={entryState}
-                  editable={editable}
+                  employees={employees}
+                  editable={gridEditable}
                   updateEntry={updateEntry}
                 />
               </div>
@@ -993,12 +1081,42 @@ export function TresbePayrollAdminWorkspace({
   );
 }
 
+const GRID_COLUMNS = [
+  "Empleado",
+  "Área / regla",
+  "Horas",
+  "H. sistema",
+  "Tarifa / base",
+  "Pago sistema",
+  "Tips",
+  "H. servicio",
+  "Tarifa servicio",
+  "Cheque / override",
+  "Ajustes",
+  "Total",
+  "Vacaciones",
+  "Enfermedad",
+  "Feriado",
+  "Jurado",
+  "Duelo",
+  "Comentario",
+];
+
+function formatGridNumber(value: number | null) {
+  return Number(value ?? 0).toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
 function CompactPayrollEntries({
   entries,
+  employees,
   editable,
   updateEntry,
 }: {
   entries: TresbePayrollEntry[];
+  employees: Pick<TresbeEmployee, "id" | "area">[];
   editable: boolean;
   updateEntry: (
     id: string,
@@ -1006,6 +1124,21 @@ function CompactPayrollEntries({
     value: string,
   ) => void;
 }) {
+  const groups = useMemo(
+    () => groupTresbeEntriesForGrid(entries, employees),
+    [entries, employees],
+  );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set([FIXED_SALARY_GROUP_LABEL]),
+  );
+  const toggleGroup = (label: string) =>
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+
   const numericInput =
     "h-7 w-20 rounded border border-input bg-background px-1.5 text-right text-xs tabular-nums disabled:opacity-70";
   const numeric = (
@@ -1013,205 +1146,286 @@ function CompactPayrollEntries({
     field: keyof TresbePayrollEntry,
     label: string,
     allowNegative = false,
-  ) => (
-    <input
-      aria-label={`${label} de ${entry.employee_name_snapshot}`}
-      type="number"
-      min={allowNegative ? undefined : "0"}
-      step="0.01"
-      value={(entry[field] as number | null) ?? ""}
-      disabled={!editable}
-      onChange={(event) => updateEntry(entry.id, field, event.target.value)}
-      className={numericInput}
-    />
-  );
+  ) =>
+    editable ? (
+      <input
+        aria-label={`${label} de ${entry.employee_name_snapshot}`}
+        type="number"
+        min={allowNegative ? undefined : "0"}
+        step="0.01"
+        value={(entry[field] as number | null) ?? ""}
+        onChange={(event) => updateEntry(entry.id, field, event.target.value)}
+        className={numericInput}
+      />
+    ) : (
+      <span className="block text-right text-xs tabular-nums sm:text-[13px]">
+        {formatGridNumber(entry[field] as number | null)}
+      </span>
+    );
 
   return (
-    <div className="border-border max-h-[68vh] overflow-auto rounded-lg border">
-      <table className="w-full min-w-[1850px] border-collapse text-xs sm:text-[13px]">
-        <thead className="bg-muted sticky top-0 z-10 text-[11px] tracking-wide uppercase">
-          <tr className="border-border border-b">
-            {[
-              "Empleado",
-              "Área / regla",
-              "Horas",
-              "H. sistema",
-              "Tarifa / base",
-              "Pago sistema",
-              "Tips",
-              "H. servicio",
-              "Tarifa servicio",
-              "Cheque / override",
-              "Ajustes",
-              "Total",
-              "Vacaciones",
-              "Enfermedad",
-              "Feriado",
-              "Jurado",
-              "Duelo",
-              "Comentario",
-            ].map((heading) => (
-              <th key={heading} className="px-2 py-2 text-left font-semibold">
-                {heading}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => {
-            const result = toCalculation(entry);
-            const rule = entry.payroll_rule_snapshot;
-            const hourly = [
-              "standard_hourly_40_plus_services",
-              "preset_40_hourly",
-            ].includes(rule);
-            const fixed = [
-              "preset_40_weekly_salary",
-              "fixed_weekly_salary",
-            ].includes(rule);
-            return (
-              <tr
-                key={entry.id}
-                className="border-border hover:bg-muted/40 border-b last:border-b-0"
-              >
-                <td className="max-w-44 px-2 py-1.5 align-top font-medium">
-                  {entry.employee_name_snapshot}
-                  <div className="mt-0.5 flex gap-1 text-[10px] font-normal">
-                    {entry.is_new_employee ? (
-                      <span className="text-blue-700">Nuevo</span>
-                    ) : null}
-                    {rule === "unconfigured" ? (
-                      <span className="text-amber-700">Configurar</span>
-                    ) : null}
-                    {result.serviceCheckAmount > 0 ? (
-                      <span className="text-red-700">Servicios</span>
-                    ) : null}
-                  </div>
-                </td>
-                <td className="text-muted-foreground max-w-44 px-2 py-1.5 align-top text-[11px]">
-                  <div>{entry.area_snapshot}</div>
-                  <div>{TRESBE_RULE_LABELS[rule]}</div>
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "total_weekly_hours", "Horas")}
-                </td>
-                <td className="px-2 py-1.5 text-right tabular-nums">
-                  {result.systemHours}
-                </td>
-                <td className="px-2 py-1.5">
-                  {hourly
-                    ? numeric(entry, "regular_rate_snapshot", "Tarifa regular")
-                    : fixed || rule === "full_services"
-                      ? numeric(
-                          entry,
-                          "weekly_salary_snapshot",
-                          "Salario semanal",
-                        )
-                      : rule === "custom_manual"
-                        ? numeric(
-                            entry,
-                            "manual_system_amount",
-                            "Monto sistema",
-                          )
-                        : "—"}
-                </td>
-                <td className="px-2 py-1.5 text-right font-medium tabular-nums">
-                  {money.format(result.systemPay)}
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "tips", "Tips")}
-                </td>
-                <td className="px-2 py-1.5 text-right tabular-nums">
-                  {result.serviceHours}
-                </td>
-                <td className="px-2 py-1.5">
-                  {hourly || rule === "full_services"
-                    ? numeric(entry, "service_rate_snapshot", "Tarifa servicio")
-                    : "—"}
-                </td>
-                <td className="px-2 py-1.5">
-                  {hourly ||
-                  rule === "full_services" ||
-                  rule === "custom_manual" ? (
-                    <div>
-                      {numeric(
-                        entry,
-                        "fixed_service_amount",
-                        "Cheque de servicios",
-                      )}
-                      {result.serviceCheckAmount > 0 ? (
-                        <div className="text-muted-foreground mt-0.5 text-right text-[10px] tabular-nums">
-                          Calculado: {money.format(result.serviceCheckAmount)}
-                        </div>
-                      ) : null}
-                      {Number(entry.fixed_service_amount) > 0 ? (
-                        <select
-                          aria-label={`Motivo del cheque de servicios de ${entry.employee_name_snapshot}`}
-                          value={entry.service_reason ?? "Empleado por servicios"}
-                          disabled={!editable}
-                          onChange={(event) =>
-                            updateEntry(
-                              entry.id,
-                              "service_reason",
-                              event.target.value,
-                            )
-                          }
-                          className="border-input bg-background mt-1 h-6 w-full rounded border px-1 text-[10px] disabled:opacity-70"
+    <div className="space-y-3">
+      {groups.map((group) => {
+        const isOpen = !collapsedGroups.has(group.label);
+        const subtotalHours = group.entries.reduce(
+          (sum, entry) => sum + Number(entry.total_weekly_hours),
+          0,
+        );
+        const subtotalTotal = group.entries.reduce(
+          (sum, entry) => sum + toCalculation(entry).employeeTotal,
+          0,
+        );
+        return (
+          <SurfaceCard key={group.label} padding="sm">
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.label)}
+              className="flex w-full items-center justify-between gap-3 text-left"
+            >
+              <span className="font-semibold">
+                {group.label}{" "}
+                <span className="text-muted-foreground font-normal">
+                  · {group.entries.length}{" "}
+                  {group.entries.length === 1 ? "empleado" : "empleados"}
+                </span>
+              </span>
+              <span className="flex items-center gap-3 text-sm">
+                <span className="text-muted-foreground tabular-nums">
+                  {subtotalHours.toFixed(2)} h
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {money.format(subtotalTotal)}
+                </span>
+                <ChevronDown
+                  className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                />
+              </span>
+            </button>
+            {isOpen ? (
+              <div className="border-border mt-3 overflow-x-auto rounded-lg border">
+                <table className="w-full min-w-[1850px] border-collapse text-xs sm:text-[13px]">
+                  <thead className="bg-muted text-[11px] tracking-wide uppercase">
+                    <tr className="border-border border-b">
+                      {GRID_COLUMNS.map((heading) => (
+                        <th
+                          key={heading}
+                          className="px-2 py-2 text-left font-semibold"
                         >
-                          <option value="Empleado por servicios">
-                            Servicios
-                          </option>
-                          <option value="Horas sobre 40">
-                            Horas sobre 40
-                          </option>
-                          <option value="Ajuste manual">Ajuste manual</option>
-                          <option value="Otro">Otro</option>
-                        </select>
-                      ) : null}
-                    </div>
-                  ) : (
-                    money.format(result.serviceCheckAmount)
-                  )}
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "other_adjustments", "Otros ajustes", true)}
-                </td>
-                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
-                  {money.format(result.employeeTotal)}
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "vacation_paid_hours", "Vacaciones pagadas")}
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "sick_paid_hours", "Enfermedad pagada")}
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "holiday_paid_hours", "Feriado pagado")}
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "jury_duty_hours", "Jurado")}
-                </td>
-                <td className="px-2 py-1.5">
-                  {numeric(entry, "bereavement_hours", "Duelo")}
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    aria-label={`Comentario de ${entry.employee_name_snapshot}`}
-                    value={entry.comment ?? ""}
-                    maxLength={1000}
-                    disabled={!editable}
-                    placeholder="Opcional"
-                    onChange={(event) =>
-                      updateEntry(entry.id, "comment", event.target.value)
-                    }
-                    className="border-input bg-background h-7 w-48 rounded border px-2 text-xs disabled:opacity-70"
-                  />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.entries.map((entry) => {
+                      const result = toCalculation(entry);
+                      const rule = entry.payroll_rule_snapshot;
+                      const hourly = [
+                        "standard_hourly_40_plus_services",
+                        "preset_40_hourly",
+                      ].includes(rule);
+                      const fixed = [
+                        "preset_40_weekly_salary",
+                        "fixed_weekly_salary",
+                      ].includes(rule);
+                      return (
+                        <tr
+                          key={entry.id}
+                          className="border-border hover:bg-muted/40 border-b last:border-b-0"
+                        >
+                          <td className="max-w-44 px-2 py-1.5 align-top font-medium">
+                            {entry.employee_name_snapshot}
+                            <div className="mt-0.5 flex gap-1 text-[10px] font-normal">
+                              {entry.is_new_employee ? (
+                                <span className="text-blue-700">Nuevo</span>
+                              ) : null}
+                              {rule === "unconfigured" ? (
+                                <span className="text-amber-700">
+                                  Configurar
+                                </span>
+                              ) : null}
+                              {result.serviceCheckAmount > 0 ? (
+                                <span className="text-red-700">
+                                  Servicios
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="text-muted-foreground max-w-44 px-2 py-1.5 align-top text-[11px]">
+                            <div>{entry.area_snapshot}</div>
+                            <div>{TRESBE_RULE_LABELS[rule]}</div>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(entry, "total_weekly_hours", "Horas")}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">
+                            {result.systemHours}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {hourly
+                              ? numeric(
+                                  entry,
+                                  "regular_rate_snapshot",
+                                  "Tarifa regular",
+                                )
+                              : fixed || rule === "full_services"
+                                ? numeric(
+                                    entry,
+                                    "weekly_salary_snapshot",
+                                    "Salario semanal",
+                                  )
+                                : rule === "custom_manual"
+                                  ? numeric(
+                                      entry,
+                                      "manual_system_amount",
+                                      "Monto sistema",
+                                    )
+                                  : "—"}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-medium tabular-nums">
+                            {money.format(result.systemPay)}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(entry, "tips", "Tips")}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">
+                            {result.serviceHours}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {hourly || rule === "full_services"
+                              ? numeric(
+                                  entry,
+                                  "service_rate_snapshot",
+                                  "Tarifa servicio",
+                                )
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {hourly ||
+                            rule === "full_services" ||
+                            rule === "custom_manual" ? (
+                              <div>
+                                {numeric(
+                                  entry,
+                                  "fixed_service_amount",
+                                  "Cheque de servicios",
+                                )}
+                                {result.serviceCheckAmount > 0 ? (
+                                  <div className="text-muted-foreground mt-0.5 text-right text-[10px] tabular-nums">
+                                    Calculado:{" "}
+                                    {money.format(result.serviceCheckAmount)}
+                                  </div>
+                                ) : null}
+                                {editable &&
+                                Number(entry.fixed_service_amount) > 0 ? (
+                                  <select
+                                    aria-label={`Motivo del cheque de servicios de ${entry.employee_name_snapshot}`}
+                                    value={
+                                      entry.service_reason ??
+                                      "Empleado por servicios"
+                                    }
+                                    onChange={(event) =>
+                                      updateEntry(
+                                        entry.id,
+                                        "service_reason",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="border-input bg-background mt-1 h-6 w-full rounded border px-1 text-[10px]"
+                                  >
+                                    <option value="Empleado por servicios">
+                                      Servicios
+                                    </option>
+                                    <option value="Horas sobre 40">
+                                      Horas sobre 40
+                                    </option>
+                                    <option value="Ajuste manual">
+                                      Ajuste manual
+                                    </option>
+                                    <option value="Otro">Otro</option>
+                                  </select>
+                                ) : !editable &&
+                                  Number(entry.fixed_service_amount) > 0 ? (
+                                  <div className="text-muted-foreground mt-0.5 text-[10px]">
+                                    {entry.service_reason ??
+                                      "Empleado por servicios"}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              money.format(result.serviceCheckAmount)
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(
+                              entry,
+                              "other_adjustments",
+                              "Otros ajustes",
+                              true,
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                            {money.format(result.employeeTotal)}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(
+                              entry,
+                              "vacation_paid_hours",
+                              "Vacaciones pagadas",
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(
+                              entry,
+                              "sick_paid_hours",
+                              "Enfermedad pagada",
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(
+                              entry,
+                              "holiday_paid_hours",
+                              "Feriado pagado",
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(entry, "jury_duty_hours", "Jurado")}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {numeric(entry, "bereavement_hours", "Duelo")}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {editable ? (
+                              <input
+                                aria-label={`Comentario de ${entry.employee_name_snapshot}`}
+                                value={entry.comment ?? ""}
+                                maxLength={1000}
+                                placeholder="Opcional"
+                                onChange={(event) =>
+                                  updateEntry(
+                                    entry.id,
+                                    "comment",
+                                    event.target.value,
+                                  )
+                                }
+                                className="border-input bg-background h-7 w-48 rounded border px-2 text-xs"
+                              />
+                            ) : (
+                              <span className="text-muted-foreground block text-xs">
+                                {entry.comment || "—"}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </SurfaceCard>
+        );
+      })}
     </div>
   );
 }
