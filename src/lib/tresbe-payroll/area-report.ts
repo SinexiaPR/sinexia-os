@@ -4,6 +4,7 @@ import type {
   TresbePayrollDailyEntry,
   TresbePayrollEntry,
 } from "@/services/tresbe-payroll";
+import type { TresbePayrollRule } from "@/lib/tresbe-payroll/calculations";
 
 // Area-based breakdown for the payroll report (screen + PDF). Two separate
 // data sources, on purpose:
@@ -44,6 +45,51 @@ export function computeAreaHoursTips(
   return [...byArea.values()]
     .map((row) => ({ ...row, hours: round2(row.hours), tips: round2(row.tips) }))
     .sort((a, b) => a.area.localeCompare(b.area));
+}
+
+// Grouping for the employee grid on the "Nóminas" tab. Reuses the exact
+// same area lookup as computeAreaPay (current tresbe_employees.area), but
+// pulls fixed-salary employees into their own group first -- their pay
+// doesn't depend on hours and they rarely need to be touched, so mixing
+// them into their area's group would bury them among employees who do
+// need weekly attention.
+export const FIXED_SALARY_GROUP_LABEL = "Salario semanal fijo";
+const FIXED_SALARY_RULES: TresbePayrollRule[] = [
+  "fixed_weekly_salary",
+  "preset_40_weekly_salary",
+];
+const GRID_AREA_ORDER = ["BOH", "CAFE CON CE", CALLE_CERRA_AREA, "FOH", "Seguridad"];
+
+export type TresbeEntryGroup = { label: string; entries: TresbePayrollEntry[] };
+
+export function groupTresbeEntriesForGrid(
+  entries: TresbePayrollEntry[],
+  employees: Pick<TresbeEmployee, "id" | "area">[],
+): TresbeEntryGroup[] {
+  const areaByEmployeeId = new Map(employees.map((e) => [e.id, e.area]));
+  const buckets = new Map<string, TresbePayrollEntry[]>();
+  for (const entry of entries) {
+    const label = FIXED_SALARY_RULES.includes(entry.payroll_rule_snapshot)
+      ? FIXED_SALARY_GROUP_LABEL
+      : (areaByEmployeeId.get(entry.employee_id) ?? "(sin área)");
+    const list = buckets.get(label);
+    if (list) list.push(entry);
+    else buckets.set(label, [entry]);
+  }
+  const orderedLabels = [
+    FIXED_SALARY_GROUP_LABEL,
+    ...GRID_AREA_ORDER,
+    ...[...buckets.keys()]
+      .filter(
+        (label) =>
+          label !== FIXED_SALARY_GROUP_LABEL &&
+          !GRID_AREA_ORDER.includes(label),
+      )
+      .sort(),
+  ];
+  return orderedLabels
+    .filter((label) => buckets.has(label))
+    .map((label) => ({ label, entries: buckets.get(label)! }));
 }
 
 export function computeAreaPay(

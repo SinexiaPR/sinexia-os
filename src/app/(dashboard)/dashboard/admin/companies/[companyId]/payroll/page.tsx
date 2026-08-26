@@ -22,5 +22,11 @@ export default async function TresbeAdminPayrollPage({
   const company = await resolveTresbeCompany(companyId);
   if (!company) notFound();
   const workspace = await getTresbeAdminWorkspace(company.id, payroll);
-  return <TresbePayrollAdminWorkspace company={company} {...workspace} />;
+  return (
+    <TresbePayrollAdminWorkspace
+      key={workspace.selected?.id ?? "none"}
+      company={company}
+      {...workspace}
+    />
+  );
 }
