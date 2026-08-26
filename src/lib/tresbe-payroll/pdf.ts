@@ -629,6 +629,11 @@ function drawDailyHalfBlock(
   return y;
 }
 
+// BOH and Seguridad never split tips, so their $0.00 rows in this
+// per-shift breakdown were just noise -- this only hides them from this
+// one table; pay/hours for those areas are untouched everywhere else.
+const TIP_PARTICIPATING_AREAS = new Set(["FOH", "CAFE CON CE", CALLE_CERRA_AREA]);
+
 function drawTresbeDailyEntriesPages(
   pdf: PDFDocument,
   bold: PDFFont,
@@ -636,9 +641,12 @@ function drawTresbeDailyEntriesPages(
   payroll: TresbePayroll,
   companyName: string,
   employees: { id: string; display_name: string }[],
-  dailyEntries: TresbePayrollDailyEntry[],
+  allDailyEntries: TresbePayrollDailyEntry[],
   shiftPools: TresbePayrollShiftPool[],
 ) {
+  const dailyEntries = allDailyEntries.filter((entry) =>
+    TIP_PARTICIPATING_AREAS.has(entry.area_snapshot),
+  );
   const employeeNames = new Map(employees.map((e) => [e.id, e.display_name]));
   const poolByKey = new Map(
     shiftPools.map((pool) => [`${pool.work_date}|${pool.shift}`, pool]),
