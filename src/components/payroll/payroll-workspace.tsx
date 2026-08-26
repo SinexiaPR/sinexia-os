@@ -24,6 +24,7 @@ import {
 } from "@/actions/payroll";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PayrollStatusHeader } from "@/components/payroll/payroll-status-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { calculatePayrollEntry } from "@/lib/payroll/calculations";
 import {
@@ -39,6 +40,11 @@ const money = new Intl.NumberFormat("es-US", {
   style: "currency",
   currency: "USD",
 });
+const statusLabel: Record<WeeklyPayroll["status"], string> = {
+  draft: "Borrador",
+  submitted: "Enviada",
+  approved: "Aprobada",
+};
 
 export function PayrollWorkspace({
   company,
@@ -134,22 +140,42 @@ export function PayrollWorkspace({
           </p>
         </div>
       </header>
-      <div className="bg-muted flex gap-1 rounded-lg p-1 sm:w-fit">
-        <Button
-          size="sm"
-          variant={tab === "weekly" ? "default" : "ghost"}
-          onClick={() => setTab("weekly")}
-        >
-          Nóminas semanales
-        </Button>
-        <Button
-          size="sm"
-          variant={tab === "employees" ? "default" : "ghost"}
-          onClick={() => setTab("employees")}
-        >
-          Empleados y tarifas
-        </Button>
-      </div>
+      {selected ? (
+        <PayrollStatusHeader
+          weekLabel={`Semana ${selected.week_start} — ${selected.week_end}`}
+          statusLabel={statusLabel[selected.status]}
+          total={total}
+          tabs={[
+            {
+              label: "Nóminas semanales",
+              active: tab === "weekly",
+              onSelect: () => setTab("weekly"),
+            },
+            {
+              label: "Empleados y tarifas",
+              active: tab === "employees",
+              onSelect: () => setTab("employees"),
+            },
+          ]}
+        />
+      ) : (
+        <div className="bg-muted flex gap-1 rounded-lg p-1 sm:w-fit">
+          <Button
+            size="sm"
+            variant={tab === "weekly" ? "default" : "ghost"}
+            onClick={() => setTab("weekly")}
+          >
+            Nóminas semanales
+          </Button>
+          <Button
+            size="sm"
+            variant={tab === "employees" ? "default" : "ghost"}
+            onClick={() => setTab("employees")}
+          >
+            Empleados y tarifas
+          </Button>
+        </div>
+      )}
       {message ? (
         <p
           className={`rounded-lg px-4 py-3 text-sm ${message.includes("correctamente") ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}
@@ -198,12 +224,7 @@ export function PayrollWorkspace({
                       Semana {selected.week_start} — {selected.week_end}
                     </h2>
                     <p className="text-muted-foreground text-sm">
-                      Estado:{" "}
-                      {selected.status === "draft"
-                        ? "Borrador"
-                        : selected.status === "submitted"
-                          ? "Enviada"
-                          : "Aprobada"}
+                      Estado: {statusLabel[selected.status]}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
