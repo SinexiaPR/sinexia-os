@@ -115,11 +115,22 @@ export default async function AdminCompanyPage({
           </div>
           <div className="flex flex-wrap gap-2">
             {company.slug === "tresbe" ? (
-              <Button asChild variant="outline">
-                <Link href={`/dashboard/admin/companies/${company.id}/payroll`}>
-                  Nómina
-                </Link>
-              </Button>
+              <>
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/payroll`}
+                  >
+                    Nómina
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/budget`}
+                  >
+                    Presupuesto
+                  </Link>
+                </Button>
+              </>
             ) : null}
             {company.slug === "sibarita" ? (
               <Button asChild variant="outline">
