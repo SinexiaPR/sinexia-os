@@ -411,7 +411,7 @@ function drawHorizonPage(
     weekNumber,
     "PRESUPUESTO TRESBE - RESUMEN",
   );
-  page.drawText(`Resumen de ${weeks} semanas`, {
+  page.drawText(`RESUMEN DE ${weeks} SEMANAS`, {
     x: MARGIN,
     y: HEIGHT - 128,
     size: 10,
@@ -590,6 +590,9 @@ export async function buildTresbeBudgetPdf(params: {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  pdf.setTitle(`Presupuesto Tresbe ${params.weekStart}`);
+  pdf.setAuthor("Sinexia OS");
+  pdf.setSubject("Presupuesto semanal vs real - Tresbe");
 
   const page = pdf.addPage([WIDTH, HEIGHT]);
   drawHeader(
@@ -602,16 +605,53 @@ export async function buildTresbeBudgetPdf(params: {
     "PRESUPUESTO SEMANAL TRESBE",
   );
 
-  page.drawText("Seguimiento diario: presupuestado vs real", {
+  page.drawText("RESUMEN DE LA SEMANA", {
     x: MARGIN,
-    y: HEIGHT - 128,
+    y: HEIGHT - 126,
     size: 10,
+    font: bold,
+    color: NAVY,
+  });
+  const summary: Array<[string, string, "normal" | "total"]> = [
+    ["Ingresos ppto", money(view.income.totals.budget), "normal"],
+    ["Ingresos real", money(view.income.totals.real), "normal"],
+    ["Egresos ppto", money(view.expenses.totals.budget), "normal"],
+    ["Egresos real", money(view.expenses.totals.real), "normal"],
+    ["Flujo neto real", money(view.net.totals.real), "normal"],
+    ["Intercompany", money(view.intercompany.netReal), "normal"],
+    ["Linea de credito", money(view.financing.netReal), "normal"],
+    ["SALDO FINAL TEORICO", money(view.cash.theoreticalReal), "total"],
+  ];
+  const summaryY = HEIGHT - 142;
+  summary.forEach(([label, value, kind], index) => {
+    const cellWidth = (WIDTH - MARGIN * 2) / summary.length;
+    const x = MARGIN + index * cellWidth;
+    page.drawText(fit(label, bold, 6.2, cellWidth - 4), {
+      x,
+      y: summaryY,
+      size: 6.2,
+      font: bold,
+      color: MUTED,
+    });
+    page.drawText(value, {
+      x,
+      y: summaryY - 13,
+      size: kind === "total" ? 10 : 8,
+      font: bold,
+      color: kind === "total" ? RED : NAVY,
+    });
+  });
+
+  page.drawText("SEGUIMIENTO DIARIO -- PRESUPUESTADO VS REAL", {
+    x: MARGIN,
+    y: summaryY - 34,
+    size: 9,
     font: bold,
     color: NAVY,
   });
   page.drawText(
     "Desvio favorable en positivo: en ingresos Real - Presupuesto; en egresos Presupuesto - Real. Importes en US$.",
-    { x: MARGIN, y: HEIGHT - 141, size: 7, font: regular, color: MUTED },
+    { x: MARGIN, y: summaryY - 44, size: 6.5, font: regular, color: MUTED },
   );
 
   const byGroup = (group: string) =>
@@ -667,7 +707,7 @@ export async function buildTresbeBudgetPdf(params: {
     ...view.financingRows.map(categoryRow),
   ];
 
-  let y = drawGrid(page, bold, regular, HEIGHT - 152, view.dates, rows);
+  let y = drawGrid(page, bold, regular, summaryY - 52, view.dates, rows);
 
   y -= 22;
   const cashBottom = drawKeyValueBlock(
@@ -677,7 +717,7 @@ export async function buildTresbeBudgetPdf(params: {
     MARGIN,
     y,
     348,
-    "Control de Caja",
+    "CONTROL DE CAJA",
     ["Presupuesto", "Real"],
     [
       {
@@ -755,7 +795,7 @@ export async function buildTresbeBudgetPdf(params: {
     sideX,
     y,
     sideWidth,
-    "Linea de Credito",
+    "LINEA DE CREDITO",
     ["Semana"],
     [
       {
@@ -773,7 +813,7 @@ export async function buildTresbeBudgetPdf(params: {
   );
 
   const interY = y - 78;
-  page.drawText("Control Intercompany", {
+  page.drawText("CONTROL INTERCOMPANY", {
     x: sideX,
     y: interY,
     size: 8.5,
