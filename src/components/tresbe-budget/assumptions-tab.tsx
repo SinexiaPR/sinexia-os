@@ -77,6 +77,9 @@ export function AssumptionsTab({
     relatedCashOutEnabled: assumptions.settings.related_cash_out_enabled,
     payrollTaxRate: String(Number(assumptions.settings.payroll_tax_rate) * 100),
     payrollTaxOffsetDays: String(assumptions.settings.payroll_tax_offset_days),
+    creditLineOpeningBalance: String(
+      assumptions.settings.credit_line_opening_balance,
+    ),
   }));
   const [pattern, setPattern] = useState(() =>
     weekdays.map((weekday) => {
@@ -109,6 +112,7 @@ export function AssumptionsTab({
         relatedCashOutEnabled: settings.relatedCashOutEnabled,
         payrollTaxRate: Number(settings.payrollTaxRate) / 100,
         payrollTaxOffsetDays: Number(settings.payrollTaxOffsetDays),
+        creditLineOpeningBalance: Number(settings.creditLineOpeningBalance),
       });
       setMessage(messageFrom(result, "Supuestos guardados."));
     });
@@ -242,6 +246,21 @@ export function AssumptionsTab({
                 setSettings({
                   ...settings,
                   payrollTaxOffsetDays: event.target.value,
+                })
+              }
+            />
+          </Field>
+          <Field
+            label="Saldo inicial línea de crédito"
+            hint="Al inicio de la semana 1; negativo = deuda"
+          >
+            <Input
+              inputMode="decimal"
+              value={settings.creditLineOpeningBalance}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  creditLineOpeningBalance: event.target.value,
                 })
               }
             />

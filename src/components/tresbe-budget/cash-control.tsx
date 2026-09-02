@@ -149,23 +149,34 @@ export function CashControlCard({
           real={week.cash.opening}
         />
         <Line
-          label="+ Ingresos operativos"
-          budget={week.income.totals.budget}
-          real={week.income.totals.real}
+          label="+ Flujo Neto Operativo"
+          budget={week.net.totals.budget}
+          real={week.net.totals.real}
         />
         <Line
-          label="− Egresos operativos"
-          budget={week.expenses.totals.budget}
-          real={week.expenses.totals.real}
+          label="+ Movimiento Neto Intercompany"
+          hint="Transferencias entre las LLC; no es venta ni gasto"
+          budget={week.intercompany.netBudget}
+          real={week.intercompany.netReal}
         />
         <Line
-          label="± Línea de reserva"
-          hint="Neto de barridos del banco; no es resultado operativo"
+          label="= Saldo antes de Financiamiento"
+          budget={week.cash.beforeFinancingBudget}
+          real={week.cash.beforeFinancingReal}
+          strong
+        />
+        <Line
+          label="+ Utilización Línea de Crédito"
           budget={0}
-          real={week.financing.netReal}
+          real={week.financing.drawdown}
         />
         <Line
-          label="Saldo Final Teórico"
+          label="− Repago Línea de Crédito"
+          budget={0}
+          real={week.financing.repayment}
+        />
+        <Line
+          label="= Saldo Final Banco Teórico"
           budget={week.cash.theoreticalBudget}
           real={week.cash.theoreticalReal}
           strong
@@ -189,6 +200,73 @@ export function CashControlCard({
           real={week.cash.surplusReal}
           strong
         />
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div>
+          <h3 className="text-sm font-semibold">Línea de Crédito</h3>
+          <div className="mt-2 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Saldo inicial</span>
+              <span className="tabular-nums">
+                {formatMoney(week.financing.creditLineOpening)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">
+                + Utilización − Repago
+              </span>
+              <span className="tabular-nums">
+                {formatMoney(week.financing.netReal)}
+              </span>
+            </div>
+            <div className="flex justify-between border-t pt-1 font-medium">
+              <span>Saldo final</span>
+              <span className="tabular-nums">
+                {formatMoney(week.financing.creditLineClosing)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold">Control Intercompany</h3>
+          {week.intercompany.counterparties.length === 0 ? (
+            <p className="text-muted-foreground mt-2 text-sm">
+              Sin contrapartes cargadas.
+            </p>
+          ) : (
+            <table className="mt-2 w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground border-b text-xs uppercase">
+                  <th className="py-1 text-left">LLC</th>
+                  <th className="py-1 text-right">Inicial</th>
+                  <th className="py-1 text-right">Recibido</th>
+                  <th className="py-1 text-right">Entregado</th>
+                  <th className="py-1 text-right">Final</th>
+                </tr>
+              </thead>
+              <tbody className="divide-border/60 divide-y">
+                {week.intercompany.counterparties.map((row) => (
+                  <tr key={row.id}>
+                    <td className="py-1">{row.name}</td>
+                    <td className="py-1 text-right tabular-nums">
+                      {formatMoney(row.opening)}
+                    </td>
+                    <td className="py-1 text-right tabular-nums">
+                      {formatMoney(row.received)}
+                    </td>
+                    <td className="py-1 text-right tabular-nums">
+                      {formatMoney(row.delivered)}
+                    </td>
+                    <td className="py-1 text-right font-medium tabular-nums">
+                      {formatMoney(row.closing)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
       <label className="mt-4 block space-y-1 text-sm">

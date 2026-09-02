@@ -13,13 +13,15 @@ import {
   buildHorizonSummary,
 } from "@/lib/tresbe-budget/calculations";
 
-export type BudgetCategoryKind = "ingreso" | "egreso" | "financiamiento";
+export type BudgetCategoryKind =
+  "ingreso" | "egreso" | "financiamiento" | "intercompany";
 export type BudgetTotalGroup =
   | "ingresos"
   | "proveedores_compras"
   | "nomina"
   | "payroll_taxes"
   | "debitos_bancarios"
+  | "intercompany"
   | "financiamiento";
 export type BudgetOrigin = "calculado" | "manual";
 
@@ -31,6 +33,7 @@ export type BudgetCategory = {
   kind: BudgetCategoryKind;
   total_group: BudgetTotalGroup;
   is_financing: boolean;
+  flow: "entrada" | "salida" | null;
   sort_order: number;
   is_active: boolean;
 };
@@ -47,6 +50,7 @@ export type BudgetMovement = {
   amount: number;
   account: string | null;
   note: string | null;
+  counterparty_id: string | null;
   created_at: string;
 };
 
@@ -88,6 +92,7 @@ export type BudgetSettings = {
   related_cash_out_enabled: boolean;
   payroll_tax_rate: number;
   payroll_tax_offset_days: number;
+  credit_line_opening_balance: number;
 };
 
 export type BudgetSalesPattern = {
@@ -127,6 +132,14 @@ export type BudgetVendorSchedule = {
   note: string | null;
 };
 
+export type BudgetCounterparty = {
+  id: string;
+  company_id: string;
+  name: string;
+  opening_balance: number;
+  is_active: boolean;
+};
+
 export type BudgetAssumptions = {
   settings: BudgetSettings;
   salesPattern: BudgetSalesPattern[];
@@ -155,6 +168,68 @@ export async function getBudgetCategories(companyId: string) {
     .order("sort_order");
   if (error) throw error;
   return (data ?? []) as BudgetCategory[];
+}
+
+export async function getBudgetCounterparties(companyId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tresbe_budget_counterparties")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as BudgetCounterparty[];
+}
+
+/**
+ * Saldos al inicio de la semana. El ancla del horizonte trae los saldos de
+ * arranque y desde ahí se encadenan los movimientos previos, así no hay que
+ * volver a escribir a mano el saldo inicial de cada semana como en la planilla.
+ */
+export async function getOpeningBalances(
+  companyId: string,
+  weekStart: IsoDate,
+  settings: BudgetSettings | null,
+  counterparties: BudgetCounterparty[],
+) {
+  const supabase = await createClient();
+  const anchor = settings ? weekStartOf(settings.week_one_start) : weekStart;
+  const openings: Record<string, number> = {};
+  for (const counterparty of counterparties) {
+    openings[counterparty.id] = Number(counterparty.opening_balance);
+  }
+  let creditLine = Number(settings?.credit_line_opening_balance ?? 0);
+  if (weekStart <= anchor) {
+    return { creditLine, counterparties: openings };
+  }
+  const { data, error } = await supabase
+    .from("tresbe_budget_movements")
+    .select("amount,counterparty_id,tresbe_budget_categories(code,kind)")
+    .eq("company_id", companyId)
+    .gte("entry_date", anchor)
+    .lt("entry_date", weekStart);
+  if (error) throw error;
+  for (const row of (data ?? []) as unknown as Array<{
+    amount: number;
+    counterparty_id: string | null;
+    tresbe_budget_categories: { code: string } | Array<{ code: string }> | null;
+  }>) {
+    const joined = row.tresbe_budget_categories;
+    const code = Array.isArray(joined) ? joined[0]?.code : joined?.code;
+    const amount = Number(row.amount);
+    // Mismo signo que v3: el saldo se mueve con (Utilización - Repago).
+    if (code === "linea_credito_utilizacion") creditLine += amount;
+    else if (code === "linea_credito_repago") creditLine -= amount;
+    else if (code === "intercompany_recibido" && row.counterparty_id) {
+      openings[row.counterparty_id] =
+        Math.round(((openings[row.counterparty_id] ?? 0) + amount) * 100) / 100;
+    } else if (code === "intercompany_entregado" && row.counterparty_id) {
+      openings[row.counterparty_id] =
+        Math.round(((openings[row.counterparty_id] ?? 0) - amount) * 100) / 100;
+    }
+  }
+  creditLine = Math.round(creditLine * 100) / 100;
+  return { creditLine, counterparties: openings };
 }
 
 export async function getBudgetAssumptions(
@@ -239,25 +314,33 @@ export async function getBudgetWeekWorkspace(
   companyId: string,
   requestedWeek?: string | null,
 ) {
-  const [categories, assumptions] = await Promise.all([
+  const [categories, assumptions, counterparties] = await Promise.all([
     getBudgetCategories(companyId),
     getBudgetAssumptions(companyId),
+    getBudgetCounterparties(companyId),
   ]);
   const weekStart = weekStartOf(
     requestedWeek && /^\d{4}-\d{2}-\d{2}$/.test(requestedWeek)
       ? requestedWeek
       : todayInPuertoRico(),
   );
-  const { movements, entries, cashControl } = await getBudgetWeekData(
-    companyId,
-    weekStart,
-  );
+  const [{ movements, entries, cashControl }, openings] = await Promise.all([
+    getBudgetWeekData(companyId, weekStart),
+    getOpeningBalances(
+      companyId,
+      weekStart,
+      assumptions?.settings ?? null,
+      counterparties,
+    ),
+  ]);
   const week = buildWeekView({
     weekStart,
     categories,
     movements,
     entries,
     cashControl,
+    counterparties,
+    openings,
   });
   return {
     weekStart,
@@ -266,6 +349,7 @@ export async function getBudgetWeekWorkspace(
       ? weekNumber(assumptions.settings.week_one_start, weekStart)
       : null,
     categories,
+    counterparties,
     assumptions,
     movements,
     entries,

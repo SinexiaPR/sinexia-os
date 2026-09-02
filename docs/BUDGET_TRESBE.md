@@ -4,8 +4,40 @@ Módulo interno (solo admin) que reemplaza las dos Google Sheets que se cruzaban
 a mano: `TRESBE_Seguimiento_Diario` (movimientos reales) y
 `TRESBE-CASHFLOW OPERATIVO-SEMANAL` (forecast a 13 semanas).
 
-Ruta: `/dashboard/admin/companies/{companyId}/budget`
-(vista imprimible en `.../budget/print?week=YYYY-MM-DD`).
+Ruta: `/dashboard/admin/companies/{companyId}/budget`.
+PDF de la semana: `/api/tresbe-budget/{companyId}/pdf?week=YYYY-MM-DD` (dos
+páginas apaisadas: seguimiento diario + control de caja, y resumen del horizonte).
+
+## Los cuatro tipos de movimiento
+
+Igual que la planilla v3:
+
+| Tipo             | Entra en Flujo Neto Operativo | Notas                                                                   |
+| ---------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| Ingreso / Egreso | Sí                            | La operación corriente                                                  |
+| Intercompany     | No                            | Transferencias entre las LLC; lleva contraparte y saldo por empresa     |
+| Financiamiento   | No                            | Línea de crédito, partida en Utilización y Repago, con saldo encadenado |
+
+El sentido de un movimiento no operativo lo fija la categoría (`flow`), no quien
+carga: Utilización e Intercompany Recibido son siempre entradas; Repago e
+Intercompany Entregado, salidas.
+
+### Puente de caja
+
+```
+Saldo Banco Inicial
+  + Flujo Neto Operativo
+  + Movimiento Neto Intercompany
+  = Saldo antes de Financiamiento
+  + Utilización − Repago
+  = Saldo Final Banco Teórico
+  − Saldo Banco Real (manual)  = Diferencia a Conciliar
+```
+
+Los saldos iniciales de cada semana no se escriben a mano como en la planilla:
+se anclan al inicio del horizonte (`credit_line_opening_balance` y el
+`opening_balance` de cada contraparte) y se encadenan con los movimientos
+previos.
 
 ## Qué corrige respecto de la planilla
 
@@ -50,7 +82,8 @@ Todas las tablas tienen RLS: solo `is_admin()` sobre la empresa con slug
   `Presupuesto − Real`.
 - **Total Ingresos** = Credit Card + Cash. **Total Egresos** = Proveedores +
   Recurrentes + Reembolsos + Nómina + Payroll Taxes + Débitos Bancarios.
-  **Flujo Neto** = Ingresos − Egresos. El financiamiento no entra en ninguno.
+  **Flujo Neto Operativo** = Ingresos − Egresos. Ni intercompany ni
+  financiamiento entran en ninguno de los tres.
 - **Saldo Final Teórico (Real)** = Saldo inicial + Flujo Neto real + neto de la
   línea de reserva. **Diferencia a Conciliar** = Saldo Banco Real − ese teórico.
   **Excedente / Necesidad** = teórico − Caja Mínima Objetivo.
@@ -78,17 +111,22 @@ npm run test:tresbe-budget
 
 Lee los movimientos reales de la migración de semilla
 (`20260901010000_tresbe_budget_seed_week_20260824.sql`) y comprueba los
-criterios de aceptación: los ingresos de la semana del 24–30 de agosto de 2026
-pasan de $34,185.38 (con Clover y los barridos mezclados) a $21,468.84
-operativos, la reserva queda afuera pero suma en el saldo real, y el payroll tax
-generado cae el jueves.
+criterios de aceptación: los ingresos operativos de la semana del 24–30 de
+agosto de 2026 pasan de $34,185.38 (con Clover, los barridos y el cheque de otra
+LLC mezclados) a $12,468.84, el mismo número que la planilla v3. Intercompany y
+línea de crédito quedan afuera de los totales pero mueven el saldo, y el payroll
+tax generado cae el jueves.
 
 ## Pendiente (fuera de v1)
 
 - Conciliación automática contra un feed bancario: `Saldo Banco Real` sigue
   siendo manual.
-- LADO CE / Calle Cerra como entidad propia: hoy solo se registra su cash out
-  dentro del forecast de nómina de Tresbe, igual que en la planilla.
+- LADO CE / Calle Cerra como entidad propia: existe como contraparte
+  intercompany, pero su cash out sigue viviendo dentro del forecast de nómina de
+  Tresbe, igual que en la planilla.
+- El signo del saldo de la línea de crédito replica la aritmética de v3
+  (`inicial + Utilización − Repago`). Si la intención es que usar la línea
+  aumente la deuda, hay que invertirlo.
 - Forecast de ventas basado en histórico real en vez del patrón fijo por día.
 - El calendario de proveedores llegó sin importes por día en la especificación:
   hay que cargarlos desde la pestaña **Supuestos** para que el presupuesto

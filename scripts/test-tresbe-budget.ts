@@ -33,7 +33,10 @@ const categoryDefinitions: Array<
   ["nomina", "egreso", "nomina", 60],
   ["payroll_taxes", "egreso", "payroll_taxes", 70],
   ["debitos_bancarios", "egreso", "debitos_bancarios", 80],
-  ["linea_reserva", "financiamiento", "financiamiento", 90],
+  ["intercompany_recibido", "intercompany", "intercompany", 85],
+  ["intercompany_entregado", "intercompany", "intercompany", 86],
+  ["linea_credito_utilizacion", "financiamiento", "financiamiento", 90],
+  ["linea_credito_repago", "financiamiento", "financiamiento", 91],
 ];
 
 const categories: CategoryLike[] = categoryDefinitions.map(
@@ -44,9 +47,17 @@ const categories: CategoryLike[] = categoryDefinitions.map(
     kind,
     total_group,
     is_financing: kind === "financiamiento",
+    flow:
+      kind === "ingreso" || kind === "egreso"
+        ? null
+        : code.endsWith("_repago") || code.endsWith("_entregado")
+          ? "salida"
+          : "entrada",
     sort_order,
   }),
 );
+
+const SIBARITA = "grupo-sibarita";
 
 // Los movimientos se leen de la migración de semilla para que el test siga a los
 // datos y no a una copia paralela.
@@ -65,11 +76,27 @@ const movementPattern =
   /\('(\d{4}-\d{2}-\d{2})',\s*'(ingreso|egreso)',\s*'([a-z_]+)',\s*'[^']*',\s*'[^']*',\s*([\d.]+)\)/g;
 const movements: MovementLike[] = [];
 for (const match of movementsBlock.matchAll(movementPattern)) {
+  const direction = match[2] as "ingreso" | "egreso";
+  let code = match[3];
+  let counterpartyId: string | null = null;
+  // Misma reclasificación que aplicó la migración a v3.
+  if (code === "linea_reserva") {
+    code =
+      direction === "ingreso"
+        ? "linea_credito_utilizacion"
+        : "linea_credito_repago";
+  } else if (code === "cash_disponible" && Number(match[4]) === 9000) {
+    code = "intercompany_recibido";
+    counterpartyId = SIBARITA;
+  } else if (code === "cash_disponible" && Number(match[4]) === 26.88) {
+    code = "credit_card_disponible";
+  }
   movements.push({
     entry_date: match[1],
-    direction: match[2] as "ingreso" | "egreso",
-    category_id: match[3],
+    direction,
+    category_id: code,
     amount: Number(match[4]),
+    counterparty_id: counterpartyId,
   });
 }
 assert.equal(movements.length, 63, "la semilla debe traer 63 movimientos");
@@ -92,6 +119,8 @@ const view = buildWeekView({
     minimum_cash_target: null,
     notes: null,
   },
+  counterparties: [{ id: SIBARITA, name: "GRUPO SIBARITA LLC" }],
+  openings: { creditLine: -23015.78, counterparties: { [SIBARITA]: 0 } },
 });
 
 // 1. Antes: todo ingreso caía en "Cash Disponible", barridos incluidos.
@@ -106,67 +135,84 @@ assert.equal(
   "la suma sin corregir reproduce los ~$34,185 de la planilla",
 );
 
-// 2. Después: solo tarjeta y efectivo reales.
-const cardTotal = round(
-  movements
-    .filter((movement) => movement.category_id === "credit_card_disponible")
-    .reduce((sum, movement) => sum + movement.amount, 0),
+// 2. Después: el operativo son solo las ventas, sin el cheque de otra LLC.
+const sumOf = (code: string) =>
+  round(
+    movements
+      .filter((movement) => movement.category_id === code)
+      .reduce((sum, movement) => sum + movement.amount, 0),
+  );
+const cardTotal = sumOf("credit_card_disponible");
+assert.equal(
+  cardTotal,
+  12468.84,
+  "Clover + DoorDash, igual que la planilla v3",
 );
-const cashTotal = round(
-  movements
-    .filter((movement) => movement.category_id === "cash_disponible")
-    .reduce((sum, movement) => sum + movement.amount, 0),
-);
-assert.equal(cardTotal, 12441.96, "depósitos Clover de la semana");
-assert.equal(cashTotal, 9026.88, "efectivo de la semana");
+assert.equal(sumOf("cash_disponible"), 0, "no queda efectivo mal clasificado");
 assert.equal(
   view.income.totals.real,
-  round(cardTotal + cashTotal),
-  "Total Ingresos operativo = tarjeta + efectivo, sin barridos",
+  cardTotal,
+  "Total Ingresos operativo = ventas, sin intercompany ni barridos",
 );
 assert.ok(
   view.income.totals.real < wrongIncome,
   "el ingreso corregido tiene que ser menor que el inflado",
 );
 
-// 3. La línea de reserva queda fuera de los totales operativos pero visible.
-const reserveIn = round(
-  movements
-    .filter(
-      (movement) =>
-        movement.category_id === "linea_reserva" &&
-        movement.direction === "ingreso",
-    )
-    .reduce((sum, movement) => sum + movement.amount, 0),
-);
-const reserveOut = round(
-  movements
-    .filter(
-      (movement) =>
-        movement.category_id === "linea_reserva" &&
-        movement.direction === "egreso",
-    )
-    .reduce((sum, movement) => sum + movement.amount, 0),
-);
-assert.equal(view.financing.totalInflow, reserveIn);
-assert.equal(view.financing.totalOutflow, reserveOut);
-assert.equal(view.financing.netReal, round(reserveIn - reserveOut));
+// 3. Intercompany: ni venta ni gasto, con contraparte y saldo propio.
+const received = sumOf("intercompany_recibido");
+assert.equal(received, 9000, "el cheque de GRUPO SIBARITA");
+assert.equal(view.intercompany.received, received);
+assert.equal(view.intercompany.netReal, received);
+assert.equal(view.intercompany.counterparties.length, 1);
+assert.equal(view.intercompany.counterparties[0].received, 9000);
 assert.equal(
-  round(wrongIncome - reserveIn),
-  view.income.totals.real,
-  "la diferencia entre el ingreso viejo y el nuevo es exactamente la reserva",
+  view.intercompany.counterparties[0].closing,
+  9000,
+  "saldo inicial 0 + 9,000 recibidos",
 );
 assert.ok(
-  view.rows.every((row) => !row.category.is_financing),
-  "las filas operativas no incluyen financiamiento",
+  view.rows.every(
+    (row) =>
+      row.category.kind !== "intercompany" &&
+      row.category.kind !== "financiamiento",
+  ),
+  "las filas operativas no incluyen intercompany ni financiamiento",
+);
+
+// 4. Línea de crédito: utilización y repago separados, con saldo encadenado.
+const drawdown = sumOf("linea_credito_utilizacion");
+const repayment = sumOf("linea_credito_repago");
+assert.equal(drawdown, 12716.54, "utilización de la semana, igual que v3");
+assert.equal(repayment, 8271.11);
+assert.equal(view.financing.drawdown, drawdown);
+assert.equal(view.financing.repayment, repayment);
+assert.equal(view.financing.netReal, round(drawdown - repayment));
+assert.equal(view.financing.creditLineOpening, -23015.78);
+assert.equal(
+  view.financing.creditLineClosing,
+  round(-23015.78 + drawdown - repayment),
+  "saldo final de la línea = inicial + utilización - repago",
+);
+
+// 5. El puente de caja de v3, escalón por escalón.
+assert.equal(
+  view.cash.beforeFinancingReal,
+  round(view.net.totals.real + view.intercompany.netReal),
+  "el saldo antes de financiamiento suma lo operativo y lo intercompany",
 );
 assert.equal(
   view.cash.theoreticalReal,
-  round(view.net.totals.real + view.financing.netReal),
-  "el saldo teórico real sí incorpora la reserva para cuadrar con el banco",
+  round(view.cash.beforeFinancingReal + view.financing.netReal),
+  "y recién después entra la línea de crédito",
+);
+assert.equal(
+  round(wrongIncome - drawdown - received),
+  view.income.totals.real,
+  "el ingreso viejo era ventas + barridos + intercompany",
 );
 
-// 4. El desvío es favorable en positivo de los dos lados.
+// 6. El desvío es favorable en positivo de los dos lados.
 const withBudget = buildWeekView({
   weekStart,
   categories,
@@ -209,7 +255,7 @@ assert.equal(withBudget.expenses.totals.variance, 20, "gasto por debajo: +20");
 assert.equal(withBudget.net.totals.variance, 40);
 assert.equal(withBudget.manualCells, 1, "las celdas manuales se cuentan");
 
-// 5. El forecast pone el payroll tax el jueves, no el miércoles.
+// 7. El forecast pone el payroll tax el jueves, no el miércoles.
 const forecast = buildForecastForWeek({
   weekStart,
   settings: {
@@ -310,7 +356,7 @@ assert.equal(
 assert.equal(find("debitos_bancarios", "2026-08-25"), undefined);
 assert.equal(find("proveedores", weekStart)!.amount, 702.19);
 
-// 6. El resumen de semanas se calcula de verdad, semana por semana.
+// 8. El resumen de semanas se calcula de verdad, semana por semana.
 const horizon = buildHorizonSummary({
   firstWeek: weekStart,
   weeks: 13,
@@ -336,5 +382,11 @@ console.log(
   `  Ingresos reales corregidos:   $${view.income.totals.real.toLocaleString("en-US")}`,
 );
 console.log(
-  `  Movimiento de línea de reserva (neto): $${view.financing.netReal.toLocaleString("en-US")}`,
+  `  Intercompany recibido:        $${view.intercompany.netReal.toLocaleString("en-US")}`,
+);
+console.log(
+  `  Línea de crédito (neto):      $${view.financing.netReal.toLocaleString("en-US")}`,
+);
+console.log(
+  `  Saldo final de la línea:      $${view.financing.creditLineClosing.toLocaleString("en-US")}`,
 );

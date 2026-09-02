@@ -14,7 +14,11 @@ import { SurfaceCard } from "@/components/ui/surface-card";
 import { categoryHintFor } from "@/lib/tresbe-budget/category-hints";
 import { formatDayLabel, weekDates } from "@/lib/tresbe-budget/dates";
 import { formatMoney } from "@/lib/tresbe-budget/format";
-import type { BudgetCategory, BudgetMovement } from "@/services/tresbe-budget";
+import type {
+  BudgetCategory,
+  BudgetCounterparty,
+  BudgetMovement,
+} from "@/services/tresbe-budget";
 import { cn } from "@/lib/utils";
 
 const selectClass =
@@ -30,6 +34,7 @@ type FormState = {
   amount: string;
   account: string;
   note: string;
+  counterpartyId: string;
 };
 
 function emptyForm(entryDate: string): FormState {
@@ -42,6 +47,7 @@ function emptyForm(entryDate: string): FormState {
     amount: "",
     account: "Banco Popular",
     note: "",
+    counterpartyId: "",
   };
 }
 
@@ -49,11 +55,13 @@ export function MovementsTab({
   companyId,
   weekStart,
   categories,
+  counterparties,
   movements,
 }: {
   companyId: string;
   weekStart: string;
   categories: BudgetCategory[];
+  counterparties: BudgetCounterparty[];
   movements: BudgetMovement[];
 }) {
   const dates = weekDates(weekStart);
@@ -73,8 +81,13 @@ export function MovementsTab({
   const available = categories.filter(
     (category) =>
       category.is_active &&
-      (category.kind === "financiamiento" || category.kind === form.direction),
+      (category.flow
+        ? (category.flow === "entrada" ? "ingreso" : "egreso") ===
+          form.direction
+        : category.kind === form.direction),
   );
+  const selected = categoriesById.get(form.categoryId);
+  const needsCounterparty = selected?.kind === "intercompany";
 
   const hint = categoryHintFor(form.concept, form.counterparty);
   const hintCategory = hint ? categoriesByCode.get(hint.code) : null;
@@ -91,13 +104,16 @@ export function MovementsTab({
       // El sentido manda: si cambia, una categoría incompatible se descarta.
       if (patch.direction && next.categoryId) {
         const category = categoriesById.get(next.categoryId);
-        if (
-          category &&
-          category.kind !== "financiamiento" &&
-          category.kind !== next.direction
-        ) {
-          next.categoryId = "";
-        }
+        const allowed = category?.flow
+          ? (category.flow === "entrada" ? "ingreso" : "egreso") ===
+            next.direction
+          : category?.kind === next.direction;
+        if (category && !allowed) next.categoryId = "";
+      }
+      // La contraparte solo tiene sentido en intercompany.
+      if (patch.categoryId) {
+        const category = categoriesById.get(next.categoryId);
+        if (category?.kind !== "intercompany") next.counterpartyId = "";
       }
       // Clover y los barridos de reserva se autocompletan al escribir.
       if ((patch.concept != null || patch.counterparty != null) && !next.id) {
@@ -105,12 +121,11 @@ export function MovementsTab({
         const target = suggestion
           ? categoriesByCode.get(suggestion.code)
           : null;
-        if (
-          target &&
-          (target.kind === "financiamiento" ||
-            target.kind === next.direction) &&
-          !current.categoryId
-        ) {
+        const allowed = target?.flow
+          ? (target.flow === "entrada" ? "ingreso" : "egreso") ===
+            next.direction
+          : target?.kind === next.direction;
+        if (target && allowed && !current.categoryId) {
           next.categoryId = target.id;
         }
       }
@@ -128,6 +143,10 @@ export function MovementsTab({
       setMessage("El importe debe ser mayor a 0.");
       return;
     }
+    if (needsCounterparty && !form.counterpartyId) {
+      setMessage("Elegí la contraparte del movimiento intercompany.");
+      return;
+    }
     startTransition(async () => {
       const result = await saveBudgetMovement({
         id: form.id,
@@ -140,6 +159,7 @@ export function MovementsTab({
         amount: Math.round(amount * 100) / 100,
         account: form.account.trim() || null,
         note: form.note.trim() || null,
+        counterpartyId: needsCounterparty ? form.counterpartyId : null,
         overrideHint: override,
       });
       if ("error" in result) {
@@ -239,6 +259,27 @@ export function MovementsTab({
               onChange={(event) => update({ counterparty: event.target.value })}
             />
           </label>
+          {needsCounterparty ? (
+            <label className="space-y-1 text-sm">
+              <span className="text-muted-foreground text-xs">Contraparte</span>
+              <select
+                className={selectClass}
+                value={form.counterpartyId}
+                onChange={(event) =>
+                  update({ counterpartyId: event.target.value })
+                }
+              >
+                <option value="">Elegí la LLC…</option>
+                {counterparties
+                  .filter((item) => item.is_active)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : null}
           <label className="space-y-1 text-sm">
             <span className="text-muted-foreground text-xs">Cuenta</span>
             <Input
@@ -341,7 +382,8 @@ export function MovementsTab({
                             <span
                               className={cn(
                                 "rounded-full border px-2 py-0.5 text-xs",
-                                category?.is_financing
+                                category?.kind === "financiamiento" ||
+                                  category?.kind === "intercompany"
                                   ? "border-amber-300 bg-amber-50 text-amber-900"
                                   : "border-border text-muted-foreground",
                               )}
@@ -376,6 +418,8 @@ export function MovementsTab({
                                   amount: String(movement.amount),
                                   account: movement.account ?? "",
                                   note: movement.note ?? "",
+                                  counterpartyId:
+                                    movement.counterparty_id ?? "",
                                 })
                               }
                             >
