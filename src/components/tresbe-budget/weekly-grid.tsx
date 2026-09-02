@@ -56,7 +56,9 @@ function BudgetInput({
         categoryId,
         amount: Math.round(parsed * 100) / 100,
       });
-      onSaved("error" in result ? result.error : null);
+      onSaved(
+        "error" in result ? (result.error ?? "No se pudo guardar.") : null,
+      );
     });
   };
 
@@ -139,6 +141,20 @@ function GroupTableRow({
         </Fragment>
       ))}
       <TotalsCells totals={row.totals} />
+    </tr>
+  );
+}
+
+function SectionRow({ label, span }: { label: string; span: number }) {
+  return (
+    <tr className="bg-muted/60">
+      <th
+        scope="row"
+        colSpan={span}
+        className="px-3 py-1 text-left text-[10px] font-semibold tracking-wide uppercase"
+      >
+        {label}
+      </th>
     </tr>
   );
 }
@@ -254,6 +270,24 @@ export function WeeklyGrid({
           ))}
           <GroupTableRow row={week.expenses} />
           <GroupTableRow row={week.net} className="bg-muted/70" />
+          {week.intercompanyRows.length ? (
+            <>
+              <SectionRow
+                label="Intercompany — movimientos entre LLC"
+                span={week.dates.length * 3 + 4}
+              />
+              {week.intercompanyRows.map(renderCategoryRow)}
+            </>
+          ) : null}
+          {week.financingRows.length ? (
+            <>
+              <SectionRow
+                label="Financiamiento — línea de crédito"
+                span={week.dates.length * 3 + 4}
+              />
+              {week.financingRows.map(renderCategoryRow)}
+            </>
+          ) : null}
         </tbody>
       </table>
       <p className="text-muted-foreground mt-3 text-xs">
@@ -266,38 +300,75 @@ export function WeeklyGrid({
 }
 
 export function FinancingBlock({ week }: { week: WeekView }) {
-  if (week.financing.totalInflow === 0 && week.financing.totalOutflow === 0) {
-    return null;
-  }
+  const hasIntercompany =
+    week.intercompany.received !== 0 || week.intercompany.delivered !== 0;
+  const hasFinancing =
+    week.financing.drawdown !== 0 || week.financing.repayment !== 0;
+  if (!hasIntercompany && !hasFinancing) return null;
   return (
-    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-      <p className="text-sm font-medium text-amber-900">
-        Movimiento Línea de Reserva (fuera de los totales operativos)
-      </p>
-      <p className="mt-1 text-xs text-amber-900/80">
-        Los barridos automáticos del banco no son ventas ni gastos: se muestran
-        aparte y solo entran en el saldo real para conciliar contra el banco.
-      </p>
-      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
-        <div>
-          <p className="text-muted-foreground text-xs">Entradas de reserva</p>
-          <p className="font-medium tabular-nums">
-            {formatCell(week.financing.totalInflow)}
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      {hasIntercompany ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+          <p className="text-sm font-medium text-sky-900">
+            Intercompany (fuera de los totales operativos)
           </p>
-        </div>
-        <div>
-          <p className="text-muted-foreground text-xs">Devoluciones</p>
-          <p className="font-medium tabular-nums">
-            {formatCell(week.financing.totalOutflow)}
+          <p className="mt-1 text-xs text-sky-900/80">
+            Transferencias entre las LLC del grupo: no son venta ni gasto, pero
+            sí mueven la caja antes del financiamiento.
           </p>
+          <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+            <div>
+              <p className="text-muted-foreground text-xs">Recibido</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.intercompany.received)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Entregado</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.intercompany.delivered)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Neto</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.intercompany.netReal)}
+              </p>
+            </div>
+          </div>
         </div>
-        <div>
-          <p className="text-muted-foreground text-xs">Neto</p>
-          <p className="font-medium tabular-nums">
-            {formatCell(week.financing.netReal)}
+      ) : null}
+      {hasFinancing ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            Línea de crédito (fuera de los totales operativos)
           </p>
+          <p className="mt-1 text-xs text-amber-900/80">
+            Los barridos del banco no son ingresos ni gastos; solo entran en el
+            saldo real para conciliar contra el banco.
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+            <div>
+              <p className="text-muted-foreground text-xs">Utilización</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.financing.drawdown)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Repago</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.financing.repayment)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Saldo de la línea</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.financing.creditLineClosing)}
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

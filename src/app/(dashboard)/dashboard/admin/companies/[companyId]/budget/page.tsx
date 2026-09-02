@@ -32,6 +32,7 @@ export default async function TresbeBudgetPage({
       weekNumber={workspace.weekNumber}
       week={workspace.week}
       categories={workspace.categories}
+      counterparties={workspace.counterparties}
       movements={workspace.movements}
       assumptions={workspace.assumptions}
       horizon={{ weeks: horizon.weeks, rows: horizon.rows }}

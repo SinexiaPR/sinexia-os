@@ -54,6 +54,8 @@ const movementSchema = z.object({
   amount: money.refine((value) => value > 0, "El importe debe ser mayor a 0."),
   account: z.string().trim().max(100).nullable(),
   note: z.string().trim().max(1000).nullable(),
+  // Obligatoria en intercompany: identifica la LLC del otro lado.
+  counterpartyId: z.string().uuid().nullable().optional(),
   // La categoría forzada por el concepto solo se puede saltear a conciencia.
   overrideHint: z.boolean().optional(),
 });
@@ -69,12 +71,30 @@ export async function saveBudgetMovement(input: BudgetMovementInput) {
     const category = categories.find((item) => item.id === data.categoryId);
     if (!category) return { error: "Categoría inválida." };
     if (
-      category.kind !== "financiamiento" &&
+      (category.kind === "ingreso" || category.kind === "egreso") &&
       category.kind !== data.direction
     ) {
       return {
         error: `La categoría "${category.name}" no admite movimientos de ${data.direction}.`,
       };
+    }
+    // Fuera de lo operativo el sentido lo fija la categoría, no quien carga.
+    const expected =
+      category.flow === "entrada"
+        ? "ingreso"
+        : category.flow === "salida"
+          ? "egreso"
+          : null;
+    if (expected && expected !== data.direction) {
+      return {
+        error: `"${category.name}" se registra siempre como ${expected}.`,
+      };
+    }
+    if (category.kind === "intercompany" && !data.counterpartyId) {
+      return { error: "Elegí la contraparte del movimiento intercompany." };
+    }
+    if (category.kind !== "intercompany" && data.counterpartyId) {
+      return { error: "Solo los movimientos intercompany llevan contraparte." };
     }
     const hint = categoryHintFor(data.concept, data.counterparty);
     if (
@@ -101,6 +121,8 @@ export async function saveBudgetMovement(input: BudgetMovementInput) {
       amount: data.amount,
       account: data.account || null,
       note: data.note || null,
+      counterparty_id:
+        category.kind === "intercompany" ? (data.counterpartyId ?? null) : null,
       updated_by: profile.id,
     };
     const { error } = data.id
@@ -375,6 +397,7 @@ export async function saveBudgetSettings(input: {
   relatedCashOutEnabled: boolean;
   payrollTaxRate: number;
   payrollTaxOffsetDays: number;
+  creditLineOpeningBalance: number;
 }) {
   const parsed = z
     .object({
@@ -391,6 +414,7 @@ export async function saveBudgetSettings(input: {
       relatedCashOutEnabled: z.boolean(),
       payrollTaxRate: rate,
       payrollTaxOffsetDays: z.number().int().min(0).max(14),
+      creditLineOpeningBalance: z.number().finite(),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisa los supuestos." };
@@ -413,6 +437,7 @@ export async function saveBudgetSettings(input: {
         related_cash_out_enabled: data.relatedCashOutEnabled,
         payroll_tax_rate: data.payrollTaxRate,
         payroll_tax_offset_days: data.payrollTaxOffsetDays,
+        credit_line_opening_balance: data.creditLineOpeningBalance,
       },
       { onConflict: "company_id" },
     );
@@ -545,6 +570,45 @@ export async function deleteRecurringDebit(input: {
       .eq("company_id", parsed.data.companyId);
     if (error) throw error;
     refresh(parsed.data.companyId);
+    return { success: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+const counterpartySchema = z.object({
+  id: z.string().uuid().optional(),
+  companyId: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  openingBalance: z.number().finite(),
+  isActive: z.boolean(),
+});
+
+/** Las otras LLC del grupo, con su saldo al inicio del horizonte. */
+export async function saveCounterparty(
+  input: z.infer<typeof counterpartySchema>,
+) {
+  const parsed = counterpartySchema.safeParse(input);
+  if (!parsed.success) return { error: "Revisa la contraparte." };
+  const data = parsed.data;
+  try {
+    await authorize(data.companyId);
+    const supabase = await createClient();
+    const values = {
+      company_id: data.companyId,
+      name: data.name,
+      opening_balance: data.openingBalance,
+      is_active: data.isActive,
+    };
+    const { error } = data.id
+      ? await supabase
+          .from("tresbe_budget_counterparties")
+          .update(values)
+          .eq("id", data.id)
+          .eq("company_id", data.companyId)
+      : await supabase.from("tresbe_budget_counterparties").insert(values);
+    if (error) throw error;
+    refresh(data.companyId);
     return { success: true };
   } catch (error) {
     return failure(error);

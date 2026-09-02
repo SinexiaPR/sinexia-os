@@ -1,27 +1,36 @@
 // Reglas de cálculo de la vista "Seguimiento Diario" y del resumen de semanas.
 //
-// Dos decisiones cargan todo el peso de la corrección respecto de la planilla:
-//   · las categorías marcadas como financiamiento (la línea de reserva) quedan
-//     fuera de Total Ingresos y Total Egresos operativos, pero entran en el
-//     saldo real para que cuadre contra el banco;
-//   · el desvío es favorable con signo positivo en ambos sentidos: en ingresos
-//     es Real − Presupuesto y en egresos, Presupuesto − Real.
+// El módulo sigue la planilla v3, que separa cuatro tipos de movimiento:
+//
+//   Ingreso / Egreso  -> operativo, arma el Flujo Neto Operativo.
+//   Intercompany      -> transferencias entre las LLC del grupo. No es venta ni
+//                        gasto; lleva contraparte y saldo por empresa.
+//   Financiamiento    -> línea de crédito, partida en Utilización y Repago, con
+//                        saldo de la línea que se arrastra entre semanas.
+//
+// El desvío es favorable con signo positivo de los dos lados: en ingresos es
+// Real − Presupuesto y en egresos, Presupuesto − Real.
 
 import { addDays, weekDates, weekNumber, type IsoDate } from "./dates";
+
+export type CategoryKind =
+  "ingreso" | "egreso" | "financiamiento" | "intercompany";
 
 export type CategoryLike = {
   id: string;
   code: string;
   name: string;
-  kind: "ingreso" | "egreso" | "financiamiento";
+  kind: CategoryKind;
   total_group:
     | "ingresos"
     | "proveedores_compras"
     | "nomina"
     | "payroll_taxes"
     | "debitos_bancarios"
+    | "intercompany"
     | "financiamiento";
   is_financing: boolean;
+  flow?: "entrada" | "salida" | null;
   sort_order: number;
 };
 
@@ -30,6 +39,7 @@ export type MovementLike = {
   category_id: string;
   direction: "ingreso" | "egreso";
   amount: number;
+  counterparty_id?: string | null;
 };
 
 export type EntryLike = {
@@ -47,6 +57,14 @@ export type CashControlLike = {
   minimum_cash_target: number | null;
   notes: string | null;
 } | null;
+
+export type CounterpartyLike = { id: string; name: string };
+
+/** Saldos al inicio de la semana, encadenados desde el ancla del horizonte. */
+export type OpeningBalances = {
+  creditLine: number;
+  counterparties: Record<string, number>;
+};
 
 export type Cell = {
   date: IsoDate;
@@ -79,6 +97,16 @@ export type GroupRow = {
   totals: Totals;
 };
 
+export type CounterpartyBalance = {
+  id: string;
+  name: string;
+  opening: number;
+  received: number;
+  delivered: number;
+  net: number;
+  closing: number;
+};
+
 const round = (value: number) => Math.round(value * 100) / 100;
 
 function variance(
@@ -104,6 +132,11 @@ const expenseGroups = [
   "debitos_bancarios",
 ] as const;
 
+export const CREDIT_LINE_DRAWDOWN = "linea_credito_utilizacion";
+export const CREDIT_LINE_REPAYMENT = "linea_credito_repago";
+export const INTERCOMPANY_RECEIVED = "intercompany_recibido";
+export const INTERCOMPANY_DELIVERED = "intercompany_entregado";
+
 export type WeekView = ReturnType<typeof buildWeekView>;
 
 export function buildWeekView({
@@ -112,56 +145,78 @@ export function buildWeekView({
   movements,
   entries,
   cashControl,
+  counterparties = [],
+  openings,
 }: {
   weekStart: IsoDate;
   categories: CategoryLike[];
   movements: MovementLike[];
   entries: EntryLike[];
   cashControl: CashControlLike;
+  counterparties?: CounterpartyLike[];
+  openings?: OpeningBalances;
 }) {
   const dates = weekDates(weekStart);
   const dateIndex = new Map(dates.map((date, index) => [date, index]));
+  const categoryById = new Map(categories.map((item) => [item.id, item]));
+  const zeros = () => dates.map(() => 0);
 
   const realByCategory = new Map<string, number[]>();
-  // La línea de reserva se mira por sentido: entra plata para cubrir cheques y
-  // se devuelve con el excedente, y ambos lados deben verse por separado.
-  const financingIn = dates.map(() => 0);
-  const financingOut = dates.map(() => 0);
+  const budgetByCategory = new Map<string, number[]>();
+  // Los tres flujos no operativos se miran por sentido: la línea entra y se
+  // devuelve, y el intercompany se recibe y se entrega.
+  const financingIn = zeros();
+  const financingOut = zeros();
+  const intercompanyIn = zeros();
+  const intercompanyOut = zeros();
+  const counterpartyIn = new Map<string, number>();
+  const counterpartyOut = new Map<string, number>();
+
   for (const movement of movements) {
     const index = dateIndex.get(movement.entry_date);
     if (index === undefined) continue;
+    const category = categoryById.get(movement.category_id);
+    const amount = Number(movement.amount);
     let bucket = realByCategory.get(movement.category_id);
     if (!bucket) {
-      bucket = dates.map(() => 0);
+      bucket = zeros();
       realByCategory.set(movement.category_id, bucket);
     }
-    bucket[index] = round(bucket[index] + Number(movement.amount));
-    const category = categories.find(
-      (item) => item.id === movement.category_id,
-    );
-    if (category?.is_financing) {
-      if (movement.direction === "ingreso") {
-        financingIn[index] = round(
-          financingIn[index] + Number(movement.amount),
-        );
-      } else {
-        financingOut[index] = round(
-          financingOut[index] + Number(movement.amount),
-        );
-      }
+    bucket[index] = round(bucket[index] + amount);
+    if (!category) continue;
+    if (category.kind === "financiamiento") {
+      const target =
+        category.code === CREDIT_LINE_REPAYMENT ? financingOut : financingIn;
+      target[index] = round(target[index] + amount);
+    } else if (category.kind === "intercompany") {
+      const delivered = category.code === INTERCOMPANY_DELIVERED;
+      const target = delivered ? intercompanyOut : intercompanyIn;
+      target[index] = round(target[index] + amount);
+      const key = movement.counterparty_id ?? "";
+      const map = delivered ? counterpartyOut : counterpartyIn;
+      map.set(key, round((map.get(key) ?? 0) + amount));
     }
   }
 
   const entryByKey = new Map<string, EntryLike>();
   for (const entry of entries) {
     entryByKey.set(`${entry.category_id}|${entry.entry_date}`, entry);
+    const index = dateIndex.get(entry.entry_date);
+    if (index === undefined) continue;
+    let bucket = budgetByCategory.get(entry.category_id);
+    if (!bucket) {
+      bucket = zeros();
+      budgetByCategory.set(entry.category_id, bucket);
+    }
+    bucket[index] = round(bucket[index] + Number(entry.amount));
   }
 
   const ordered = [...categories].sort((a, b) => a.sort_order - b.sort_order);
-  const rows: CategoryRow[] = ordered.map((category) => {
+  const allRows: CategoryRow[] = ordered.map((category) => {
+    const operating = category.kind === "ingreso" || category.kind === "egreso";
     const favorable =
       category.kind === "ingreso" ? "higher_real" : "lower_real";
-    const reals = realByCategory.get(category.id) ?? dates.map(() => 0);
+    const reals = realByCategory.get(category.id) ?? zeros();
     const cells: Cell[] = dates.map((date, index) => {
       const entry = entryByKey.get(`${category.id}|${date}`);
       const budget = entry ? Number(entry.amount) : 0;
@@ -170,9 +225,9 @@ export function buildWeekView({
         date,
         budget,
         real,
-        variance: category.is_financing
-          ? round(real - budget)
-          : variance(favorable, budget, real),
+        variance: operating
+          ? variance(favorable, budget, real)
+          : round(real - budget),
         origin: entry ? entry.origin : null,
         entryId: entry?.id ?? null,
         note: entry?.note ?? null,
@@ -186,15 +241,22 @@ export function buildWeekView({
       totals: {
         budget,
         real,
-        variance: category.is_financing
-          ? round(real - budget)
-          : variance(favorable, budget, real),
+        variance: operating
+          ? variance(favorable, budget, real)
+          : round(real - budget),
       },
     };
   });
 
-  const operationalRows = rows.filter((row) => !row.category.is_financing);
-  const financingRows = rows.filter((row) => row.category.is_financing);
+  const operatingRows = allRows.filter(
+    (row) => row.category.kind === "ingreso" || row.category.kind === "egreso",
+  );
+  const intercompanyRows = allRows.filter(
+    (row) => row.category.kind === "intercompany" && hasValue(row),
+  );
+  const financingRows = allRows.filter(
+    (row) => row.category.kind === "financiamiento" && hasValue(row),
+  );
 
   function groupRow(
     key: string,
@@ -231,21 +293,21 @@ export function buildWeekView({
     "ingresos",
     groupLabels.ingresos,
     "higher_real",
-    operationalRows.filter((row) => row.category.total_group === "ingresos"),
+    operatingRows.filter((row) => row.category.total_group === "ingresos"),
   );
   const expenseSubtotals = expenseGroups.map((group) =>
     groupRow(
       group,
       groupLabels[group],
       "lower_real",
-      operationalRows.filter((row) => row.category.total_group === group),
+      operatingRows.filter((row) => row.category.total_group === group),
     ),
   );
   const expenses = groupRow(
     "egresos",
     "Total Egresos",
     "lower_real",
-    operationalRows.filter((row) => row.category.total_group !== "ingresos"),
+    operatingRows.filter((row) => row.category.total_group !== "ingresos"),
   );
 
   const netCells = dates.map((date, index) => {
@@ -257,7 +319,7 @@ export function buildWeekView({
   });
   const net: GroupRow = {
     key: "flujo_neto",
-    label: "Flujo Neto",
+    label: "Flujo Neto Operativo",
     favorable: "higher_real",
     cells: netCells,
     totals: {
@@ -271,9 +333,27 @@ export function buildWeekView({
     },
   };
 
-  const financingNetReal = round(
-    financingIn.reduce((sum, value) => sum + value, 0) -
-      financingOut.reduce((sum, value) => sum + value, 0),
+  const sum = (values: number[]) => round(values.reduce((a, b) => a + b, 0));
+  const budgetOf = (code: string) =>
+    sum(
+      budgetByCategory.get(
+        categories.find((item) => item.code === code)?.id ?? "",
+      ) ?? [0],
+    );
+
+  const drawdown = sum(financingIn);
+  const repayment = sum(financingOut);
+  const financingNetReal = round(drawdown - repayment);
+  const financingNetBudget = round(
+    budgetOf(CREDIT_LINE_DRAWDOWN) - budgetOf(CREDIT_LINE_REPAYMENT),
+  );
+  const intercompanyReceived = sum(intercompanyIn);
+  const intercompanyDelivered = sum(intercompanyOut);
+  const intercompanyNetReal = round(
+    intercompanyReceived - intercompanyDelivered,
+  );
+  const intercompanyNetBudget = round(
+    budgetOf(INTERCOMPANY_RECEIVED) - budgetOf(INTERCOMPANY_DELIVERED),
   );
 
   const opening = Number(cashControl?.opening_bank_balance ?? 0);
@@ -285,31 +365,75 @@ export function buildWeekView({
     cashControl?.minimum_cash_target == null
       ? null
       : Number(cashControl.minimum_cash_target);
-  const theoreticalBudget = round(opening + net.totals.budget);
-  // El saldo real sí incorpora el movimiento de la línea de reserva: sin él, el
-  // teórico nunca cuadraría contra el estado de cuenta.
-  const theoreticalReal = round(opening + net.totals.real + financingNetReal);
+
+  // Puente de caja de v3: lo operativo y lo intercompany antes de tocar la
+  // línea de crédito, y recién después el financiamiento.
+  const beforeFinancingBudget = round(
+    opening + net.totals.budget + intercompanyNetBudget,
+  );
+  const beforeFinancingReal = round(
+    opening + net.totals.real + intercompanyNetReal,
+  );
+  const theoreticalBudget = round(beforeFinancingBudget + financingNetBudget);
+  const theoreticalReal = round(beforeFinancingReal + financingNetReal);
+
+  const creditLineOpening = openings?.creditLine ?? 0;
+  const counterpartyBalances: CounterpartyBalance[] = counterparties.map(
+    (counterparty) => {
+      const openingBalance = openings?.counterparties[counterparty.id] ?? 0;
+      const received = counterpartyIn.get(counterparty.id) ?? 0;
+      const delivered = counterpartyOut.get(counterparty.id) ?? 0;
+      const movementNet = round(received - delivered);
+      return {
+        id: counterparty.id,
+        name: counterparty.name,
+        opening: openingBalance,
+        received,
+        delivered,
+        net: movementNet,
+        closing: round(openingBalance + movementNet),
+      };
+    },
+  );
 
   return {
     weekStart,
     dates,
-    rows: operationalRows,
+    rows: operatingRows,
+    intercompanyRows,
     financingRows,
-    financing: {
-      inflow: financingIn,
-      outflow: financingOut,
-      netReal: financingNetReal,
-      totalInflow: round(financingIn.reduce((sum, value) => sum + value, 0)),
-      totalOutflow: round(financingOut.reduce((sum, value) => sum + value, 0)),
-    },
     income,
     expenseSubtotals,
     expenses,
     net,
+    intercompany: {
+      inflow: intercompanyIn,
+      outflow: intercompanyOut,
+      received: intercompanyReceived,
+      delivered: intercompanyDelivered,
+      netReal: intercompanyNetReal,
+      netBudget: intercompanyNetBudget,
+      counterparties: counterpartyBalances,
+    },
+    financing: {
+      inflow: financingIn,
+      outflow: financingOut,
+      drawdown,
+      repayment,
+      netReal: financingNetReal,
+      netBudget: financingNetBudget,
+      creditLineOpening,
+      creditLineClosing: round(creditLineOpening + financingNetReal),
+      // Compatibilidad con la vista previa a intercompany.
+      totalInflow: drawdown,
+      totalOutflow: repayment,
+    },
     cash: {
       opening,
       actual,
       minimum,
+      beforeFinancingBudget,
+      beforeFinancingReal,
       theoreticalBudget,
       theoreticalReal,
       differenceToReconcile:
@@ -321,12 +445,16 @@ export function buildWeekView({
     },
     hasBudget: entries.length > 0,
     hasReal: movements.length > 0,
-    manualCells: rows.reduce(
+    manualCells: allRows.reduce(
       (count, row) =>
         count + row.cells.filter((cell) => cell.origin === "manual").length,
       0,
     ),
   };
+}
+
+function hasValue(row: CategoryRow) {
+  return row.totals.real !== 0 || row.totals.budget !== 0;
 }
 
 export type HorizonRow = {
@@ -336,8 +464,8 @@ export type HorizonRow = {
   income: Totals;
   expenses: Totals;
   net: Totals;
+  intercompanyNetReal: number;
   financingNetReal: number;
-  theoreticalReal: number | null;
   hasBudget: boolean;
   hasReal: boolean;
 };
@@ -393,10 +521,8 @@ export function buildHorizonSummary({
       income: view.income.totals,
       expenses: view.expenses.totals,
       net: view.net.totals,
+      intercompanyNetReal: view.intercompany.netReal,
       financingNetReal: view.financing.netReal,
-      theoreticalReal: controlByWeek.has(weekStart)
-        ? view.cash.theoreticalReal
-        : null,
       hasBudget: weekEntries.length > 0,
       hasReal: weekMovements.length > 0,
     });

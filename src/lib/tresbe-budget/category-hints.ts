@@ -24,10 +24,18 @@ export function categoryHintFor(
     )
   ) {
     return {
-      code: "linea_reserva",
+      code: "linea_credito_utilizacion",
       level: "obligatoria",
       reason:
-        "Los barridos de la línea de reserva no son ingresos ni egresos operativos: van a Movimiento Línea de Reserva.",
+        "Los barridos de la línea no son ingresos operativos: van a Utilización Línea de Crédito.",
+    };
+  }
+  if (/grupo sibarita|lado ce|intercompany/.test(text)) {
+    return {
+      code: "intercompany_recibido",
+      level: "sugerencia",
+      reason:
+        "Las transferencias entre las LLC no son venta ni gasto: van a Intercompany, con contraparte.",
     };
   }
   if (/clover/.test(text)) {

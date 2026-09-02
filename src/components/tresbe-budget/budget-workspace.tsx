@@ -7,7 +7,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Printer,
+  FileDown,
   RefreshCw,
 } from "lucide-react";
 
@@ -31,6 +31,7 @@ import {
 import type {
   BudgetAssumptions,
   BudgetCategory,
+  BudgetCounterparty,
   BudgetMovement,
 } from "@/services/tresbe-budget";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ export function TresbeBudgetWorkspace({
   weekNumber,
   week,
   categories,
+  counterparties,
   movements,
   assumptions,
   horizon,
@@ -60,6 +62,7 @@ export function TresbeBudgetWorkspace({
   weekNumber: number | null;
   week: WeekView;
   categories: BudgetCategory[];
+  counterparties: BudgetCounterparty[];
   movements: BudgetMovement[];
   assumptions: BudgetAssumptions | null;
   horizon: { weeks: number; rows: HorizonRow[] };
@@ -83,7 +86,7 @@ export function TresbeBudgetWorkspace({
         overwriteManual,
       });
       if ("error" in result) {
-        setMessage(result.error);
+        setMessage(result.error ?? "No se pudo generar el presupuesto.");
         return;
       }
       setMessage(
@@ -142,11 +145,11 @@ export function TresbeBudgetWorkspace({
             </Button>
             <Button asChild variant="outline">
               <Link
-                href={`/dashboard/admin/companies/${company.id}/budget/print?week=${weekStart}`}
+                href={`/api/tresbe-budget/${company.id}/pdf?week=${weekStart}`}
                 target="_blank"
               >
-                <Printer className="size-4" />
-                Imprimir
+                <FileDown className="size-4" />
+                PDF de la semana
               </Link>
             </Button>
           </div>
@@ -248,6 +251,7 @@ export function TresbeBudgetWorkspace({
           companyId={company.id}
           weekStart={weekStart}
           categories={categories}
+          counterparties={counterparties}
           movements={movements}
         />
       ) : null}
