@@ -226,9 +226,10 @@ export async function getOpeningBalances(
     const joined = row.tresbe_budget_categories;
     const code = Array.isArray(joined) ? joined[0]?.code : joined?.code;
     const amount = Number(row.amount);
-    // Mismo signo que v3: el saldo se mueve con (Utilización - Repago).
-    if (code === "linea_credito_utilizacion") creditLine += amount;
-    else if (code === "linea_credito_repago") creditLine -= amount;
+    // El saldo de la línea es un pasivo: utilizar aumenta la deuda (más
+    // negativo) y repagar la reduce -- se mueve con (Repago - Utilización).
+    if (code === "linea_credito_utilizacion") creditLine -= amount;
+    else if (code === "linea_credito_repago") creditLine += amount;
     else if (code === "intercompany_recibido" && row.counterparty_id) {
       openings[row.counterparty_id] =
         Math.round(((openings[row.counterparty_id] ?? 0) + amount) * 100) / 100;
