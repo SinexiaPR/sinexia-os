@@ -726,7 +726,7 @@ export async function buildTresbeBudgetPdf(params: {
         values: [money(view.cash.opening), money(view.cash.opening)],
       },
       {
-        label: "+ Flujo Neto Operativo",
+        label: "+ Flujo Neto Operativo BANCO",
         values: [
           money(view.net.totals.budget),
           money(view.cash.bankOperatingReal),

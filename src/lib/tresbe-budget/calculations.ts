@@ -200,12 +200,19 @@ export function buildWeekView({
   // igual; Línea de Crédito y Transferencia Interna no llevan cuenta.
   let bankOperatingReal = 0;
   let cashOperatingReal = 0;
+  let cashIncomeReal = 0;
+  let cashExpenseReal = 0;
   let intercompanyNetBank = 0;
   let intercompanyNetCash = 0;
   let externoNetBank = 0;
   let externoNetCash = 0;
   let transferNetBank = 0;
   let transferNetCash = 0;
+  // "CONTROL DIARIO CASH / CAJA" de la planilla muestra las transferencias
+  // por separado: + Transferencias Banco → Cash (retiro), - Depósitos Cash →
+  // Banco (depósito).
+  let transferBankToCash = 0;
+  let transferCashToBank = 0;
 
   for (const movement of movements) {
     const index = dateIndex.get(movement.entry_date);
@@ -224,7 +231,14 @@ export function buildWeekView({
     if (category.kind === "ingreso" || category.kind === "egreso") {
       const signed = category.kind === "ingreso" ? amount : -amount;
       if (isBank) bankOperatingReal = round(bankOperatingReal + signed);
-      if (isCash) cashOperatingReal = round(cashOperatingReal + signed);
+      if (isCash) {
+        cashOperatingReal = round(cashOperatingReal + signed);
+        if (category.kind === "ingreso") {
+          cashIncomeReal = round(cashIncomeReal + amount);
+        } else {
+          cashExpenseReal = round(cashExpenseReal + amount);
+        }
+      }
     } else if (category.kind === "financiamiento") {
       const target =
         category.code === CREDIT_LINE_REPAYMENT ? financingOut : financingIn;
@@ -252,6 +266,11 @@ export function buildWeekView({
       const toBank = category.code === TRANSFER_TO_BANK;
       transferNetBank = round(transferNetBank + (toBank ? amount : -amount));
       transferNetCash = round(transferNetCash + (toBank ? -amount : amount));
+      if (toBank) {
+        transferCashToBank = round(transferCashToBank + amount);
+      } else {
+        transferBankToCash = round(transferBankToCash + amount);
+      }
     }
   }
 
@@ -546,9 +565,13 @@ export function buildWeekView({
         opening: cashOpening,
         actual: cashActual,
         operatingReal: cashOperatingReal,
+        incomeReal: cashIncomeReal,
+        expenseReal: cashExpenseReal,
         intercompanyNetReal: intercompanyNetCash,
         financingExternoNetReal: externoNetCash,
         transferNetReal: transferNetCash,
+        transferBankToCash,
+        transferCashToBank,
         theoreticalReal: cashTheoreticalReal,
         differenceToReconcile:
           cashActual == null ? null : round(cashActual - cashTheoreticalReal),

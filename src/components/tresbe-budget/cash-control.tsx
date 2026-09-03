@@ -186,7 +186,7 @@ export function CashControlCard({
           real={week.cash.opening}
         />
         <Line
-          label="+ Flujo Neto Operativo"
+          label="+ Flujo Neto Operativo BANCO"
           hint="Solo Banco Popular; el efectivo se rastrea aparte"
           budget={week.net.totals.budget}
           real={week.cash.bankOperatingReal}
@@ -253,40 +253,49 @@ export function CashControlCard({
       </div>
 
       <div className="mt-6">
-        <h3 className="text-sm font-semibold">Cash / Caja</h3>
+        <h3 className="text-sm font-semibold">CONTROL DIARIO CASH / CAJA</h3>
         <p className="text-muted-foreground text-xs">
           Efectivo físico, aparte del banco. No lleva presupuesto ni línea de
           crédito.
         </p>
         <div className="mt-2">
           <Line
-            label="Saldo Cash Inicial"
+            label="Saldo Inicial Cash"
             budget={null}
             real={week.cash.cashAccount.opening}
           />
           <Line
-            label="+ Ingresos/Egresos Operativos"
-            hint="Solo cuenta Cash / Caja"
+            label="+ Ingresos Operativos Cash"
             budget={null}
-            real={week.cash.cashAccount.operatingReal}
+            real={week.cash.cashAccount.incomeReal}
+          />
+          <Line
+            label="- Egresos Operativos Cash"
+            budget={null}
+            real={week.cash.cashAccount.expenseReal}
           />
           <Line
             label="+ Movimiento Neto Intercompany"
-            hint="Solo cuenta Cash / Caja"
+            hint="No aparece en la planilla (siempre $0 hasta ahora), pero cuenta para el saldo"
             budget={null}
             real={week.cash.cashAccount.intercompanyNetReal}
           />
           <Line
-            label="+ Financiamiento Externo Neto"
-            hint="Solo cuenta Cash / Caja"
+            label="+ Financiamiento Externo Neto Cash"
             budget={null}
             real={week.cash.cashAccount.financingExternoNetReal}
           />
           <Line
-            label="+/− Transferencia Interna"
-            hint="Retiro Banco a Cash − Depósito Cash a Banco"
+            label="+ Transferencias Banco → Cash"
+            hint="Retiro Banco a Cash"
             budget={null}
-            real={week.cash.cashAccount.transferNetReal}
+            real={week.cash.cashAccount.transferBankToCash}
+          />
+          <Line
+            label="- Depósitos Cash → Banco"
+            hint="Depósito Cash a Banco"
+            budget={null}
+            real={week.cash.cashAccount.transferCashToBank}
           />
           <Line
             label="= Saldo Final Cash Teórico"
@@ -301,11 +310,67 @@ export function CashControlCard({
             real={week.cash.cashAccount.actual}
           />
           <Line
-            label="Diferencia a Conciliar"
+            label="Diferencia Cash a Conciliar"
             hint="Cash Real Contado − Saldo Final Teórico"
             budget={null}
             real={week.cash.cashAccount.differenceToReconcile}
           />
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold">LIQUIDEZ TOTAL AL CIERRE</h3>
+        <div className="mt-2 grid grid-cols-[1fr_auto_auto_auto] gap-4 text-sm">
+          <span />
+          <span className="text-muted-foreground w-24 text-right text-xs uppercase">
+            Banco
+          </span>
+          <span className="text-muted-foreground w-24 text-right text-xs uppercase">
+            Cash
+          </span>
+          <span className="text-muted-foreground w-24 text-right text-xs uppercase">
+            Total Liquidez
+          </span>
+          <span className="py-1">Saldo Final Teórico</span>
+          <span className="w-24 text-right tabular-nums">
+            {formatMoney(week.cash.theoreticalReal)}
+          </span>
+          <span className="w-24 text-right tabular-nums">
+            {formatMoney(week.cash.cashAccount.theoreticalReal)}
+          </span>
+          <span className="w-24 text-right font-medium tabular-nums">
+            {formatMoney(
+              week.cash.theoreticalReal + week.cash.cashAccount.theoreticalReal,
+            )}
+          </span>
+          <span className="py-1">Saldo Real / Contado</span>
+          <span className="w-24 text-right tabular-nums">
+            {formatMoney(week.cash.actual)}
+          </span>
+          <span className="w-24 text-right tabular-nums">
+            {formatMoney(week.cash.cashAccount.actual)}
+          </span>
+          <span className="w-24 text-right font-medium tabular-nums">
+            {week.cash.actual == null || week.cash.cashAccount.actual == null
+              ? formatMoney(null)
+              : formatMoney(week.cash.actual + week.cash.cashAccount.actual)}
+          </span>
+          <span className="border-t py-1 font-medium">Diferencia Total</span>
+          <span className="w-24 border-t text-right tabular-nums">
+            {formatMoney(week.cash.differenceToReconcile)}
+          </span>
+          <span className="w-24 border-t text-right tabular-nums">
+            {formatMoney(week.cash.cashAccount.differenceToReconcile)}
+          </span>
+          <span className="w-24 border-t text-right font-medium tabular-nums">
+            {week.cash.differenceToReconcile == null ||
+            week.cash.cashAccount.differenceToReconcile == null
+              ? formatMoney(null)
+              : formatMoney(
+                  week.cash.differenceToReconcile +
+                    week.cash.cashAccount.differenceToReconcile,
+                )}
+          </span>
         </div>
       </div>
 

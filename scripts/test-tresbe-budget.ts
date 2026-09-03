@@ -314,6 +314,16 @@ assert.equal(
   200,
   "el puente de caja excluye Cash / Caja: 500 - 300",
 );
+assert.equal(
+  bankVsCash.cash.cashAccount.incomeReal,
+  200,
+  "+ Ingresos Operativos Cash: el título exacto de CONTROL DIARIO CASH / CAJA",
+);
+assert.equal(
+  bankVsCash.cash.cashAccount.expenseReal,
+  0,
+  "- Egresos Operativos Cash: sin egresos en efectivo en este caso",
+);
 
 // 6c. Financiamiento Externo (dueño) y Transferencia Interna: filtran por
 // cuenta igual que Intercompany; la transferencia mueve banco y efectivo en
@@ -366,6 +376,16 @@ assert.equal(
   externoYTransferencias.cash.cashAccount.financingExternoNetReal,
   -200,
   "cash: solo el repago (Cash / Caja)",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.transferBankToCash,
+  50,
+  "+ Transferencias Banco → Cash: el retiro, tal como lo titula la planilla",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.transferCashToBank,
+  150,
+  "- Depósitos Cash → Banco: el depósito, tal como lo titula la planilla",
 );
 assert.equal(
   externoYTransferencias.cash.cashAccount.theoreticalReal,
