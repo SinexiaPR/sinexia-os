@@ -115,6 +115,19 @@ export type GroupRow = {
   totals: Totals;
 };
 
+/** Una fila del bloque CONTROL DIARIO CASH / CAJA. */
+export type CashDay = {
+  date: IsoDate;
+  opening: number;
+  income: number;
+  expense: number;
+  intercompanyNet: number;
+  externoNet: number;
+  transferIn: number;
+  transferOut: number;
+  closing: number;
+};
+
 export type CounterpartyBalance = {
   id: string;
   name: string;
@@ -213,6 +226,15 @@ export function buildWeekView({
   // Banco (depósito).
   let transferBankToCash = 0;
   let transferCashToBank = 0;
+  // Mismo desglose, día por día -- para reproducir el bloque CONTROL DIARIO
+  // CASH / CAJA de la planilla, donde el saldo final de un día es el saldo
+  // inicial del día siguiente.
+  const cashIncomeDaily = zeros();
+  const cashExpenseDaily = zeros();
+  const cashIntercompanyDaily = zeros();
+  const cashExternoDaily = zeros();
+  const cashTransferInDaily = zeros();
+  const cashTransferOutDaily = zeros();
 
   for (const movement of movements) {
     const index = dateIndex.get(movement.entry_date);
@@ -235,8 +257,10 @@ export function buildWeekView({
         cashOperatingReal = round(cashOperatingReal + signed);
         if (category.kind === "ingreso") {
           cashIncomeReal = round(cashIncomeReal + amount);
+          cashIncomeDaily[index] = round(cashIncomeDaily[index] + amount);
         } else {
           cashExpenseReal = round(cashExpenseReal + amount);
+          cashExpenseDaily[index] = round(cashExpenseDaily[index] + amount);
         }
       }
     } else if (category.kind === "financiamiento") {
@@ -252,14 +276,22 @@ export function buildWeekView({
       map.set(key, round((map.get(key) ?? 0) + amount));
       const signed = delivered ? -amount : amount;
       if (isBank) intercompanyNetBank = round(intercompanyNetBank + signed);
-      if (isCash) intercompanyNetCash = round(intercompanyNetCash + signed);
+      if (isCash) {
+        intercompanyNetCash = round(intercompanyNetCash + signed);
+        cashIntercompanyDaily[index] = round(
+          cashIntercompanyDaily[index] + signed,
+        );
+      }
     } else if (category.kind === "financiamiento_externo") {
       const delivered = category.code === EXTERNO_REPAYMENT;
       const target = delivered ? externoOut : externoIn;
       target[index] = round(target[index] + amount);
       const signed = delivered ? -amount : amount;
       if (isBank) externoNetBank = round(externoNetBank + signed);
-      if (isCash) externoNetCash = round(externoNetCash + signed);
+      if (isCash) {
+        externoNetCash = round(externoNetCash + signed);
+        cashExternoDaily[index] = round(cashExternoDaily[index] + signed);
+      }
     } else if (category.kind === "transferencia_interna") {
       // No filtra por cuenta: por definición mueve banco y efectivo en
       // sentidos opuestos.
@@ -268,8 +300,14 @@ export function buildWeekView({
       transferNetCash = round(transferNetCash + (toBank ? -amount : amount));
       if (toBank) {
         transferCashToBank = round(transferCashToBank + amount);
+        cashTransferOutDaily[index] = round(
+          cashTransferOutDaily[index] + amount,
+        );
       } else {
         transferBankToCash = round(transferBankToCash + amount);
+        cashTransferInDaily[index] = round(
+          cashTransferInDaily[index] + amount,
+        );
       }
     }
   }
@@ -483,6 +521,40 @@ export function buildWeekView({
       transferNetCash,
   );
 
+  // CONTROL DIARIO CASH / CAJA: el saldo final de un día es el saldo inicial
+  // del siguiente, igual que en la planilla.
+  let cashRunningBalance = cashOpening;
+  const cashDays: CashDay[] = dates.map((date, index) => {
+    const opening = cashRunningBalance;
+    const income = cashIncomeDaily[index];
+    const expense = cashExpenseDaily[index];
+    const intercompanyNet = cashIntercompanyDaily[index];
+    const externoNet = cashExternoDaily[index];
+    const transferIn = cashTransferInDaily[index];
+    const transferOut = cashTransferOutDaily[index];
+    const closing = round(
+      opening +
+        income -
+        expense +
+        intercompanyNet +
+        externoNet +
+        transferIn -
+        transferOut,
+    );
+    cashRunningBalance = closing;
+    return {
+      date,
+      opening,
+      income,
+      expense,
+      intercompanyNet,
+      externoNet,
+      transferIn,
+      transferOut,
+      closing,
+    };
+  });
+
   const creditLineOpening = openings?.creditLine ?? 0;
   const counterpartyBalances: CounterpartyBalance[] = counterparties.map(
     (counterparty) => {
@@ -575,6 +647,7 @@ export function buildWeekView({
         theoreticalReal: cashTheoreticalReal,
         differenceToReconcile:
           cashActual == null ? null : round(cashActual - cashTheoreticalReal),
+        days: cashDays,
       },
     },
     hasBudget: entries.length > 0,

@@ -393,6 +393,53 @@ assert.equal(
   "cash: repago - depósito + retiro",
 );
 
+// 6d. CONTROL DIARIO CASH / CAJA: el saldo final de un día es el inicial del
+// siguiente -- mismos importes que trajo la v5 real de la semana 1.
+const dailyIncomes = [234.37, 114.65, 146.51, 173.53, 6.09, 91.14, 193.95];
+const expectedClosings = [
+  234.37, 349.02, 495.53, 669.06, 675.15, 766.29, 960.24,
+];
+const dailyCashView = buildWeekView({
+  weekStart,
+  categories,
+  movements: dailyIncomes.map((amount, index) => ({
+    entry_date: addDays(weekStart, index),
+    direction: "ingreso",
+    category_id: "cash_disponible",
+    amount,
+    account: "Cash / Caja",
+  })),
+  entries: [],
+  cashControl: {
+    opening_bank_balance: 0,
+    actual_bank_balance: null,
+    opening_cash_balance: 0,
+    actual_cash_balance: null,
+    minimum_cash_target: null,
+    notes: null,
+  },
+});
+assert.equal(dailyCashView.cash.cashAccount.days.length, 7);
+dailyCashView.cash.cashAccount.days.forEach((day, index) => {
+  assert.equal(
+    day.closing,
+    expectedClosings[index],
+    `día ${index + 1}: saldo final cash teórico`,
+  );
+  if (index > 0) {
+    assert.equal(
+      day.opening,
+      dailyCashView.cash.cashAccount.days[index - 1].closing,
+      `día ${index + 1}: el saldo inicial es el final del día anterior`,
+    );
+  }
+});
+assert.equal(
+  dailyCashView.cash.cashAccount.days[6].closing,
+  dailyCashView.cash.cashAccount.theoreticalReal,
+  "el último día del encadenado coincide con el saldo teórico semanal",
+);
+
 // 7. El forecast pone el payroll tax el jueves, no el miércoles.
 const forecast = buildForecastForWeek({
   weekStart,

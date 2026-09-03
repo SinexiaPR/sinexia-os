@@ -8,8 +8,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import type { WeekView } from "@/lib/tresbe-budget/calculations";
-import { formatMoney } from "@/lib/tresbe-budget/format";
+import { formatDayLabel } from "@/lib/tresbe-budget/dates";
+import { formatCell, formatMoney } from "@/lib/tresbe-budget/format";
 import { cn } from "@/lib/utils";
+
+const dailyCashRows: Array<{
+  label: string;
+  hint?: string;
+  pick: (day: WeekView["cash"]["cashAccount"]["days"][number]) => number;
+}> = [
+  { label: "Saldo Inicial Cash", pick: (day) => day.opening },
+  { label: "+ Ingresos Operativos Cash", pick: (day) => day.income },
+  { label: "- Egresos Operativos Cash", pick: (day) => day.expense },
+  {
+    label: "+ Movimiento Neto Intercompany",
+    hint: "No aparece en la planilla; cuenta para el saldo si algún día hay intercompany en efectivo",
+    pick: (day) => day.intercompanyNet,
+  },
+  {
+    label: "+ Financiamiento Externo Neto Cash",
+    pick: (day) => day.externoNet,
+  },
+  {
+    label: "+ Transferencias Banco → Cash",
+    hint: "Retiro Banco a Cash",
+    pick: (day) => day.transferIn,
+  },
+  {
+    label: "- Depósitos Cash → Banco",
+    hint: "Depósito Cash a Banco",
+    pick: (day) => day.transferOut,
+  },
+  { label: "= Saldo Final Cash Teórico", pick: (day) => day.closing },
+];
 
 function parseAmount(value: string): number | null {
   const trimmed = value.trim();
@@ -258,51 +289,49 @@ export function CashControlCard({
           Efectivo físico, aparte del banco. No lleva presupuesto ni línea de
           crédito.
         </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted-foreground border-b text-xs uppercase">
+                <th className="py-1 pr-2 text-left font-normal">Concepto</th>
+                {week.cash.cashAccount.days.map((day) => (
+                  <th
+                    key={day.date}
+                    className="px-2 py-1 text-right font-normal whitespace-nowrap"
+                  >
+                    {formatDayLabel(day.date)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-border/60 divide-y">
+              {dailyCashRows.map((row) => (
+                <tr key={row.label}>
+                  <td className="py-1 pr-2">
+                    <span>{row.label}</span>
+                    {row.hint ? (
+                      <span className="text-muted-foreground block text-xs">
+                        {row.hint}
+                      </span>
+                    ) : null}
+                  </td>
+                  {week.cash.cashAccount.days.map((day) => (
+                    <td
+                      key={day.date}
+                      className={cn(
+                        "px-2 py-1 text-right tabular-nums",
+                        row.label.startsWith("=") && "font-medium",
+                      )}
+                    >
+                      {formatCell(row.pick(day))}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="mt-2">
-          <Line
-            label="Saldo Inicial Cash"
-            budget={null}
-            real={week.cash.cashAccount.opening}
-          />
-          <Line
-            label="+ Ingresos Operativos Cash"
-            budget={null}
-            real={week.cash.cashAccount.incomeReal}
-          />
-          <Line
-            label="- Egresos Operativos Cash"
-            budget={null}
-            real={week.cash.cashAccount.expenseReal}
-          />
-          <Line
-            label="+ Movimiento Neto Intercompany"
-            hint="No aparece en la planilla (siempre $0 hasta ahora), pero cuenta para el saldo"
-            budget={null}
-            real={week.cash.cashAccount.intercompanyNetReal}
-          />
-          <Line
-            label="+ Financiamiento Externo Neto Cash"
-            budget={null}
-            real={week.cash.cashAccount.financingExternoNetReal}
-          />
-          <Line
-            label="+ Transferencias Banco → Cash"
-            hint="Retiro Banco a Cash"
-            budget={null}
-            real={week.cash.cashAccount.transferBankToCash}
-          />
-          <Line
-            label="- Depósitos Cash → Banco"
-            hint="Depósito Cash a Banco"
-            budget={null}
-            real={week.cash.cashAccount.transferCashToBank}
-          />
-          <Line
-            label="= Saldo Final Cash Teórico"
-            budget={null}
-            real={week.cash.cashAccount.theoreticalReal}
-            strong
-          />
           <Line
             label="Cash Real Contado"
             hint="Campo manual"
