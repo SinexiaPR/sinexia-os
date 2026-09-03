@@ -726,7 +726,10 @@ export async function buildTresbeBudgetPdf(params: {
       },
       {
         label: "+ Flujo Neto Operativo",
-        values: [money(view.net.totals.budget), money(view.net.totals.real)],
+        values: [
+          money(view.net.totals.budget),
+          money(view.cash.bankOperatingReal),
+        ],
       },
       {
         label: "+ Mov. Neto Intercompany",

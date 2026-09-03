@@ -40,7 +40,14 @@ export type MovementLike = {
   direction: "ingreso" | "egreso";
   amount: number;
   counterparty_id?: string | null;
+  account?: string | null;
 };
+
+/** Cuenta bancaria operativa. El puente de caja (Saldo Final Banco Teórico)
+ * solo debe reflejar lo que pasa por el banco -- el efectivo se rastrea
+ * aparte -- igual que el SUMAR.SI.CONJUNTO de la planilla que filtra
+ * Cuenta = "Banco Popular". */
+export const OPERATING_BANK_ACCOUNT = "Banco Popular";
 
 export type EntryLike = {
   id: string;
@@ -171,6 +178,9 @@ export function buildWeekView({
   const intercompanyOut = zeros();
   const counterpartyIn = new Map<string, number>();
   const counterpartyOut = new Map<string, number>();
+  // Flujo operativo restringido a Banco Popular, para el puente de caja --
+  // separado del Flujo Neto Operativo de la cuadrícula (que incluye Cash/Caja).
+  let bankOperatingReal = 0;
 
   for (const movement of movements) {
     const index = dateIndex.get(movement.entry_date);
@@ -184,6 +194,14 @@ export function buildWeekView({
     }
     bucket[index] = round(bucket[index] + amount);
     if (!category) continue;
+    if (
+      (category.kind === "ingreso" || category.kind === "egreso") &&
+      movement.account === OPERATING_BANK_ACCOUNT
+    ) {
+      bankOperatingReal = round(
+        bankOperatingReal + (category.kind === "ingreso" ? amount : -amount),
+      );
+    }
     if (category.kind === "financiamiento") {
       const target =
         category.code === CREDIT_LINE_REPAYMENT ? financingOut : financingIn;
@@ -372,7 +390,7 @@ export function buildWeekView({
     opening + net.totals.budget + intercompanyNetBudget,
   );
   const beforeFinancingReal = round(
-    opening + net.totals.real + intercompanyNetReal,
+    opening + bankOperatingReal + intercompanyNetReal,
   );
   const theoreticalBudget = round(beforeFinancingBudget + financingNetBudget);
   const theoreticalReal = round(beforeFinancingReal + financingNetReal);
@@ -432,6 +450,7 @@ export function buildWeekView({
       opening,
       actual,
       minimum,
+      bankOperatingReal,
       beforeFinancingBudget,
       beforeFinancingReal,
       theoreticalBudget,

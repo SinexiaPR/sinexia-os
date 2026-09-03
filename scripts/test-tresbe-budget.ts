@@ -97,6 +97,8 @@ for (const match of movementsBlock.matchAll(movementPattern)) {
     category_id: code,
     amount: Number(match[4]),
     counterparty_id: counterpartyId,
+    // La semilla v3 carga todo bajo la misma cuenta bancaria.
+    account: "Banco Popular",
   });
 }
 assert.equal(movements.length, 63, "la semilla debe traer 63 movimientos");
@@ -195,11 +197,19 @@ assert.equal(
   "saldo final de la línea = inicial + utilización - repago",
 );
 
-// 5. El puente de caja de v3, escalón por escalón.
+// 5. El puente de caja de v3, escalón por escalón. "+ Flujo Neto Operativo"
+// del puente solo mira Banco Popular (SUMAR.SI.CONJUNTO de la planilla);
+// en esta semilla toda la cuenta es Banco Popular, así que coincide con el
+// Flujo Neto Operativo de la cuadrícula completa.
+assert.equal(
+  view.cash.bankOperatingReal,
+  view.net.totals.real,
+  "sin movimientos en efectivo, el flujo de banco iguala al operativo total",
+);
 assert.equal(
   view.cash.beforeFinancingReal,
-  round(view.net.totals.real + view.intercompany.netReal),
-  "el saldo antes de financiamiento suma lo operativo y lo intercompany",
+  round(view.cash.bankOperatingReal + view.intercompany.netReal),
+  "el saldo antes de financiamiento suma lo operativo de banco y lo intercompany",
 );
 assert.equal(
   view.cash.theoreticalReal,
@@ -254,6 +264,48 @@ assert.equal(withBudget.income.totals.variance, 20, "ingreso por encima: +20");
 assert.equal(withBudget.expenses.totals.variance, 20, "gasto por debajo: +20");
 assert.equal(withBudget.net.totals.variance, 40);
 assert.equal(withBudget.manualCells, 1, "las celdas manuales se cuentan");
+
+// 6b. Cash Disponible en cuenta "Cash / Caja" no cuenta para el puente de
+// caja (Flujo Neto Operativo = SUMAR.SI.CONJUNTO filtrado a Banco Popular).
+const bankVsCash = buildWeekView({
+  weekStart,
+  categories,
+  movements: [
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "credit_card_disponible",
+      amount: 500,
+      account: "Banco Popular",
+    },
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "cash_disponible",
+      amount: 200,
+      account: "Cash / Caja",
+    },
+    {
+      entry_date: weekStart,
+      direction: "egreso",
+      category_id: "proveedores",
+      amount: 300,
+      account: "Banco Popular",
+    },
+  ],
+  entries: [],
+  cashControl: null,
+});
+assert.equal(
+  bankVsCash.net.totals.real,
+  400,
+  "la cuadrícula suma banco y efectivo: 500 + 200 - 300",
+);
+assert.equal(
+  bankVsCash.cash.bankOperatingReal,
+  200,
+  "el puente de caja excluye Cash / Caja: 500 - 300",
+);
 
 // 7. El forecast pone el payroll tax el jueves, no el miércoles.
 const forecast = buildForecastForWeek({

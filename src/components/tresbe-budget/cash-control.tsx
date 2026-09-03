@@ -150,8 +150,9 @@ export function CashControlCard({
         />
         <Line
           label="+ Flujo Neto Operativo"
+          hint="Solo Banco Popular; el efectivo se rastrea aparte"
           budget={week.net.totals.budget}
-          real={week.net.totals.real}
+          real={week.cash.bankOperatingReal}
         />
         <Line
           label="+ Movimiento Neto Intercompany"
