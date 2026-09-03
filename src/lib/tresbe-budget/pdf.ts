@@ -708,11 +708,23 @@ export async function buildTresbeBudgetPdf(params: {
     ...view.externoRows.map(categoryRow),
   ];
 
-  let y = drawGrid(page, bold, regular, summaryY - 52, view.dates, rows);
+  drawGrid(page, bold, regular, summaryY - 52, view.dates, rows);
 
-  y -= 22;
+  // Control de Caja va en su propia página: la cuadrícula diaria más el
+  // puente de caja y sus recuadros ya no entraban proporcionados en una sola.
+  const cashPage = pdf.addPage([WIDTH, HEIGHT]);
+  drawHeader(
+    cashPage,
+    bold,
+    regular,
+    params.companyName,
+    params.weekStart,
+    params.weekNumber,
+    "PRESUPUESTO TRESBE - CONTROL DE CAJA",
+  );
+  const y = HEIGHT - 140;
   const cashBottom = drawKeyValueBlock(
-    page,
+    cashPage,
     bold,
     regular,
     MARGIN,
@@ -794,7 +806,7 @@ export async function buildTresbeBudgetPdf(params: {
   // resultado operativo, pero sin ellos el saldo no cuadra contra el banco.
   const sideX = MARGIN + 396;
   const sideWidth = WIDTH - MARGIN - sideX;
-  page.drawRectangle({
+  cashPage.drawRectangle({
     x: sideX - 8,
     y: y - 150,
     width: sideWidth + 16,
@@ -804,7 +816,7 @@ export async function buildTresbeBudgetPdf(params: {
     borderWidth: 0.5,
   });
   drawKeyValueBlock(
-    page,
+    cashPage,
     bold,
     regular,
     sideX,
@@ -828,7 +840,7 @@ export async function buildTresbeBudgetPdf(params: {
   );
 
   const interY = y - 78;
-  page.drawText("CONTROL INTERCOMPANY", {
+  cashPage.drawText("CONTROL INTERCOMPANY", {
     x: sideX,
     y: interY,
     size: 8.5,
@@ -836,17 +848,25 @@ export async function buildTresbeBudgetPdf(params: {
     color: NAVY,
   });
   let interRow = interY - 11;
-  page.drawText("LLC", {
+  cashPage.drawText("LLC", {
     x: sideX,
     y: interRow,
     size: 6,
     font: regular,
     color: MUTED,
   });
-  right(page, "Recibido", regular, 6, sideX + sideWidth - 72, interRow, MUTED);
-  right(page, "Saldo", regular, 6, sideX + sideWidth, interRow, MUTED);
+  right(
+    cashPage,
+    "Recibido",
+    regular,
+    6,
+    sideX + sideWidth - 72,
+    interRow,
+    MUTED,
+  );
+  right(cashPage, "Saldo", regular, 6, sideX + sideWidth, interRow, MUTED);
   interRow -= 3;
-  page.drawLine({
+  cashPage.drawLine({
     start: { x: sideX, y: interRow },
     end: { x: sideX + sideWidth, y: interRow },
     thickness: 0.5,
@@ -857,7 +877,7 @@ export async function buildTresbeBudgetPdf(params: {
   );
   if (balances.length === 0) {
     interRow -= 12;
-    page.drawText("Sin movimientos en la semana.", {
+    cashPage.drawText("Sin movimientos en la semana.", {
       x: sideX,
       y: interRow,
       size: 6.5,
@@ -867,7 +887,7 @@ export async function buildTresbeBudgetPdf(params: {
   }
   for (const row of balances) {
     interRow -= 12;
-    page.drawText(fit(row.name, regular, 7, sideWidth - 150), {
+    cashPage.drawText(fit(row.name, regular, 7, sideWidth - 150), {
       x: sideX,
       y: interRow,
       size: 7,
@@ -875,17 +895,17 @@ export async function buildTresbeBudgetPdf(params: {
       color: NAVY,
     });
     right(
-      page,
+      cashPage,
       money(row.received),
       regular,
       7,
       sideX + sideWidth - 72,
       interRow,
     );
-    right(page, money(row.closing), bold, 7, sideX + sideWidth, interRow);
+    right(cashPage, money(row.closing), bold, 7, sideX + sideWidth, interRow);
   }
   if (view.cash.notes) {
-    page.drawText(fit(view.cash.notes, regular, 6.2, sideWidth), {
+    cashPage.drawText(fit(view.cash.notes, regular, 6.2, sideWidth), {
       x: sideX,
       y: y - 144,
       size: 6.2,
