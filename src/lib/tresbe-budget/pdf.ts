@@ -913,7 +913,103 @@ export async function buildTresbeBudgetPdf(params: {
       color: MUTED,
     });
   }
-  void cashBottom;
+
+  // Liquidez combinada (banco + cash), igual que el cuadro de la planilla.
+  const liquidityBottom = drawKeyValueBlock(
+    cashPage,
+    bold,
+    regular,
+    MARGIN,
+    cashBottom - 20,
+    348,
+    "LIQUIDEZ TOTAL AL CIERRE",
+    ["Banco", "Cash", "Total"],
+    [
+      {
+        label: "Saldo Final Teorico",
+        values: [
+          money(view.cash.theoreticalReal),
+          money(view.cash.cashAccount.theoreticalReal),
+          money(
+            view.cash.theoreticalReal + view.cash.cashAccount.theoreticalReal,
+          ),
+        ],
+      },
+      {
+        label: "Saldo Real / Contado",
+        values: [
+          money(view.cash.actual),
+          money(view.cash.cashAccount.actual),
+          view.cash.actual == null || view.cash.cashAccount.actual == null
+            ? "-"
+            : money(view.cash.actual + view.cash.cashAccount.actual),
+        ],
+      },
+      {
+        label: "Diferencia Total",
+        values: [
+          money(view.cash.differenceToReconcile),
+          money(view.cash.cashAccount.differenceToReconcile),
+          view.cash.differenceToReconcile == null ||
+          view.cash.cashAccount.differenceToReconcile == null
+            ? "-"
+            : money(
+                view.cash.differenceToReconcile +
+                  view.cash.cashAccount.differenceToReconcile,
+              ),
+        ],
+        strong: true,
+      },
+    ],
+  );
+
+  // CONTROL DIARIO CASH / CAJA: mismo desglose día por día que trajo la v5,
+  // con el saldo encadenado (el cierre de un día es el inicio del siguiente).
+  const dailyCashColumns = view.dates.map((date) =>
+    dayFormat.format(asDate(date)).replace(".", ""),
+  );
+  const dailyCashRows: Array<{
+    label: string;
+    pick: (day: WeekView["cash"]["cashAccount"]["days"][number]) => number;
+    strong?: boolean;
+  }> = [
+    { label: "Saldo Inicial Cash", pick: (day) => day.opening },
+    { label: "+ Ingresos Operativos Cash", pick: (day) => day.income },
+    { label: "- Egresos Operativos Cash", pick: (day) => day.expense },
+    {
+      label: "+ Mov. Neto Intercompany",
+      pick: (day) => day.intercompanyNet,
+    },
+    {
+      label: "+ Financ. Externo Neto Cash",
+      pick: (day) => day.externoNet,
+    },
+    {
+      label: "+ Transferencias Banco -> Cash",
+      pick: (day) => day.transferIn,
+    },
+    { label: "- Depositos Cash -> Banco", pick: (day) => day.transferOut },
+    {
+      label: "= Saldo Final Cash Teorico",
+      pick: (day) => day.closing,
+      strong: true,
+    },
+  ];
+  drawKeyValueBlock(
+    cashPage,
+    bold,
+    regular,
+    MARGIN,
+    liquidityBottom - 20,
+    WIDTH - MARGIN * 2,
+    "CONTROL DIARIO CASH / CAJA",
+    dailyCashColumns,
+    dailyCashRows.map((row) => ({
+      label: row.label,
+      values: view.cash.cashAccount.days.map((day) => money(row.pick(day))),
+      strong: row.strong,
+    })),
+  );
 
   if (params.horizon && params.horizon.rows.length) {
     drawHorizonPage(
