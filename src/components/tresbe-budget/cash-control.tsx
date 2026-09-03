@@ -65,6 +65,14 @@ export function CashControlCard({
   const [actual, setActual] = useState(
     week.cash.actual == null ? "" : String(week.cash.actual),
   );
+  const [cashOpening, setCashOpening] = useState(
+    String(week.cash.cashAccount.opening ?? 0),
+  );
+  const [cashActual, setCashActual] = useState(
+    week.cash.cashAccount.actual == null
+      ? ""
+      : String(week.cash.cashAccount.actual),
+  );
   const [minimum, setMinimum] = useState(
     week.cash.minimum == null ? "" : String(week.cash.minimum),
   );
@@ -75,9 +83,15 @@ export function CashControlCard({
   const save = () => {
     const openingValue = parseAmount(opening) ?? 0;
     const actualValue = parseAmount(actual);
+    const cashOpeningValue = parseAmount(cashOpening) ?? 0;
+    const cashActualValue = parseAmount(cashActual);
     const minimumValue = parseAmount(minimum);
     if (actual.trim() !== "" && actualValue == null) {
       setMessage("El saldo bancario real no es un número válido.");
+      return;
+    }
+    if (cashActual.trim() !== "" && cashActualValue == null) {
+      setMessage("El cash real contado no es un número válido.");
       return;
     }
     if (minimum.trim() !== "" && minimumValue == null) {
@@ -90,6 +104,8 @@ export function CashControlCard({
         weekStart,
         openingBankBalance: openingValue,
         actualBankBalance: actualValue,
+        openingCashBalance: cashOpeningValue,
+        actualCashBalance: cashActualValue,
         minimumCashTarget: minimumValue,
         notes: notes.trim() || null,
       });
@@ -140,6 +156,27 @@ export function CashControlCard({
             onChange={(event) => setMinimum(event.target.value)}
           />
         </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground text-xs">
+            Saldo Cash Inicial
+          </span>
+          <Input
+            inputMode="decimal"
+            value={cashOpening}
+            onChange={(event) => setCashOpening(event.target.value)}
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground text-xs">
+            Cash Real Contado (cierre)
+          </span>
+          <Input
+            inputMode="decimal"
+            placeholder="Sin cargar"
+            value={cashActual}
+            onChange={(event) => setCashActual(event.target.value)}
+          />
+        </label>
       </div>
 
       <div className="mt-5">
@@ -156,9 +193,21 @@ export function CashControlCard({
         />
         <Line
           label="+ Movimiento Neto Intercompany"
-          hint="Transferencias entre las LLC; no es venta ni gasto"
+          hint="Solo Banco Popular; transferencias entre las LLC"
           budget={week.intercompany.netBudget}
           real={week.intercompany.netReal}
+        />
+        <Line
+          label="+ Financiamiento Externo Neto"
+          hint="Solo Banco Popular; Aporte + Préstamo − Repago de Dueño"
+          budget={week.financingExterno.netBudget}
+          real={week.financingExterno.netReal}
+        />
+        <Line
+          label="+/− Transferencia Interna"
+          hint="Depósito Cash a Banco − Retiro Banco a Cash; no lleva presupuesto"
+          budget={null}
+          real={week.cash.transferNetReal}
         />
         <Line
           label="= Saldo antes de Financiamiento"
@@ -201,6 +250,63 @@ export function CashControlCard({
           real={week.cash.surplusReal}
           strong
         />
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold">Cash / Caja</h3>
+        <p className="text-muted-foreground text-xs">
+          Efectivo físico, aparte del banco. No lleva presupuesto ni línea de
+          crédito.
+        </p>
+        <div className="mt-2">
+          <Line
+            label="Saldo Cash Inicial"
+            budget={null}
+            real={week.cash.cashAccount.opening}
+          />
+          <Line
+            label="+ Ingresos/Egresos Operativos"
+            hint="Solo cuenta Cash / Caja"
+            budget={null}
+            real={week.cash.cashAccount.operatingReal}
+          />
+          <Line
+            label="+ Movimiento Neto Intercompany"
+            hint="Solo cuenta Cash / Caja"
+            budget={null}
+            real={week.cash.cashAccount.intercompanyNetReal}
+          />
+          <Line
+            label="+ Financiamiento Externo Neto"
+            hint="Solo cuenta Cash / Caja"
+            budget={null}
+            real={week.cash.cashAccount.financingExternoNetReal}
+          />
+          <Line
+            label="+/− Transferencia Interna"
+            hint="Retiro Banco a Cash − Depósito Cash a Banco"
+            budget={null}
+            real={week.cash.cashAccount.transferNetReal}
+          />
+          <Line
+            label="= Saldo Final Cash Teórico"
+            budget={null}
+            real={week.cash.cashAccount.theoreticalReal}
+            strong
+          />
+          <Line
+            label="Cash Real Contado"
+            hint="Campo manual"
+            budget={null}
+            real={week.cash.cashAccount.actual}
+          />
+          <Line
+            label="Diferencia a Conciliar"
+            hint="Cash Real Contado − Saldo Final Teórico"
+            budget={null}
+            real={week.cash.cashAccount.differenceToReconcile}
+          />
+        </div>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">

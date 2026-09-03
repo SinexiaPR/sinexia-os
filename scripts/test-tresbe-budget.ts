@@ -37,6 +37,11 @@ const categoryDefinitions: Array<
   ["intercompany_entregado", "intercompany", "intercompany", 86],
   ["linea_credito_utilizacion", "financiamiento", "financiamiento", 90],
   ["linea_credito_repago", "financiamiento", "financiamiento", 91],
+  ["aporte_dueno", "financiamiento_externo", "financiamiento_externo", 95],
+  ["prestamo_dueno", "financiamiento_externo", "financiamiento_externo", 96],
+  ["repago_dueno", "financiamiento_externo", "financiamiento_externo", 97],
+  ["deposito_cash_banco", "transferencia_interna", "transferencia_interna", 98],
+  ["retiro_banco_cash", "transferencia_interna", "transferencia_interna", 99],
 ];
 
 const categories: CategoryLike[] = categoryDefinitions.map(
@@ -50,7 +55,10 @@ const categories: CategoryLike[] = categoryDefinitions.map(
     flow:
       kind === "ingreso" || kind === "egreso"
         ? null
-        : code.endsWith("_repago") || code.endsWith("_entregado")
+        : code.endsWith("_repago") ||
+            code.endsWith("_entregado") ||
+            code === "repago_dueno" ||
+            code === "retiro_banco_cash"
           ? "salida"
           : "entrada",
     sort_order,
@@ -305,6 +313,64 @@ assert.equal(
   bankVsCash.cash.bankOperatingReal,
   200,
   "el puente de caja excluye Cash / Caja: 500 - 300",
+);
+
+// 6c. Financiamiento Externo (dueño) y Transferencia Interna: filtran por
+// cuenta igual que Intercompany; la transferencia mueve banco y efectivo en
+// sentidos opuestos, sin filtro de cuenta propio.
+const externoYTransferencias = buildWeekView({
+  weekStart,
+  categories,
+  movements: [
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "aporte_dueno",
+      amount: 1000,
+      account: "Banco Popular",
+    },
+    {
+      entry_date: weekStart,
+      direction: "egreso",
+      category_id: "repago_dueno",
+      amount: 200,
+      account: "Cash / Caja",
+    },
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "deposito_cash_banco",
+      amount: 150,
+    },
+    {
+      entry_date: weekStart,
+      direction: "egreso",
+      category_id: "retiro_banco_cash",
+      amount: 50,
+    },
+  ],
+  entries: [],
+  cashControl: { opening_bank_balance: 0, actual_bank_balance: null, minimum_cash_target: null, notes: null },
+});
+assert.equal(
+  externoYTransferencias.financingExterno.netReal,
+  800,
+  "aporte 1000 - repago 200, sin filtrar por cuenta en la cuadrícula",
+);
+assert.equal(
+  externoYTransferencias.cash.beforeFinancingReal,
+  1000 + 150 - 50,
+  "banco: solo el aporte (Banco Popular) + depósito - retiro",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.financingExternoNetReal,
+  -200,
+  "cash: solo el repago (Cash / Caja)",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.theoreticalReal,
+  -200 - 150 + 50,
+  "cash: repago - depósito + retiro",
 );
 
 // 7. El forecast pone el payroll tax el jueves, no el miércoles.

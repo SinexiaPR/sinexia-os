@@ -338,6 +338,8 @@ export async function saveCashControl(input: {
   weekStart: string;
   openingBankBalance: number;
   actualBankBalance: number | null;
+  openingCashBalance: number;
+  actualCashBalance: number | null;
   minimumCashTarget: number | null;
   notes: string | null;
 }) {
@@ -347,6 +349,8 @@ export async function saveCashControl(input: {
       weekStart: isoDate,
       openingBankBalance: z.number().finite(),
       actualBankBalance: z.number().finite().nullable(),
+      openingCashBalance: z.number().finite(),
+      actualCashBalance: z.number().finite().nullable(),
       minimumCashTarget: z.number().finite().min(0).nullable(),
       notes: z.string().trim().max(1000).nullable(),
     })
@@ -363,6 +367,8 @@ export async function saveCashControl(input: {
         week_start: weekStartOf(data.weekStart),
         opening_bank_balance: data.openingBankBalance,
         actual_bank_balance: data.actualBankBalance,
+        opening_cash_balance: data.openingCashBalance,
+        actual_cash_balance: data.actualCashBalance,
         minimum_cash_target: data.minimumCashTarget,
         notes: data.notes || null,
         updated_by: profile.id,

@@ -705,6 +705,7 @@ export async function buildTresbeBudgetPdf(params: {
     // caja de la semana.
     ...view.intercompanyRows.map(categoryRow),
     ...view.financingRows.map(categoryRow),
+    ...view.externoRows.map(categoryRow),
   ];
 
   let y = drawGrid(page, bold, regular, summaryY - 52, view.dates, rows);
@@ -737,6 +738,17 @@ export async function buildTresbeBudgetPdf(params: {
           money(view.intercompany.netBudget),
           money(view.intercompany.netReal),
         ],
+      },
+      {
+        label: "+ Financiamiento Externo Neto",
+        values: [
+          money(view.financingExterno.netBudget),
+          money(view.financingExterno.netReal),
+        ],
+      },
+      {
+        label: "+/- Transferencia Interna",
+        values: ["-", money(view.cash.transferNetReal)],
       },
       {
         label: "= Saldo antes de Financiamiento",

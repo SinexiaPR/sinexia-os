@@ -288,6 +288,15 @@ export function WeeklyGrid({
               {week.financingRows.map(renderCategoryRow)}
             </>
           ) : null}
+          {week.externoRows.length ? (
+            <>
+              <SectionRow
+                label="Financiamiento externo — dueño / terceros"
+                span={week.dates.length * 3 + 4}
+              />
+              {week.externoRows.map(renderCategoryRow)}
+            </>
+          ) : null}
         </tbody>
       </table>
       <p className="text-muted-foreground mt-3 text-xs">
@@ -304,7 +313,10 @@ export function FinancingBlock({ week }: { week: WeekView }) {
     week.intercompany.received !== 0 || week.intercompany.delivered !== 0;
   const hasFinancing =
     week.financing.drawdown !== 0 || week.financing.repayment !== 0;
-  if (!hasIntercompany && !hasFinancing) return null;
+  const hasExterno =
+    week.financingExterno.contributed !== 0 ||
+    week.financingExterno.repaid !== 0;
+  if (!hasIntercompany && !hasFinancing && !hasExterno) return null;
   return (
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       {hasIntercompany ? (
@@ -364,6 +376,39 @@ export function FinancingBlock({ week }: { week: WeekView }) {
               <p className="text-muted-foreground text-xs">Saldo de la línea</p>
               <p className="font-medium tabular-nums">
                 {formatCell(week.financing.creditLineClosing)}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {hasExterno ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+          <p className="text-sm font-medium text-violet-900">
+            Financiamiento externo — dueño / terceros
+          </p>
+          <p className="mt-1 text-xs text-violet-900/80">
+            Aportes y préstamos de fuera del negocio: tampoco son venta ni
+            gasto, pero sí mueven la caja antes de tocar la línea de crédito.
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+            <div>
+              <p className="text-muted-foreground text-xs">
+                Aporte + préstamo
+              </p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.financingExterno.contributed)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Repago</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.financingExterno.repaid)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Neto</p>
+              <p className="font-medium tabular-nums">
+                {formatCell(week.financingExterno.netReal)}
               </p>
             </div>
           </div>
