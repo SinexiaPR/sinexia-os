@@ -14,7 +14,12 @@ import {
 } from "@/lib/tresbe-budget/calculations";
 
 export type BudgetCategoryKind =
-  "ingreso" | "egreso" | "financiamiento" | "intercompany";
+  | "ingreso"
+  | "egreso"
+  | "financiamiento"
+  | "intercompany"
+  | "financiamiento_externo"
+  | "transferencia_interna";
 export type BudgetTotalGroup =
   | "ingresos"
   | "proveedores_compras"
@@ -22,7 +27,9 @@ export type BudgetTotalGroup =
   | "payroll_taxes"
   | "debitos_bancarios"
   | "intercompany"
-  | "financiamiento";
+  | "financiamiento"
+  | "financiamiento_externo"
+  | "transferencia_interna";
 export type BudgetOrigin = "calculado" | "manual";
 
 export type BudgetCategory = {
@@ -73,6 +80,8 @@ export type BudgetCashControl = {
   week_start: IsoDate;
   opening_bank_balance: number;
   actual_bank_balance: number | null;
+  opening_cash_balance: number;
+  actual_cash_balance: number | null;
   minimum_cash_target: number | null;
   notes: string | null;
 };

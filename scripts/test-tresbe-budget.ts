@@ -37,6 +37,11 @@ const categoryDefinitions: Array<
   ["intercompany_entregado", "intercompany", "intercompany", 86],
   ["linea_credito_utilizacion", "financiamiento", "financiamiento", 90],
   ["linea_credito_repago", "financiamiento", "financiamiento", 91],
+  ["aporte_dueno", "financiamiento_externo", "financiamiento_externo", 95],
+  ["prestamo_dueno", "financiamiento_externo", "financiamiento_externo", 96],
+  ["repago_dueno", "financiamiento_externo", "financiamiento_externo", 97],
+  ["deposito_cash_banco", "transferencia_interna", "transferencia_interna", 98],
+  ["retiro_banco_cash", "transferencia_interna", "transferencia_interna", 99],
 ];
 
 const categories: CategoryLike[] = categoryDefinitions.map(
@@ -50,7 +55,10 @@ const categories: CategoryLike[] = categoryDefinitions.map(
     flow:
       kind === "ingreso" || kind === "egreso"
         ? null
-        : code.endsWith("_repago") || code.endsWith("_entregado")
+        : code.endsWith("_repago") ||
+            code.endsWith("_entregado") ||
+            code === "repago_dueno" ||
+            code === "retiro_banco_cash"
           ? "salida"
           : "entrada",
     sort_order,
@@ -97,6 +105,8 @@ for (const match of movementsBlock.matchAll(movementPattern)) {
     category_id: code,
     amount: Number(match[4]),
     counterparty_id: counterpartyId,
+    // La semilla v3 carga todo bajo la misma cuenta bancaria.
+    account: "Banco Popular",
   });
 }
 assert.equal(movements.length, 63, "la semilla debe traer 63 movimientos");
@@ -195,11 +205,19 @@ assert.equal(
   "saldo final de la línea = inicial + utilización - repago",
 );
 
-// 5. El puente de caja de v3, escalón por escalón.
+// 5. El puente de caja de v3, escalón por escalón. "+ Flujo Neto Operativo"
+// del puente solo mira Banco Popular (SUMAR.SI.CONJUNTO de la planilla);
+// en esta semilla toda la cuenta es Banco Popular, así que coincide con el
+// Flujo Neto Operativo de la cuadrícula completa.
+assert.equal(
+  view.cash.bankOperatingReal,
+  view.net.totals.real,
+  "sin movimientos en efectivo, el flujo de banco iguala al operativo total",
+);
 assert.equal(
   view.cash.beforeFinancingReal,
-  round(view.net.totals.real + view.intercompany.netReal),
-  "el saldo antes de financiamiento suma lo operativo y lo intercompany",
+  round(view.cash.bankOperatingReal + view.intercompany.netReal),
+  "el saldo antes de financiamiento suma lo operativo de banco y lo intercompany",
 );
 assert.equal(
   view.cash.theoreticalReal,
@@ -254,6 +272,173 @@ assert.equal(withBudget.income.totals.variance, 20, "ingreso por encima: +20");
 assert.equal(withBudget.expenses.totals.variance, 20, "gasto por debajo: +20");
 assert.equal(withBudget.net.totals.variance, 40);
 assert.equal(withBudget.manualCells, 1, "las celdas manuales se cuentan");
+
+// 6b. Cash Disponible en cuenta "Cash / Caja" no cuenta para el puente de
+// caja (Flujo Neto Operativo = SUMAR.SI.CONJUNTO filtrado a Banco Popular).
+const bankVsCash = buildWeekView({
+  weekStart,
+  categories,
+  movements: [
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "credit_card_disponible",
+      amount: 500,
+      account: "Banco Popular",
+    },
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "cash_disponible",
+      amount: 200,
+      account: "Cash / Caja",
+    },
+    {
+      entry_date: weekStart,
+      direction: "egreso",
+      category_id: "proveedores",
+      amount: 300,
+      account: "Banco Popular",
+    },
+  ],
+  entries: [],
+  cashControl: null,
+});
+assert.equal(
+  bankVsCash.net.totals.real,
+  400,
+  "la cuadrícula suma banco y efectivo: 500 + 200 - 300",
+);
+assert.equal(
+  bankVsCash.cash.bankOperatingReal,
+  200,
+  "el puente de caja excluye Cash / Caja: 500 - 300",
+);
+assert.equal(
+  bankVsCash.cash.cashAccount.incomeReal,
+  200,
+  "+ Ingresos Operativos Cash: el título exacto de CONTROL DIARIO CASH / CAJA",
+);
+assert.equal(
+  bankVsCash.cash.cashAccount.expenseReal,
+  0,
+  "- Egresos Operativos Cash: sin egresos en efectivo en este caso",
+);
+
+// 6c. Financiamiento Externo (dueño) y Transferencia Interna: filtran por
+// cuenta igual que Intercompany; la transferencia mueve banco y efectivo en
+// sentidos opuestos, sin filtro de cuenta propio.
+const externoYTransferencias = buildWeekView({
+  weekStart,
+  categories,
+  movements: [
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "aporte_dueno",
+      amount: 1000,
+      account: "Banco Popular",
+    },
+    {
+      entry_date: weekStart,
+      direction: "egreso",
+      category_id: "repago_dueno",
+      amount: 200,
+      account: "Cash / Caja",
+    },
+    {
+      entry_date: weekStart,
+      direction: "ingreso",
+      category_id: "deposito_cash_banco",
+      amount: 150,
+    },
+    {
+      entry_date: weekStart,
+      direction: "egreso",
+      category_id: "retiro_banco_cash",
+      amount: 50,
+    },
+  ],
+  entries: [],
+  cashControl: { opening_bank_balance: 0, actual_bank_balance: null, minimum_cash_target: null, notes: null },
+});
+assert.equal(
+  externoYTransferencias.financingExterno.netReal,
+  800,
+  "aporte 1000 - repago 200, sin filtrar por cuenta en la cuadrícula",
+);
+assert.equal(
+  externoYTransferencias.cash.beforeFinancingReal,
+  1000 + 150 - 50,
+  "banco: solo el aporte (Banco Popular) + depósito - retiro",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.financingExternoNetReal,
+  -200,
+  "cash: solo el repago (Cash / Caja)",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.transferBankToCash,
+  50,
+  "+ Transferencias Banco → Cash: el retiro, tal como lo titula la planilla",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.transferCashToBank,
+  150,
+  "- Depósitos Cash → Banco: el depósito, tal como lo titula la planilla",
+);
+assert.equal(
+  externoYTransferencias.cash.cashAccount.theoreticalReal,
+  -200 - 150 + 50,
+  "cash: repago - depósito + retiro",
+);
+
+// 6d. CONTROL DIARIO CASH / CAJA: el saldo final de un día es el inicial del
+// siguiente -- mismos importes que trajo la v5 real de la semana 1.
+const dailyIncomes = [234.37, 114.65, 146.51, 173.53, 6.09, 91.14, 193.95];
+const expectedClosings = [
+  234.37, 349.02, 495.53, 669.06, 675.15, 766.29, 960.24,
+];
+const dailyCashView = buildWeekView({
+  weekStart,
+  categories,
+  movements: dailyIncomes.map((amount, index) => ({
+    entry_date: addDays(weekStart, index),
+    direction: "ingreso",
+    category_id: "cash_disponible",
+    amount,
+    account: "Cash / Caja",
+  })),
+  entries: [],
+  cashControl: {
+    opening_bank_balance: 0,
+    actual_bank_balance: null,
+    opening_cash_balance: 0,
+    actual_cash_balance: null,
+    minimum_cash_target: null,
+    notes: null,
+  },
+});
+assert.equal(dailyCashView.cash.cashAccount.days.length, 7);
+dailyCashView.cash.cashAccount.days.forEach((day, index) => {
+  assert.equal(
+    day.closing,
+    expectedClosings[index],
+    `día ${index + 1}: saldo final cash teórico`,
+  );
+  if (index > 0) {
+    assert.equal(
+      day.opening,
+      dailyCashView.cash.cashAccount.days[index - 1].closing,
+      `día ${index + 1}: el saldo inicial es el final del día anterior`,
+    );
+  }
+});
+assert.equal(
+  dailyCashView.cash.cashAccount.days[6].closing,
+  dailyCashView.cash.cashAccount.theoreticalReal,
+  "el último día del encadenado coincide con el saldo teórico semanal",
+);
 
 // 7. El forecast pone el payroll tax el jueves, no el miércoles.
 const forecast = buildForecastForWeek({

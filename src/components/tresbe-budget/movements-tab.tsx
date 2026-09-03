@@ -383,7 +383,9 @@ export function MovementsTab({
                               className={cn(
                                 "rounded-full border px-2 py-0.5 text-xs",
                                 category?.kind === "financiamiento" ||
-                                  category?.kind === "intercompany"
+                                  category?.kind === "intercompany" ||
+                                  category?.kind === "financiamiento_externo" ||
+                                  category?.kind === "transferencia_interna"
                                   ? "border-amber-300 bg-amber-50 text-amber-900"
                                   : "border-border text-muted-foreground",
                               )}
