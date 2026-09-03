@@ -201,8 +201,8 @@ assert.equal(view.financing.netReal, round(drawdown - repayment));
 assert.equal(view.financing.creditLineOpening, -23015.78);
 assert.equal(
   view.financing.creditLineClosing,
-  round(-23015.78 + drawdown - repayment),
-  "saldo final de la línea = inicial + utilización - repago",
+  round(-23015.78 - (drawdown - repayment)),
+  "saldo final de la línea = inicial + repago - utilización (es un pasivo)",
 );
 
 // 5. El puente de caja de v3, escalón por escalón. "+ Flujo Neto Operativo"

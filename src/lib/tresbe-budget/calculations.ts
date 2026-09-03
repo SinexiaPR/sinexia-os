@@ -602,7 +602,10 @@ export function buildWeekView({
       netReal: financingNetReal,
       netBudget: financingNetBudget,
       creditLineOpening,
-      creditLineClosing: round(creditLineOpening + financingNetReal),
+      // El saldo de la línea es un pasivo: utilizar aumenta la deuda (más
+      // negativo) y repagar la reduce -- signo opuesto al de financingNetReal,
+      // que mide el impacto en el banco (utilizar suma, repagar resta).
+      creditLineClosing: round(creditLineOpening - financingNetReal),
       // Compatibilidad con la vista previa a intercompany.
       totalInflow: drawdown,
       totalOutflow: repayment,
