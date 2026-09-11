@@ -8,6 +8,7 @@ import {
 
 import type { HorizonRow, WeekView } from "@/lib/tresbe-budget/calculations";
 import { addDays, type IsoDate } from "@/lib/tresbe-budget/dates";
+import type { BudgetCreditLineStatus } from "@/services/tresbe-budget";
 
 // Mismo lenguaje visual que el PDF de nómina de Tresbe.
 const WIDTH = 792;
@@ -585,6 +586,7 @@ export async function buildTresbeBudgetPdf(params: {
   weekNumber: number | null;
   view: WeekView;
   horizon?: { weeks: number; rows: HorizonRow[] };
+  creditLineStatus?: BudgetCreditLineStatus | null;
 }): Promise<Uint8Array> {
   const { view } = params;
   const pdf = await PDFDocument.create();
@@ -963,6 +965,42 @@ export async function buildTresbeBudgetPdf(params: {
     ],
   );
 
+  // Saldo real de caja: agregado sobre "Saldo Final Teorico", no lo reemplaza.
+  // La cuenta corriente de Tresbe barre a $0.00 contra la linea de reserva
+  // mientras esa linea tiene deuda, asi que mientras estado sea "Depende de
+  // linea de credito" el saldo real disponible es el saldo (negativo) de la
+  // linea; una vez la deuda llega a $0 la vista devuelve null y acá se usa el
+  // Saldo Final Banco Teorico, que en ese escenario ya refleja saldo real.
+  const creditLineStatusBottom = params.creditLineStatus
+    ? drawKeyValueBlock(
+        cashPage,
+        bold,
+        regular,
+        MARGIN,
+        liquidityBottom - 20,
+        348,
+        "SALDO REAL DISPONIBLE (LINEA DE RESERVA)",
+        ["Semana"],
+        [
+          {
+            label: "Saldo Real Disponible",
+            values: [
+              money(
+                params.creditLineStatus.saldo_real_disponible ??
+                  view.cash.theoreticalReal,
+              ),
+            ],
+            strong: true,
+          },
+          { label: "Estado", values: [params.creditLineStatus.estado] },
+          {
+            label: "Disponible restante en linea",
+            values: [money(params.creditLineStatus.disponible_restante_en_linea)],
+          },
+        ],
+      )
+    : liquidityBottom;
+
   // CONTROL DIARIO CASH / CAJA: mismo desglose día por día que trajo la v5,
   // con el saldo encadenado (el cierre de un día es el inicio del siguiente).
   const dailyCashColumns = view.dates.map((date) =>
@@ -1000,7 +1038,7 @@ export async function buildTresbeBudgetPdf(params: {
     bold,
     regular,
     MARGIN,
-    liquidityBottom - 20,
+    creditLineStatusBottom - 20,
     WIDTH - MARGIN * 2,
     "CONTROL DIARIO CASH / CAJA",
     dailyCashColumns,

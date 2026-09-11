@@ -422,4 +422,38 @@ export async function getBudgetHorizonSummary(
   };
 }
 
+/** Fila de la vista tresbe_budget_credit_line_status para una semana puntual. */
+export type BudgetCreditLineStatus = {
+  company_id: string;
+  week_start: IsoDate;
+  week_end: IsoDate;
+  utilizacion: number;
+  repago: number;
+  saldo_linea_credito: number;
+  credit_line_limit: number;
+  disponible_restante_en_linea: number;
+  estado: string;
+  saldo_real_disponible: number | null;
+};
+
+/**
+ * Saldo real de caja (linea de reserva) al cierre de una semana. La vista ya
+ * hereda el mismo RLS admin-por-compania que las tablas base (security_invoker),
+ * asi que no hace falta ningun chequeo de permisos adicional aqui.
+ */
+export async function getBudgetCreditLineStatus(
+  companyId: string,
+  weekStart: IsoDate,
+) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tresbe_budget_credit_line_status")
+    .select("*")
+    .eq("company_id", companyId)
+    .eq("week_start", weekStart)
+    .maybeSingle();
+  if (error) throw error;
+  return data as BudgetCreditLineStatus | null;
+}
+
 export { weekStartFromNumber };
