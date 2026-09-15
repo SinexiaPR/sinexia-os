@@ -26,6 +26,7 @@ export type BudgetTotalGroup =
   | "nomina"
   | "payroll_taxes"
   | "debitos_bancarios"
+  | "ajustes"
   | "intercompany"
   | "financiamiento"
   | "financiamiento_externo"

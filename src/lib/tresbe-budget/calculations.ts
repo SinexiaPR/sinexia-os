@@ -32,6 +32,7 @@ export type CategoryLike = {
     | "nomina"
     | "payroll_taxes"
     | "debitos_bancarios"
+    | "ajustes"
     | "intercompany"
     | "financiamiento"
     | "financiamiento_externo"
@@ -420,11 +421,31 @@ export function buildWeekView({
       operatingRows.filter((row) => row.category.total_group === group),
     ),
   );
+  // Un reverso del mismo dia (total_group "ajustes", p.ej. un cheque que
+  // rebota y se revierte) no es un gasto nuevo: revierte un egreso que ya
+  // esta contado dentro de su categoria (Nomina, Debitos Bancarios, etc).
+  // Se resta de Total Egresos en vez de sumarse como si fuera ingreso --
+  // de lo contrario queda contado dos veces (una en su categoria, otra al
+  // colarse en Total Egresos por no ser total_group "ingresos").
+  const reversalRows = operatingRows.filter(
+    (row) => row.category.total_group === "ajustes",
+  );
+  const negatedReversalRows: CategoryRow[] = reversalRows.map((row) => ({
+    ...row,
+    cells: row.cells.map((cell) => ({
+      ...cell,
+      budget: -cell.budget,
+      real: -cell.real,
+    })),
+  }));
   const expenses = groupRow(
     "egresos",
     "Total Egresos",
     "lower_real",
-    operatingRows.filter((row) => row.category.total_group !== "ingresos"),
+    [
+      ...operatingRows.filter((row) => row.category.kind === "egreso"),
+      ...negatedReversalRows,
+    ],
   );
 
   const netCells = dates.map((date, index) => {
