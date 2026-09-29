@@ -39,7 +39,6 @@ export async function GET(
     categories: workspace.categories,
     movements: workspace.movements,
     closedDays: workspace.closedDays,
-    cashControl: workspace.cashControl,
   });
 
   const bytes = await buildTresbeBudgetPdf({
