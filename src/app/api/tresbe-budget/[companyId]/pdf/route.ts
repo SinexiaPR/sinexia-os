@@ -38,6 +38,7 @@ export async function GET(
     dates: workspace.weekDates,
     categories: workspace.categories,
     movements: workspace.movements,
+    closedDays: workspace.closedDays,
     cashControl: workspace.cashControl,
   });
 
@@ -49,6 +50,7 @@ export async function GET(
     horizon: { weeks: horizon.weeks, rows: horizon.rows },
     creditLineStatus,
     warnings,
+    closedDays: workspace.closedDays,
   });
   return new NextResponse(Buffer.from(bytes), {
     headers: {

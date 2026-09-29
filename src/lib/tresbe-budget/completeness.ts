@@ -6,9 +6,14 @@
 // explícitos para lo que falta, en vez de dejarlo pasar en silencio.
 
 import type { CashControlLike, CategoryLike } from "./calculations";
-import { formatDayLabel, type IsoDate } from "./dates";
+import { formatDayLabel, isoWeekday, type IsoDate } from "./dates";
 
 export type MovementForCompleteness = {
+  entry_date: IsoDate;
+  category_id: string;
+};
+
+export type ClosedDayForCompleteness = {
   entry_date: IsoDate;
   category_id: string;
 };
@@ -16,6 +21,14 @@ export type MovementForCompleteness = {
 // Categorías de ingreso diario que deben tener un movimiento (aunque sea
 // $0 explícito) los 7 días de la semana para que el reporte no tenga huecos.
 const DAILY_INCOME_CODES = ["cash_disponible", "credit_card_disponible"];
+
+// Credit Card Disponible se carga por fecha de DEPOSITO bancario (EFT
+// Banktech), no por fecha de venta. El banco no procesa depositos en fin de
+// semana, asi que sabado y domingo estructuralmente nunca tienen un deposito
+// propio ese mismo dia -- el dinero de esos dos dias entra recien el lunes
+// siguiente (o mas tarde), agrupado con otros depositos. No es un hueco
+// real, es el diseño del proceso; se excluye del chequeo dia por dia.
+const WEEKEND_SETTLEMENT_EXEMPT_CODES = new Set(["credit_card_disponible"]);
 
 const CASH_CONTROL_FIELDS: Array<{
   field: keyof NonNullable<CashControlLike>;
@@ -30,15 +43,20 @@ export function checkWeekCompleteness({
   dates,
   categories,
   movements,
+  closedDays = [],
   cashControl,
 }: {
   dates: IsoDate[];
   categories: CategoryLike[];
   movements: MovementForCompleteness[];
+  closedDays?: ClosedDayForCompleteness[];
   cashControl: CashControlLike;
 }): string[] {
   const warnings: string[] = [];
   const categoryByCode = new Map(categories.map((item) => [item.code, item]));
+  const closedKeys = new Set(
+    closedDays.map((row) => `${row.category_id}|${row.entry_date}`),
+  );
 
   for (const code of DAILY_INCOME_CODES) {
     const category = categoryByCode.get(code);
@@ -48,10 +66,14 @@ export function checkWeekCompleteness({
         .filter((movement) => movement.category_id === category.id)
         .map((movement) => movement.entry_date),
     );
+    const weekendExempt = WEEKEND_SETTLEMENT_EXEMPT_CODES.has(code);
     for (const date of dates) {
-      if (!datesWithMovement.has(date)) {
-        warnings.push(`Falta: ${category.name} del ${formatDayLabel(date)}`);
+      if (datesWithMovement.has(date)) continue;
+      if (closedKeys.has(`${category.id}|${date}`)) continue;
+      if (weekendExempt && (isoWeekday(date) === 6 || isoWeekday(date) === 7)) {
+        continue;
       }
+      warnings.push(`Falta: ${category.name} del ${formatDayLabel(date)}`);
     }
   }
 
