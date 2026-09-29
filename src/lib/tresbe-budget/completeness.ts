@@ -5,7 +5,7 @@
 // módulo separa "dato ausente" de "dato en cero real" y devuelve avisos
 // explícitos para lo que falta, en vez de dejarlo pasar en silencio.
 
-import type { CashControlLike, CategoryLike } from "./calculations";
+import type { CategoryLike } from "./calculations";
 import { formatDayLabel, isoWeekday, type IsoDate } from "./dates";
 
 export type MovementForCompleteness = {
@@ -30,27 +30,22 @@ const DAILY_INCOME_CODES = ["cash_disponible", "credit_card_disponible"];
 // real, es el diseño del proceso; se excluye del chequeo dia por dia.
 const WEEKEND_SETTLEMENT_EXEMPT_CODES = new Set(["credit_card_disponible"]);
 
-const CASH_CONTROL_FIELDS: Array<{
-  field: keyof NonNullable<CashControlLike>;
-  label: string;
-}> = [
-  { field: "actual_bank_balance", label: "Saldo Banco Real" },
-  { field: "actual_cash_balance", label: "Saldo Cash Real" },
-  { field: "minimum_cash_target", label: "Mínimo de Caja objetivo" },
-];
+// Maria confirmó: no reconcilia el banco a mano semana a semana (el barrido
+// automático a la línea de reserva deja el banco en ~$0 de por sí), no tiene
+// una caja mínima objetivo definida, y TRESBE nunca paga en efectivo -- así
+// que tresbe_budget_cash_control se deja completar a discreción, sin exigirlo
+// ni marcarlo como dato faltante.
 
 export function checkWeekCompleteness({
   dates,
   categories,
   movements,
   closedDays = [],
-  cashControl,
 }: {
   dates: IsoDate[];
   categories: CategoryLike[];
   movements: MovementForCompleteness[];
   closedDays?: ClosedDayForCompleteness[];
-  cashControl: CashControlLike;
 }): string[] {
   const warnings: string[] = [];
   const categoryByCode = new Map(categories.map((item) => [item.code, item]));
@@ -74,18 +69,6 @@ export function checkWeekCompleteness({
         continue;
       }
       warnings.push(`Falta: ${category.name} del ${formatDayLabel(date)}`);
-    }
-  }
-
-  if (!cashControl) {
-    warnings.push(
-      "Falta: fila de Control de Caja (tresbe_budget_cash_control) para esta semana",
-    );
-  } else {
-    for (const { field, label } of CASH_CONTROL_FIELDS) {
-      if (cashControl[field] == null) {
-        warnings.push(`Falta: ${label} en Control de Caja de esta semana`);
-      }
     }
   }
 
