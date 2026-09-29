@@ -326,6 +326,49 @@ function drawGrid(
   return y;
 }
 
+function drawWarningsBlock(
+  page: PDFPage,
+  bold: PDFFont,
+  regular: PDFFont,
+  yStart: number,
+  warnings: string[],
+): number {
+  const lineHeight = 10;
+  const shown = warnings.slice(0, 8);
+  const overflow = warnings.length - shown.length;
+  const lines = overflow > 0 ? [...shown, `... y ${overflow} más`] : shown;
+  const width = WIDTH - MARGIN * 2;
+  const height = 16 + lines.length * lineHeight + 6;
+  page.drawRectangle({
+    x: MARGIN,
+    y: yStart - height,
+    width,
+    height,
+    color: rgb(0.99, 0.93, 0.9),
+    borderColor: RED,
+    borderWidth: 0.75,
+  });
+  page.drawText("ATENCION -- FALTAN DATOS PARA ESTA SEMANA", {
+    x: MARGIN + 6,
+    y: yStart - 12,
+    size: 7.5,
+    font: bold,
+    color: RED,
+  });
+  let y = yStart - 12 - lineHeight;
+  for (const line of lines) {
+    page.drawText(fit(`- ${line}`, regular, 6.5, width - 12), {
+      x: MARGIN + 6,
+      y,
+      size: 6.5,
+      font: regular,
+      color: NAVY,
+    });
+    y -= lineHeight;
+  }
+  return yStart - height;
+}
+
 function drawKeyValueBlock(
   page: PDFPage,
   bold: PDFFont,
@@ -587,8 +630,10 @@ export async function buildTresbeBudgetPdf(params: {
   view: WeekView;
   horizon?: { weeks: number; rows: HorizonRow[] };
   creditLineStatus?: BudgetCreditLineStatus | null;
+  warnings?: string[];
 }): Promise<Uint8Array> {
   const { view } = params;
+  const warnings = params.warnings ?? [];
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -607,9 +652,12 @@ export async function buildTresbeBudgetPdf(params: {
     "PRESUPUESTO SEMANAL TRESBE",
   );
 
+  const resumenY = warnings.length
+    ? drawWarningsBlock(page, bold, regular, HEIGHT - 108, warnings) - 18
+    : HEIGHT - 126;
   page.drawText("RESUMEN DE LA SEMANA", {
     x: MARGIN,
-    y: HEIGHT - 126,
+    y: resumenY,
     size: 10,
     font: bold,
     color: NAVY,
@@ -624,7 +672,7 @@ export async function buildTresbeBudgetPdf(params: {
     ["Linea de credito", money(view.financing.netReal), "normal"],
     ["SALDO FINAL TEORICO", money(view.cash.theoreticalReal), "total"],
   ];
-  const summaryY = HEIGHT - 142;
+  const summaryY = resumenY - 16;
   summary.forEach(([label, value, kind], index) => {
     const cellWidth = (WIDTH - MARGIN * 2) / summary.length;
     const x = MARGIN + index * cellWidth;
