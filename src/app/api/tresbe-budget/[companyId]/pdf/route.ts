@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/session";
+import { checkWeekCompleteness } from "@/lib/tresbe-budget/completeness";
 import { buildTresbeBudgetPdf } from "@/lib/tresbe-budget/pdf";
 import {
   getBudgetCreditLineStatus,
@@ -33,6 +34,12 @@ export async function GET(
     company.id,
     workspace.weekStart,
   );
+  const warnings = checkWeekCompleteness({
+    dates: workspace.weekDates,
+    categories: workspace.categories,
+    movements: workspace.movements,
+    cashControl: workspace.cashControl,
+  });
 
   const bytes = await buildTresbeBudgetPdf({
     companyName: company.name,
@@ -41,6 +48,7 @@ export async function GET(
     view: workspace.week,
     horizon: { weeks: horizon.weeks, rows: horizon.rows },
     creditLineStatus,
+    warnings,
   });
   return new NextResponse(Buffer.from(bytes), {
     headers: {
