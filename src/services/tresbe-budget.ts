@@ -286,10 +286,18 @@ export async function getBudgetAssumptions(
  * Datos crudos de una semana. El forecast necesita mirar los días previos al
  * lunes porque el depósito de tarjeta se acredita con retraso.
  */
+export type BudgetClosedDay = {
+  id: string;
+  company_id: string;
+  entry_date: IsoDate;
+  category_id: string;
+  note: string | null;
+};
+
 export async function getBudgetWeekData(companyId: string, weekStart: IsoDate) {
   const supabase = await createClient();
   const weekEnd = addDays(weekStart, 6);
-  const [movements, entries, cashControl] = await Promise.all([
+  const [movements, entries, cashControl, closedDays] = await Promise.all([
     supabase
       .from("tresbe_budget_movements")
       .select("*")
@@ -310,14 +318,21 @@ export async function getBudgetWeekData(companyId: string, weekStart: IsoDate) {
       .eq("company_id", companyId)
       .eq("week_start", weekStart)
       .maybeSingle(),
+    supabase
+      .from("tresbe_budget_closed_days")
+      .select("*")
+      .eq("company_id", companyId)
+      .gte("entry_date", weekStart)
+      .lte("entry_date", weekEnd),
   ]);
-  for (const result of [movements, entries, cashControl]) {
+  for (const result of [movements, entries, cashControl, closedDays]) {
     if (result.error) throw result.error;
   }
   return {
     movements: (movements.data ?? []) as BudgetMovement[],
     entries: (entries.data ?? []) as BudgetEntry[],
     cashControl: (cashControl.data ?? null) as BudgetCashControl | null,
+    closedDays: (closedDays.data ?? []) as BudgetClosedDay[],
   };
 }
 
@@ -335,15 +350,16 @@ export async function getBudgetWeekWorkspace(
       ? requestedWeek
       : todayInPuertoRico(),
   );
-  const [{ movements, entries, cashControl }, openings] = await Promise.all([
-    getBudgetWeekData(companyId, weekStart),
-    getOpeningBalances(
-      companyId,
-      weekStart,
-      assumptions?.settings ?? null,
-      counterparties,
-    ),
-  ]);
+  const [{ movements, entries, cashControl, closedDays }, openings] =
+    await Promise.all([
+      getBudgetWeekData(companyId, weekStart),
+      getOpeningBalances(
+        companyId,
+        weekStart,
+        assumptions?.settings ?? null,
+        counterparties,
+      ),
+    ]);
   const week = buildWeekView({
     weekStart,
     categories,
@@ -360,6 +376,7 @@ export async function getBudgetWeekWorkspace(
       ? weekNumber(assumptions.settings.week_one_start, weekStart)
       : null,
     categories,
+    closedDays,
     counterparties,
     assumptions,
     movements,

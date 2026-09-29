@@ -699,6 +699,13 @@ export type HorizonRow = {
   financingNetReal: number;
   hasBudget: boolean;
   hasReal: boolean;
+  // Tendencia sobre Ingresos Real, calculada solo entre semanas con datos
+  // reales cargados (hasReal) -- separa ruido semana a semana de la
+  // tendencia de fondo, ya que el "Ppto" queda fijo desde que se configuró
+  // y por si solo no distingue una caída real de un desvio contra un
+  // supuesto viejo.
+  incomeRealWowPct: number | null;
+  incomeReal4WeekAvg: number | null;
 };
 
 export function buildHorizonSummary({
@@ -756,7 +763,36 @@ export function buildHorizonSummary({
       financingNetReal: view.financing.netReal,
       hasBudget: weekEntries.length > 0,
       hasReal: weekMovements.length > 0,
+      incomeRealWowPct: null,
+      incomeReal4WeekAvg: null,
     });
   }
+
+  // Segunda pasada: variación % y promedio móvil, solo entre semanas con
+  // datos reales -- una semana sin cargar todavía (Real = 0 por ausencia de
+  // datos) no debe leerse como una caída del 100%.
+  rows.forEach((row, index) => {
+    if (!row.hasReal) return;
+    let previousIncome: number | null = null;
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      if (rows[cursor].hasReal) {
+        previousIncome = rows[cursor].income.real;
+        break;
+      }
+    }
+    row.incomeRealWowPct =
+      previousIncome != null && previousIncome !== 0
+        ? round(((row.income.real - previousIncome) / Math.abs(previousIncome)) * 100)
+        : null;
+
+    const window: number[] = [];
+    for (let cursor = index; cursor >= 0 && window.length < 4; cursor -= 1) {
+      if (rows[cursor].hasReal) window.push(rows[cursor].income.real);
+    }
+    row.incomeReal4WeekAvg = window.length
+      ? round(window.reduce((sum, value) => sum + value, 0) / window.length)
+      : null;
+  });
+
   return rows;
 }

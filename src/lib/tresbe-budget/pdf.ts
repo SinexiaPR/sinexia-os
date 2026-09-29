@@ -153,6 +153,10 @@ type GridRow = {
   real: number[];
   totals: { budget: number; real: number; variance: number };
   emphasis?: "subtotal" | "total";
+  // Fechas explícitamente marcadas "cerrado, sin operaciones" para esta
+  // categoría (tresbe_budget_closed_days) -- se muestran distinto a un $0
+  // real para no confundir "no operamos" con "ventas flojas".
+  closedDates?: Set<IsoDate>;
 };
 
 const CATEGORY_WIDTH = 96;
@@ -275,13 +279,16 @@ function drawGrid(
         baseline,
         MUTED,
       );
+      const closed =
+        row.real[day] === 0 && row.closedDates?.has(dates[day]) === true;
       right(
         page,
-        num(row.real[day]),
+        closed ? "Cerrado" : num(row.real[day]),
         font,
-        size,
+        closed ? 5.2 : size,
         cellX + DAY_CELL * 2 - 3,
         baseline,
+        closed ? MUTED : NAVY,
       );
       cellX += DAY_CELL * 2;
     }
@@ -468,16 +475,18 @@ function drawHorizonPage(
   );
 
   const columns: Array<{ label: string; width: number }> = [
-    { label: "Semana", width: 116 },
-    { label: "Ing. Ppto", width: 72 },
-    { label: "Ing. Real", width: 72 },
-    { label: "Desvio", width: 66 },
-    { label: "Egr. Ppto", width: 72 },
-    { label: "Egr. Real", width: 72 },
-    { label: "Desvio", width: 66 },
-    { label: "Flujo Ppto", width: 72 },
-    { label: "Flujo Real", width: 72 },
-    { label: "Desvio", width: 60 },
+    { label: "Semana", width: 100 },
+    { label: "Ing. Ppto", width: 62 },
+    { label: "Ing. Real", width: 62 },
+    { label: "Desvio", width: 57 },
+    { label: "Egr. Ppto", width: 62 },
+    { label: "Egr. Real", width: 62 },
+    { label: "Desvio", width: 57 },
+    { label: "Flujo Ppto", width: 62 },
+    { label: "Flujo Real", width: 62 },
+    { label: "Desvio", width: 52 },
+    { label: "Var % Ing", width: 40 },
+    { label: "Prom 4Sem", width: 40 },
   ];
   const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
   let y = HEIGHT - 156;
@@ -553,6 +562,25 @@ function drawHorizonPage(
       {
         text: num(row.net.variance),
         color: row.net.variance < -0.004 ? RED : GREEN,
+      },
+      {
+        text:
+          row.incomeRealWowPct == null
+            ? "-"
+            : `${row.incomeRealWowPct > 0 ? "+" : ""}${row.incomeRealWowPct.toFixed(1)}%`,
+        color:
+          row.incomeRealWowPct == null
+            ? MUTED
+            : row.incomeRealWowPct < -0.05
+              ? RED
+              : row.incomeRealWowPct > 0.05
+                ? GREEN
+                : MUTED,
+      },
+      {
+        text:
+          row.incomeReal4WeekAvg == null ? "-" : num(row.incomeReal4WeekAvg),
+        color: MUTED,
       },
     ];
     let cellX = MARGIN + columns[0].width;
@@ -631,9 +659,16 @@ export async function buildTresbeBudgetPdf(params: {
   horizon?: { weeks: number; rows: HorizonRow[] };
   creditLineStatus?: BudgetCreditLineStatus | null;
   warnings?: string[];
+  closedDays?: Array<{ entry_date: IsoDate; category_id: string }>;
 }): Promise<Uint8Array> {
   const { view } = params;
   const warnings = params.warnings ?? [];
+  const closedDatesByCategory = new Map<string, Set<IsoDate>>();
+  for (const row of params.closedDays ?? []) {
+    const set = closedDatesByCategory.get(row.category_id) ?? new Set();
+    set.add(row.entry_date);
+    closedDatesByCategory.set(row.category_id, set);
+  }
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -712,15 +747,17 @@ export async function buildTresbeBudgetPdf(params: {
     totals: GridRow["totals"],
     emphasis?: GridRow["emphasis"],
   ): GridRow => ({ label, ...cells, totals, emphasis });
-  const categoryRow = (row: (typeof view.rows)[number]) =>
-    toRow(
+  const categoryRow = (row: (typeof view.rows)[number]): GridRow => ({
+    ...toRow(
       row.category.name,
       {
         budget: row.cells.map((cell) => cell.budget),
         real: row.cells.map((cell) => cell.real),
       },
       row.totals,
-    );
+    ),
+    closedDates: closedDatesByCategory.get(row.category.id),
+  });
   const groupRow = (group: typeof view.income, emphasis: GridRow["emphasis"]) =>
     toRow(
       group.label,
