@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
   CalendarDays,
   Check,
@@ -16,10 +16,12 @@ import {
 import {
   addCalendarComment,
   completeCalendarItem,
+  completeCalendarItems,
   deleteCalendarItem,
 } from "@/actions/calendar";
 import { CalendarForm } from "@/components/calendar/calendar-form";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { cn } from "@/lib/utils";
@@ -66,6 +68,9 @@ function dateAt(value: string) {
 }
 function iso(date: Date) {
   return date.toISOString().slice(0, 10);
+}
+function itemKey(item: CalendarItem) {
+  return `${item.id}:${item.occurrenceDate}`;
 }
 
 function ItemCard({
@@ -133,9 +138,21 @@ export function CalendarBoard({
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [pending, startTransition] = useTransition();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [lastIndex, setLastIndex] = useState<number | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [optimisticItems, markCompleted] = useOptimistic(
+    items,
+    (state: CalendarItem[], keys: Set<string>) =>
+      state.map((item) =>
+        keys.has(itemKey(item))
+          ? { ...item, status: "completed" as const }
+          : item,
+      ),
+  );
   const filtered = useMemo(
     () =>
-      items.filter((item) => {
+      optimisticItems.filter((item) => {
         const q = search.toLowerCase();
         return (
           (!q ||
@@ -152,7 +169,7 @@ export function CalendarBoard({
         );
       }),
     [
-      items,
+      optimisticItems,
       search,
       company,
       assignee,
@@ -163,6 +180,79 @@ export function CalendarBoard({
       toDate,
     ],
   );
+  const selectableTasks = useMemo(
+    () =>
+      filtered.filter(
+        (item) => item.itemType === "task" && item.status !== "completed",
+      ),
+    [filtered],
+  );
+  const taskIndex = useMemo(
+    () => new Map(selectableTasks.map((item, i) => [itemKey(item), i])),
+    [selectableTasks],
+  );
+  const activeSelected = useMemo(
+    () => selectableTasks.filter((item) => selected.has(itemKey(item))),
+    [selectableTasks, selected],
+  );
+  const allTasksSelected =
+    selectableTasks.length > 0 &&
+    activeSelected.length === selectableTasks.length;
+
+  function toggleSelection(item: CalendarItem, shiftKey: boolean) {
+    const index = taskIndex.get(itemKey(item));
+    if (index === undefined) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (shiftKey && lastIndex !== null) {
+        const [start, end] =
+          lastIndex < index ? [lastIndex, index] : [index, lastIndex];
+        for (let i = start; i <= end; i++) {
+          const row = selectableTasks[i];
+          if (row) next.add(itemKey(row));
+        }
+      } else if (next.has(itemKey(item))) {
+        next.delete(itemKey(item));
+      } else {
+        next.add(itemKey(item));
+      }
+      return next;
+    });
+    setLastIndex(index);
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allTasksSelected) {
+        for (const item of selectableTasks) next.delete(itemKey(item));
+      } else {
+        for (const item of selectableTasks) next.add(itemKey(item));
+      }
+      return next;
+    });
+    setLastIndex(null);
+  }
+
+  function handleBulkComplete() {
+    if (!activeSelected.length) return;
+    setBulkError(null);
+    const keys = new Set(activeSelected.map(itemKey));
+    const payload = activeSelected.map((item) => ({
+      id: item.id,
+      occurrenceDate: item.occurrenceDate,
+      recurring: Boolean(item.recurrenceRule),
+    }));
+    startTransition(async () => {
+      markCompleted(keys);
+      const result = await completeCalendarItems(payload);
+      if (result.error) {
+        setBulkError(result.error);
+      } else {
+        setSelected(new Set());
+      }
+    });
+  }
 
   const monthStart = new Date(
     Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1, 12),
@@ -427,11 +517,11 @@ export function CalendarBoard({
         </div>
       ) : null}
 
-      {view === "agenda" || view === "month" ? (
-        <div className={cn("space-y-3", view === "month" ? "md:hidden" : "")}>
+      {view === "month" ? (
+        <div className="space-y-3 md:hidden">
           {filtered.length ? (
             filtered.map((item) => (
-              <ItemCard key={`${item.id}:${item.occurrenceDate}`} item={item} />
+              <ItemCard key={itemKey(item)} item={item} />
             ))
           ) : (
             <SurfaceCard>
@@ -440,6 +530,83 @@ export function CalendarBoard({
               </p>
             </SurfaceCard>
           )}
+        </div>
+      ) : null}
+
+      {view === "agenda" ? (
+        <div className="space-y-3">
+          {selectableTasks.length ? (
+            <SurfaceCard padding="sm">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={
+                    allTasksSelected
+                      ? true
+                      : activeSelected.length > 0
+                        ? "indeterminate"
+                        : false
+                  }
+                  onClick={toggleSelectAll}
+                />
+                Seleccionar todas las tareas visibles (
+                {selectableTasks.length})
+              </label>
+            </SurfaceCard>
+          ) : null}
+          {filtered.length ? (
+            filtered.map((item) =>
+              item.itemType === "task" && item.status !== "completed" ? (
+                <div key={itemKey(item)} className="flex items-start gap-3">
+                  <Checkbox
+                    className="mt-3"
+                    checked={selected.has(itemKey(item))}
+                    onClick={(event) =>
+                      toggleSelection(item, event.shiftKey)
+                    }
+                  />
+                  <div className="flex-1">
+                    <ItemCard item={item} />
+                  </div>
+                </div>
+              ) : (
+                <ItemCard key={itemKey(item)} item={item} />
+              ),
+            )
+          ) : (
+            <SurfaceCard>
+              <p className="text-muted-foreground text-sm">
+                No hay actividades para estos filtros.
+              </p>
+            </SurfaceCard>
+          )}
+        </div>
+      ) : null}
+
+      {activeSelected.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-6 z-30 flex justify-center">
+          <div className="bg-background flex flex-wrap items-center gap-3 rounded-full border px-4 py-2 shadow-lg">
+            <span className="text-sm font-medium">
+              {activeSelected.length} seleccionada
+              {activeSelected.length === 1 ? "" : "s"}
+            </span>
+            {bulkError ? (
+              <span className="text-destructive text-xs">{bulkError}</span>
+            ) : null}
+            <Button size="sm" disabled={pending} onClick={handleBulkComplete}>
+              <Check className="size-4" />
+              Marcar como completadas ({activeSelected.length})
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelected(new Set());
+                setBulkError(null);
+              }}
+            >
+              Cancelar selección
+            </Button>
+          </div>
         </div>
       ) : null}
 
