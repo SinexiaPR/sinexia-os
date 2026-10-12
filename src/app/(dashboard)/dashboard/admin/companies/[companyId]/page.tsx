@@ -139,6 +139,15 @@ export default async function AdminCompanyPage({
                 </Link>
               </Button>
             ) : null}
+            {company.slug === "cut-meat-distributors" ? (
+              <Button asChild variant="outline">
+                <Link
+                  href={`/dashboard/admin/companies/${company.id}/daily-reports`}
+                >
+                  Informes diarios
+                </Link>
+              </Button>
+            ) : null}
             <Button asChild variant="outline">
               <Link href={`/dashboard/inbox?company=${company.id}`}>
                 <FileText className="size-4" />
@@ -388,6 +397,15 @@ export default async function AdminCompanyPage({
               <Button asChild variant="outline" className="justify-start">
                 <Link href={`/dashboard/payroll?company=${company.id}`}>
                   Nómina semanal
+                </Link>
+              </Button>
+            ) : null}
+            {company.slug === "cut-meat-distributors" ? (
+              <Button asChild variant="outline" className="justify-start">
+                <Link
+                  href={`/dashboard/admin/companies/${company.id}/daily-reports`}
+                >
+                  Informes diarios
                 </Link>
               </Button>
             ) : null}
