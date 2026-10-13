@@ -9,6 +9,7 @@ All notable versions of Sinexia OS. Versions follow the internal roadmap numberi
 ### Added
 
 - Informes diarios (Cut Meat Distributors / Wagyu Food Service LLC): admin-only module replacing the manual daily Google Sheet — Reconciliation Report, bank export, Consolidated, Aging Vendors and Aging Customers PDFs, with versioned private storage and an audit log (see `docs/DAILY_REPORTS_CUTMEAT.md`)
+- Recurrentes e Historial diario (Cut Meat Distributors): monthly recurring-payments tracker with weekly totals and a read-only daily reconciliation backfill, admin read/write and the company's client read-only (see `docs/CUTMEAT_RECURRENTES.md`)
 
 ---
 
