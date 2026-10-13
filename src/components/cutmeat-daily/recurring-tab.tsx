@@ -42,9 +42,9 @@ function emptyForm(reportDate: IsoDate): FormState {
 }
 
 /**
- * Fuente única de recurrentes: cutmeat_recurrentes (Fase 1) -- esta
- * pestaña ya no lee/escribe cutmeat_daily_recurring_payments
- * (@deprecated). Alta/edición de datos vía saveRecurrente; marcar
+ * Fuente única de recurrentes: cutmeat_recurrentes (Fase 1) -- la tabla
+ * vieja cutmeat_daily_recurring_payments se retiró por migración (ver
+ * docs/CUTMEAT_DAILY_DATA_CONTRACT.md). Alta/edición de datos vía saveRecurrente; marcar
  * pagado/monto real vía markRecurrentePaid (la interacción principal
  * del día: mientras se reconcilia el banco, se marca qué recurrente ya
  * se pagó y con qué monto real). El detalle completo de recurrentes del

@@ -37,9 +37,7 @@ Todas las tablas usan el prefijo `cutmeat_daily_` y RLS
 | `cutmeat_daily_reconciliation`            | Statement ending + Register del día; `source`/`loaded_by`/`loaded_at`      |
 | `cutmeat_daily_reconciliation_items`      | Uncleared checks / deposits                                               |
 | `cutmeat_daily_bank_export`               | Closing balance del Deposit Accounts Activity Summary; `source`/`loaded_by`/`loaded_at` |
-| `cutmeat_daily_bank_movements`            | Movimientos del banco: vínculo a un recurrente, o marca "Not entered"     |
-| `cutmeat_daily_recurring_payments` ⚠️ **@deprecated** | Ya no se usa — ver "Fuente de recurrentes" abajo. 0 filas.  |
-| `cutmeat_daily_recurring_payment_history` ⚠️ **@deprecated** | Idem.                                               |
+| `cutmeat_daily_bank_movements`            | Movimientos del banco: vínculo a un recurrente (FK a `cutmeat_recurrentes`), o marca "Not entered" |
 | `cutmeat_daily_income_projection`         | THIS WEEK: ingreso proyectado por día (ya no alimenta el Financial Report, ver abajo) |
 | `cutmeat_daily_aging_vendors` / `_vendor_items`   | TOTAL del Vendor Balance Detail Report + detalle por factura (opcional) |
 | `cutmeat_daily_aging_customers` / `_customer_items` | TOTAL del Customer Balance Detail Report + detalle por factura (opcional) |
@@ -58,10 +56,12 @@ bloqueo de días cerrados y la función `cutmeat_daily_controls`) en
 
 ### Fuente de recurrentes: `cutmeat_recurrentes` (Fase 1)
 
-"Informes diarios" lee los recurrentes de `cutmeat_recurrentes` (la
-misma tabla de la pantalla Recurrentes, `docs/CUTMEAT_RECURRENTES.md`)
-— no de `cutmeat_daily_recurring_payments`, que queda deprecada con 0
-filas. `getRecurringPayments(companyId, reportDate)` en
+"Informes diarios" lee y vincula los recurrentes de `cutmeat_recurrentes`
+(la misma tabla de la pantalla Recurrentes, `docs/CUTMEAT_RECURRENTES.md`)
+— la tabla vieja `cutmeat_daily_recurring_payments` (y su historial) se
+retiraron por migración; `cutmeat_daily_bank_movements.linked_recurring_id`
+también apunta por FK a `cutmeat_recurrentes`.
+`getRecurringPayments(companyId, reportDate)` en
 `src/services/cutmeat-daily.ts` trae los recurrentes del mes del
 informe y del mes siguiente (la cubeta "semana después" puede caer ahí).
 La pestaña **Recurrentes** de "Informes diarios" usa las mismas acciones
@@ -119,7 +119,10 @@ fecha de vencimiento de cada recurrente.
   Report − subtotal de los proveedores marcados como excluidos − saldo de
   Prime Meats y sus recurrentes (Prime Meats no sale en ese PDF). Un
   proveedor del aging que no está ni incluido ni excluido dispara una
-  alerta ("proveedor nuevo") para que se lo configure.
+  alerta ("proveedor nuevo") para que se lo configure. La comparación de
+  nombres se normaliza (minúsculas, sin comas ni puntos) con
+  `normalizeVendorName()`, así "Service Zone, Inc." del PDF coincide con
+  "Service Zone Inc." de Configuración.
 - **Aging Customers consolidado**: hoy es un passthrough del TOTAL general
   (no hay ajuste de Prime Meats del lado de clientes todavía); queda como
   función propia (`consolidateCustomerAging`) para no tocar los llamadores
@@ -217,9 +220,6 @@ build`, y toda la batería de tests (sin romper los existentes).
   Meat Distributors -- no se cargó el valor real (27,224.20) porque esta
   tarea no carga datos reales. Hay que setearlo desde Configuración
   antes de cerrar el primer día en vivo del módulo.
-- Baja de `cutmeat_daily_recurring_payments` / `_payment_history`
-  (@deprecated, 0 filas) en una migración reversible aparte -- incluye
-  resolver el FK de `cutmeat_daily_bank_movements.linked_recurring_id`.
 - Conector de QuickBooks Online: hoy los documentos de entrada son
   manuales o programáticos (`claude-controlado`); `data_source =
   'quickbooks_api'` queda reservado en el esquema pero sin implementar.

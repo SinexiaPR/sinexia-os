@@ -25,6 +25,7 @@ import {
   consolidateCustomerAging,
   consolidateVendorAging,
   findUnconfiguredVendors,
+  normalizeVendorName,
   groupAgingItems,
   overdueUnpaidRecurring,
   splitRecurringByWeek,
@@ -179,6 +180,31 @@ const vendorItemsWithUnknown = [...vendorItems, { name: "Suplidor Nuevo LLC", ba
 assert.deepEqual(
   findUnconfiguredVendors(vendorItemsWithUnknown, vendorConfig).map((v) => v.name),
   ["Suplidor Nuevo LLC"],
+);
+
+// Normalización de nombre de proveedor: "Service Zone, Inc." (como viene
+// del PDF de QuickBooks) debe coincidir con "Service Zone Inc." (como está
+// en Configuración) -- sin comas, sin puntos, sin distinguir mayúsculas --
+// y no disparar la alerta de "proveedor nuevo".
+assert.equal(normalizeVendorName("Service Zone, Inc."), normalizeVendorName("Service Zone Inc."));
+const vendorItemsWithPdfPunctuation = [
+  ...vendorItems.filter((item) => item.name !== "Service Zone Inc."),
+  { name: "Service Zone, Inc.", balance: 820 },
+];
+assert.deepEqual(
+  findUnconfiguredVendors(vendorItemsWithPdfPunctuation, vendorConfig).map((v) => v.name),
+  [],
+  "Service Zone, Inc. (PDF) coincide con Service Zone Inc. (config) pese a la coma",
+);
+const vendorAgingWithPdfPunctuation = consolidateVendorAging(
+  23096.75,
+  vendorItemsWithPdfPunctuation,
+  vendorConfig,
+);
+assert.equal(
+  vendorAgingWithPdfPunctuation.unconfiguredVendors.length,
+  0,
+  "consolidateVendorAging tampoco marca Service Zone, Inc. como proveedor nuevo",
 );
 
 const customerAging = consolidateCustomerAging(16658.08);
@@ -439,7 +465,6 @@ for (const action of [
   "reopenDailyReport",
   "saveReconciliation",
   "saveBankExport",
-  "saveRecurringPayment",
   "saveCutMeatSettings",
   "saveVarianceLine",
   "deleteVarianceLine",
@@ -548,8 +573,9 @@ console.log(
 );
 
 // ---------------------------------------------------------------------------
-// B: una sola fuente de recurrentes -- "Informes diarios" lee
-// cutmeat_recurrentes (Fase 1), no cutmeat_daily_recurring_payments.
+// B: una sola fuente de recurrentes -- "Informes diarios" lee y vincula
+// contra cutmeat_recurrentes; cutmeat_daily_recurring_payments (la tabla
+// vieja, duplicada) se retiró por migración.
 // ---------------------------------------------------------------------------
 
 const servicesSource = read("src/services/cutmeat-daily.ts");
@@ -563,13 +589,32 @@ assert.doesNotMatch(
   /getDailyReportWorkspace[\s\S]*cutmeat_daily_recurring_payments/,
   "getDailyReportWorkspace ya no lee cutmeat_daily_recurring_payments",
 );
+const dailyActionsSource = read("src/actions/cutmeat-daily.ts");
+assert.doesNotMatch(
+  dailyActionsSource,
+  /cutmeat_daily_recurring_payments/,
+  "actions/cutmeat-daily.ts ya no referencia cutmeat_daily_recurring_payments",
+);
+assert.doesNotMatch(
+  dailyActionsSource,
+  /export async function (saveRecurringPayment|deleteRecurringPayment)/,
+  "saveRecurringPayment/deleteRecurringPayment (tabla vieja) se eliminaron, no quedan como dead code",
+);
 assert.match(
-  read("src/actions/cutmeat-daily.ts"),
-  /@deprecated[\s\S]{0,400}export async function saveRecurringPayment/,
-  "saveRecurringPayment (cutmeat_daily_recurring_payments) queda @deprecated, no se borra",
+  read("supabase/migrations/20261013114120_cutmeat_daily_bank_movements_relink_recurring.sql"),
+  /REFERENCES public\.cutmeat_recurrentes\(id\) ON DELETE SET NULL/,
+  "cutmeat_daily_bank_movements.linked_recurring_id apunta por FK a cutmeat_recurrentes",
+);
+assert.match(
+  read("supabase/migrations/20261013141000_cutmeat_daily_drop_old_recurring_payments.sql"),
+  /DROP TABLE IF EXISTS public\.cutmeat_daily_recurring_payments/,
+  "migración de baja de cutmeat_daily_recurring_payments existe",
 );
 
-console.log("B: Informes diarios lee cutmeat_recurrentes (fuente única) -- OK.");
+console.log(
+  "B: Informes diarios lee y vincula cutmeat_recurrentes (fuente única); " +
+    "cutmeat_daily_recurring_payments se retiró -- OK.",
+);
 
 // ---------------------------------------------------------------------------
 // D8 + D9 + D10: contrato de datos -- origen (source/loaded_by/loaded_at),

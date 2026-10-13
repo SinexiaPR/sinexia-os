@@ -226,9 +226,9 @@ export async function getGeneratedPdfHistory(
 /** Un recurrente con todos sus campos editables -- superset de
  * RecurringPayment (que calculations.ts usa solo con lo que necesita
  * para calcular) para que la pantalla pueda editar sin perder datos.
- * Fuente única: cutmeat_recurrentes (Fase 1) -- "Informes diarios" ya
- * NO lee cutmeat_daily_recurring_payments (@deprecated, 0 filas, queda
- * para una baja reversible en una migración aparte). `concept` se
+ * Fuente única: cutmeat_recurrentes (Fase 1) -- la tabla vieja
+ * cutmeat_daily_recurring_payments se retiró por migración (ver
+ * docs/CUTMEAT_DAILY_DATA_CONTRACT.md). `concept` se
  * mapea desde `vendor` (cutmeat_recurrentes no tiene un campo de
  * concepto separado) para no tener que tocar calculations.ts/pdf.ts,
  * que ya consumen RecurringPayment.concept. */
