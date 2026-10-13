@@ -78,8 +78,17 @@ export function AdminClientCards({ cards }: { cards: ClientDashboardCard[] }) {
   return (
     <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
       {cards.map(({ company, semaphore, items }) => (
-        <SurfaceCard key={company.id} padding="md">
-          <div className="flex items-center justify-between gap-3">
+        <SurfaceCard
+          key={company.id}
+          padding="md"
+          className="relative transition hover:border-primary/40 hover:shadow-md"
+        >
+          <Link
+            href={`/dashboard/admin/companies/${company.id}`}
+            aria-label={`Ver ${company.name}`}
+            className="absolute inset-0 z-0 cursor-pointer rounded-2xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+          <div className="relative z-10 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold tracking-tight">
               {company.name}
             </h3>
@@ -93,7 +102,7 @@ export function AdminClientCards({ cards }: { cards: ClientDashboardCard[] }) {
               </span>
             </span>
           </div>
-          <div className="mt-4 space-y-1">
+          <div className="relative z-10 mt-4 space-y-1">
             {items.length ? (
               items.map((item) => <ChecklistRow key={item.id} item={item} />)
             ) : (
