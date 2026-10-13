@@ -377,6 +377,16 @@ const allowedDirs = [
   "src/app/api/cutmeat-daily",
   "src/app/(dashboard)/dashboard/admin/companies/[companyId]/daily-reports",
   "src/app/(dashboard)/dashboard/admin/companies/[companyId]/page.tsx",
+  // Módulo separado (Fase 1 de "Recurrentes" / "Historial diario"), misma
+  // empresa y mismo requisito de aislamiento del portal cliente -- ver
+  // docs/CUTMEAT_RECURRENTES.md.
+  "src/lib/cutmeat-recurrentes",
+  "src/services/cutmeat-recurrentes.ts",
+  "src/services/cutmeat-daily-history.ts",
+  "src/actions/cutmeat-recurrentes.ts",
+  "src/components/cutmeat-recurrentes",
+  "src/app/(dashboard)/dashboard/admin/companies/[companyId]/recurrentes",
+  "src/app/(dashboard)/dashboard/admin/companies/[companyId]/historial-diario",
 ];
 function isAllowed(filePath: string) {
   return allowedDirs.some((allowed) => filePath === allowed || filePath.startsWith(`${allowed}/`));

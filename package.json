@@ -28,6 +28,7 @@
     "test:invoice-visibility": "tsx scripts/test-invoice-client-visibility.ts",
     "test:tresbe-budget": "tsx scripts/test-tresbe-budget.ts",
     "test:cutmeat-daily": "tsx scripts/test-cutmeat-daily-reports.ts",
+    "test:cutmeat-recurrentes": "tsx scripts/test-cutmeat-recurrentes.ts",
     "audit:security": "tsx scripts/audit-security.ts",
     "test:security": "tsx scripts/test-security-hardening.ts",
     "seed:users": "tsx scripts/seed-users.ts"

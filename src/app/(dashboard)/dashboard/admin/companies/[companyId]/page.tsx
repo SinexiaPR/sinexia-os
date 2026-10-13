@@ -140,13 +140,29 @@ export default async function AdminCompanyPage({
               </Button>
             ) : null}
             {company.slug === "cut-meat-distributors" ? (
-              <Button asChild variant="outline">
-                <Link
-                  href={`/dashboard/admin/companies/${company.id}/daily-reports`}
-                >
-                  Informes diarios
-                </Link>
-              </Button>
+              <>
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/daily-reports`}
+                  >
+                    Informes diarios
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/recurrentes`}
+                  >
+                    Recurrentes
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/historial-diario`}
+                  >
+                    Historial diario
+                  </Link>
+                </Button>
+              </>
             ) : null}
             <Button asChild variant="outline">
               <Link href={`/dashboard/inbox?company=${company.id}`}>
@@ -401,13 +417,29 @@ export default async function AdminCompanyPage({
               </Button>
             ) : null}
             {company.slug === "cut-meat-distributors" ? (
-              <Button asChild variant="outline" className="justify-start">
-                <Link
-                  href={`/dashboard/admin/companies/${company.id}/daily-reports`}
-                >
-                  Informes diarios
-                </Link>
-              </Button>
+              <>
+                <Button asChild variant="outline" className="justify-start">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/daily-reports`}
+                  >
+                    Informes diarios
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/recurrentes`}
+                  >
+                    Recurrentes
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/historial-diario`}
+                  >
+                    Historial diario
+                  </Link>
+                </Button>
+              </>
             ) : null}
             <Button asChild variant="outline" className="justify-start">
               <Link href={`/dashboard/inbox?company=${company.id}`}>
