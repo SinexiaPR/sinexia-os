@@ -14,6 +14,7 @@ import path from "node:path";
 import {
   buildAgingCustomersPdf,
   buildAgingVendorsPdf,
+  buildConsolidatedPdf,
   money,
 } from "../src/lib/cutmeat-daily/pdf";
 import {
@@ -389,6 +390,54 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   }
 }
 
+type PositionedTextItem = { str: string; x: number; y: number; width: number };
+
+/**
+ * Posición real de cada fragmento de texto de una página (vía
+ * pdfjs-dist, no pdf-parse) -- para detectar colisiones visuales que el
+ * texto extraído no revela (dos textos se pueden superponer en el PDF y
+ * seguir extrayéndose bien como texto plano).
+ */
+async function extractPdfTextPositions(
+  bytes: Uint8Array,
+  pageNumber: number,
+): Promise<PositionedTextItem[]> {
+  await import("@napi-rs/canvas");
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false }).promise;
+  try {
+    const page = await doc.getPage(pageNumber);
+    const content = await page.getTextContent();
+    return content.items
+      .filter((item) => "str" in item && "transform" in item && item.str.trim().length > 0)
+      .map((item) => {
+        const textItem = item as { str: string; transform: number[]; width: number };
+        return { str: textItem.str, x: textItem.transform[4], y: textItem.transform[5], width: textItem.width };
+      });
+  } finally {
+    await doc.destroy();
+  }
+}
+
+/** Dos fragmentos "colisionan" si están en la misma línea (y parecido) y
+ * sus rangos horizontales se superponen -- exactamente lo que le pasó a
+ * "Aging Vendors (consolidado...)" y "Excluidos (...)" en la portada del
+ * Paquete para el dueño antes de este fix. */
+function assertNoHorizontalOverlap(
+  items: PositionedTextItem[],
+  startsWithA: string,
+  startsWithB: string,
+  message: string,
+) {
+  const a = items.find((item) => item.str.startsWith(startsWithA));
+  const b = items.find((item) => item.str.startsWith(startsWithB));
+  assert.ok(a, `no se encontró el texto "${startsWithA}"`);
+  assert.ok(b, `no se encontró el texto "${startsWithB}"`);
+  if (Math.abs(a!.y - b!.y) < 3) {
+    assert.ok(a!.x + a!.width <= b!.x + 0.5, message);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Aging real del 09/10/2026 (24 líneas de proveedores, 22 de clientes,
 // con detalle por factura) -- paginación y total general de
@@ -509,6 +558,44 @@ async function main() {
     "Aging real del 09/10 (24 proveedores, 22 clientes): paginación y total " +
       "general del PDF generado -- OK.",
   );
+
+  // Portada del Paquete para el dueño (página 2 de buildConsolidatedPdf):
+  // "Aging Vendors (consolidado Wagyu + Prime Meats)" y "Excluidos
+  // (Prime Meats & Seafoods, Jose Santiago Inc)" son etiquetas largas
+  // que llegaron a superponerse con su propio valor (texto encima de
+  // texto, ilegible) cuando el raw total y el consolidado coinciden en
+  // longitud -- vendorAging (rawTotal 23096.75, excludedSubtotal
+  // 1276.75, primeMeatsBalance 914.21, consolidated 20905.79, 4 valores
+  // distintos) ya está definido arriba. Se verifica por posición real
+  // del texto (pdfjs), no solo que el texto esté presente -- dos
+  // textos superpuestos igual se extraen bien como texto plano.
+  const consolidatedPdf = await buildConsolidatedPdf({
+    reportDate: REPORT_DATE,
+    control: null,
+    recurrentes: { prior: [], priorTotal: 0, thisWeek: [], thisWeekTotal: 0 },
+    financial: null,
+    varianceLines: [],
+    totalVariance: 0,
+    balanceGabriel: null,
+    balanceWithNotEntered: null,
+    incomeDays: [],
+    vendorAging,
+    customerAgingTotal: 16658.08,
+  });
+  const page2Items = await extractPdfTextPositions(consolidatedPdf, 2);
+  assertNoHorizontalOverlap(
+    page2Items,
+    "Aging Vendors (consolidado",
+    money(vendorAging.consolidated),
+    "la etiqueta \"Aging Vendors (consolidado...)\" no debe superponerse con su valor",
+  );
+  assertNoHorizontalOverlap(
+    page2Items,
+    "Excluidos (Prime Meats",
+    money(vendorAging.excludedSubtotal),
+    "la etiqueta \"Excluidos (...)\" no debe superponerse con su valor",
+  );
+  console.log("Portada del Paquete para el dueño: etiquetas largas sin superponerse con su valor -- OK.");
 
   const withDetailPdf = await buildAgingVendorsPdf({
     reportDate: REPORT_DATE,

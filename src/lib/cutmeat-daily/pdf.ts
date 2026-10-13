@@ -126,9 +126,16 @@ function sectionTitle(doc: Doc, text: string, y: number) {
   return y - 16;
 }
 
-function keyValueRow(doc: Doc, label: string, value: string, x: number, y: number) {
+function keyValueRow(
+  doc: Doc,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  valueOffset = 220,
+) {
   doc.page.drawText(printable(label), { x, y, size: 8.5, font: doc.regular, color: MUTED });
-  right(doc.page, value, doc.bold, 9, x + 220, y);
+  right(doc.page, value, doc.bold, 9, x + valueOffset, y);
 }
 
 const BOTTOM_MARGIN = 40;
@@ -624,6 +631,7 @@ export async function buildConsolidatedPdf(params: {
       money(params.vendorAging.consolidated),
       MARGIN + 320,
       y2,
+      250,
     );
     y2 -= 14;
     keyValueRow(
@@ -632,6 +640,7 @@ export async function buildConsolidatedPdf(params: {
       money(params.vendorAging.excludedSubtotal),
       MARGIN,
       y2,
+      270,
     );
     keyValueRow(
       doc2,
