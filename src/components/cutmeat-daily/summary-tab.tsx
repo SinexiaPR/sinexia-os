@@ -1,13 +1,79 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { Plus, Trash2 } from "lucide-react";
+
+import { deleteVarianceLine, saveVarianceLine } from "@/actions/cutmeat-daily";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { MetricCard, SurfaceCard } from "@/components/ui/surface-card";
 import { formatDayLabel } from "@/lib/cutmeat-daily/dates";
 import { formatMoney } from "@/lib/cutmeat-daily/format";
 import type { DailyReportWorkspace } from "@/services/cutmeat-daily";
 
+type VarianceRow = { id?: string; concept: string; amount: string };
+
 /**
- * Todo lo que calculations.ts produjo para el día, de solo lectura. Cada
- * número indica de dónde sale, para poder auditarlo contra el PDF.
+ * Todo lo que calculations.ts produjo para el día, de solo lectura, salvo
+ * la Variación Diaria: líneas libres (concepto + monto) que carga el
+ * admin a mano, sin tipos fijos ni clasificación automática.
  */
-export function SummaryTab({ workspace }: { workspace: DailyReportWorkspace }) {
+export function SummaryTab({
+  companyId,
+  workspace,
+  readOnly,
+}: {
+  companyId: string;
+  workspace: DailyReportWorkspace;
+  readOnly: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [rows, setRows] = useState<VarianceRow[]>(
+    (workspace.varianceLines ?? []).map((line) => ({
+      id: line.id,
+      concept: line.concept,
+      amount: String(line.amount),
+    })),
+  );
+
+  const reportId = workspace.report?.id;
+
+  const removeRow = (index: number) => {
+    const row = rows[index];
+    if (row.id && reportId) {
+      startTransition(async () => {
+        const result = await deleteVarianceLine({ companyId, reportId, id: row.id! });
+        setMessage("error" in result ? result.error : null);
+        router.refresh();
+      });
+    }
+    setRows(rows.filter((_, i) => i !== index));
+  };
+
+  const save = () => {
+    if (!reportId) return;
+    const toSave = rows.filter((row) => row.concept.trim() && row.amount.trim());
+    startTransition(async () => {
+      const results = await Promise.all(
+        toSave.map((row) =>
+          saveVarianceLine({
+            id: row.id,
+            companyId,
+            reportId,
+            concept: row.concept.trim(),
+            amount: Number(row.amount) || 0,
+          }),
+        ),
+      );
+      const errors = results.filter((result): result is { error: string } => "error" in result);
+      setMessage(errors.length ? errors.map((e) => e.error).join(" ") : "Variación Diaria guardada.");
+      router.refresh();
+    });
+  };
+
   if (!workspace.settings) return null;
 
   return (
@@ -110,41 +176,70 @@ export function SummaryTab({ workspace }: { workspace: DailyReportWorkspace }) {
       ) : null}
 
       <SurfaceCard>
-        <h2 className="text-base font-semibold">Variación Diaria</h2>
-        {workspace.variance.items.length ? (
-          <table className="mt-4 w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground text-left text-xs uppercase">
-                <th className="px-1 py-1">Concepto</th>
-                <th className="px-1 py-1 text-right">Recurrente</th>
-                <th className="px-1 py-1 text-right">Real</th>
-                <th className="px-1 py-1 text-right">Variación</th>
-              </tr>
-            </thead>
-            <tbody className="divide-border/60 divide-y">
-              {workspace.variance.items.map((item) => (
-                <tr key={item.concept}>
-                  <td className="px-1 py-1.5">{item.concept}</td>
-                  <td className="px-1 py-1.5 text-right tabular-nums">
-                    {formatMoney(item.recurringAmount)}
-                  </td>
-                  <td className="px-1 py-1.5 text-right tabular-nums">
-                    {formatMoney(item.actualAmount)}
-                  </td>
-                  <td className="px-1 py-1.5 text-right tabular-nums">
-                    {formatMoney(item.variance)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-muted-foreground mt-3 text-sm">
-            Sin recurrentes pagados con monto real informado todavía.
-          </p>
-        )}
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Variación Diaria</h2>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={readOnly || !reportId}
+            onClick={() => setRows((current) => [...current, { concept: "", amount: "" }])}
+          >
+            <Plus className="size-4" />
+            Agregar línea
+          </Button>
+        </div>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Líneas libres (concepto + monto), sin tipos fijos ni clasificación
+          automática -- igual que hoy las carga Hernan en la planilla.
+        </p>
+        <div className="mt-3 space-y-2">
+          {rows.map((row, index) => (
+            <div key={row.id ?? `new-${index}`} className="flex items-center gap-2">
+              <Input
+                placeholder="Concepto"
+                value={row.concept}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, concept: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                inputMode="decimal"
+                placeholder="Monto"
+                className="w-32"
+                value={row.amount}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, amount: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Eliminar"
+                disabled={readOnly || pending}
+                className="text-muted-foreground hover:text-destructive p-1"
+                onClick={() => removeRow(index)}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          ))}
+          {rows.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Sin líneas cargadas.</p>
+          ) : null}
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <Button onClick={save} disabled={pending || readOnly || !reportId}>
+            Guardar Variación Diaria
+          </Button>
+          {message ? <span className="text-muted-foreground text-sm">{message}</span> : null}
+        </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <MetricCard label="Variación total" value={formatMoney(workspace.variance.totalVariance)} />
+          <MetricCard label="Variación total" value={formatMoney(workspace.totalVariance)} />
           <MetricCard label="Balance GABRIEL" value={formatMoney(workspace.balanceGabriel)} />
           <MetricCard
             label="Balance + Not entered Sales"

@@ -115,6 +115,14 @@ export async function ensureDailyReport(input: { companyId: string; reportDate: 
   }
 }
 
+/**
+ * Al cerrar, se congelan Balance after Weekly Payments y Balance GABRIEL
+ * de ESTE día (si hay conciliación cargada) -- el día siguiente los lee
+ * como "el último día cerrado anterior" (ver buildBalanceGabriel en
+ * lib/cutmeat-daily/calculations.ts) en vez de recalcularlos sobre datos
+ * que puedan cambiar después. Se recalculan de nuevo la próxima vez que
+ * se cierre (p.ej. tras reabrir y corregir algo).
+ */
 export async function closeDailyReport(input: { companyId: string; reportId: string }) {
   const parsed = z
     .object({ companyId: z.string().uuid(), reportId: z.string().uuid() })
@@ -123,6 +131,17 @@ export async function closeDailyReport(input: { companyId: string; reportId: str
   try {
     const { profile } = await authorize(parsed.data.companyId);
     const supabase = await createClient();
+    const report = await supabase
+      .from("cutmeat_daily_reports")
+      .select("report_date")
+      .eq("id", parsed.data.reportId)
+      .eq("company_id", parsed.data.companyId)
+      .single();
+    if (report.error) throw report.error;
+    const workspace = await getDailyReportWorkspace(
+      parsed.data.companyId,
+      report.data.report_date as IsoDate,
+    );
     const { error } = await supabase
       .from("cutmeat_daily_reports")
       .update({
@@ -130,6 +149,8 @@ export async function closeDailyReport(input: { companyId: string; reportId: str
         closed_at: new Date().toISOString(),
         closed_by: profile.id,
         updated_by: profile.id,
+        balance_after_weekly: workspace.weeklyPayments?.balanceAfterWeeklyPayments ?? null,
+        balance_gabriel: workspace.balanceGabriel ?? null,
       })
       .eq("id", parsed.data.reportId)
       .eq("company_id", parsed.data.companyId);
@@ -142,6 +163,13 @@ export async function closeDailyReport(input: { companyId: string; reportId: str
   }
 }
 
+/**
+ * Reabrir limpia Balance after Weekly Payments y Balance GABRIEL
+ * congelados de este día -- vuelven a quedar null hasta el próximo
+ * cierre, para no dejar un valor potencialmente desactualizado (ya que
+ * se puede volver a editar la conciliación/recurrentes) marcado como
+ * "congelado".
+ */
 export async function reopenDailyReport(input: { companyId: string; reportId: string }) {
   const parsed = z
     .object({ companyId: z.string().uuid(), reportId: z.string().uuid() })
@@ -157,6 +185,8 @@ export async function reopenDailyReport(input: { companyId: string; reportId: st
         reopened_at: new Date().toISOString(),
         reopened_by: profile.id,
         updated_by: profile.id,
+        balance_after_weekly: null,
+        balance_gabriel: null,
       })
       .eq("id", parsed.data.reportId)
       .eq("company_id", parsed.data.companyId);
@@ -200,6 +230,11 @@ async function readUploadedPdf(companyId: string, formData: FormData) {
   return { text: extraction.text, sourcePdfPath };
 }
 
+/**
+ * @deprecated La pantalla ya no sube PDF para extraer estos datos (ver
+ * docs/CUTMEAT_DAILY_DATA_CONTRACT.md) -- queda sin borrar por si algo
+ * externo todavía la llama directamente.
+ */
 export async function extractReconciliationPdf(formData: FormData) {
   const companyId = String(formData.get("companyId") ?? "");
   if (!z.string().uuid().safeParse(companyId).success) return { error: "Empresa inválida." };
@@ -213,6 +248,7 @@ export async function extractReconciliationPdf(formData: FormData) {
   }
 }
 
+/** @deprecated Ver extractReconciliationPdf más arriba. */
 export async function extractBankExportPdf(formData: FormData) {
   const companyId = String(formData.get("companyId") ?? "");
   if (!z.string().uuid().safeParse(companyId).success) return { error: "Empresa inválida." };
@@ -226,6 +262,7 @@ export async function extractBankExportPdf(formData: FormData) {
   }
 }
 
+/** @deprecated Ver extractReconciliationPdf más arriba. */
 export async function extractAgingPdf(formData: FormData) {
   const companyId = String(formData.get("companyId") ?? "");
   if (!z.string().uuid().safeParse(companyId).success) return { error: "Empresa inválida." };
@@ -256,6 +293,9 @@ export async function saveReconciliation(input: {
   register: number;
   items: Array<z.infer<typeof reconciliationItemSchema>>;
   sourcePdfPath?: string | null;
+  /** Origen del dato: a mano en la pantalla, o importado por una skill
+   * de Claude vía loadDailyReportData. Ver docs/CUTMEAT_DAILY_DATA_CONTRACT.md. */
+  source?: "manual" | "claude-controlado";
 }) {
   const parsed = z
     .object({
@@ -265,6 +305,7 @@ export async function saveReconciliation(input: {
       register: money,
       items: z.array(reconciliationItemSchema).max(200),
       sourcePdfPath: z.string().max(500).nullable().optional(),
+      source: z.enum(["manual", "claude-controlado"]).optional().default("manual"),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisá los datos de conciliación." };
@@ -281,6 +322,9 @@ export async function saveReconciliation(input: {
         source_pdf_path: data.sourcePdfPath ?? null,
         extracted_at: new Date().toISOString(),
         updated_by: profile.id,
+        source: data.source,
+        loaded_by: profile.id,
+        loaded_at: new Date().toISOString(),
       },
       { onConflict: "report_id" },
     );
@@ -331,6 +375,7 @@ export async function saveBankExport(input: {
   closingBalance: number | null;
   movements: Array<z.infer<typeof bankMovementSchema>>;
   sourcePdfPath?: string | null;
+  source?: "manual" | "claude-controlado";
 }) {
   const parsed = z
     .object({
@@ -339,6 +384,7 @@ export async function saveBankExport(input: {
       closingBalance: money.nullable(),
       movements: z.array(bankMovementSchema).max(500),
       sourcePdfPath: z.string().max(500).nullable().optional(),
+      source: z.enum(["manual", "claude-controlado"]).optional().default("manual"),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisá el export del banco." };
@@ -354,6 +400,9 @@ export async function saveBankExport(input: {
         source_pdf_path: data.sourcePdfPath ?? null,
         extracted_at: new Date().toISOString(),
         updated_by: profile.id,
+        source: data.source,
+        loaded_by: profile.id,
+        loaded_at: new Date().toISOString(),
       },
       { onConflict: "report_id" },
     );
@@ -390,7 +439,23 @@ export async function saveBankExport(input: {
 // Aging de proveedores y clientes
 // ---------------------------------------------------------------------------
 
-const agingItemSchema = z.object({ name: z.string().trim().min(1).max(200), balance: money });
+/**
+ * Un nombre (vendor/customer) puede repetirse en varias filas cuando se
+ * carga el detalle por factura (txn_date/txn_type/num/due_date/amount/
+ * open_balance) -- el PDF los agrupa por nombre con subtotal. Sin
+ * detalle, una sola fila con `balance` (el total de ese nombre) sigue
+ * funcionando igual que antes.
+ */
+const agingItemSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  balance: money,
+  txnDate: isoDate.nullable().optional(),
+  txnType: z.string().trim().max(60).nullable().optional(),
+  num: z.string().trim().max(60).nullable().optional(),
+  dueDate: isoDate.nullable().optional(),
+  amount: money.nullable().optional(),
+  openBalance: money.nullable().optional(),
+});
 
 async function saveAging(
   table: "vendors" | "customers",
@@ -400,6 +465,7 @@ async function saveAging(
     rawTotal: number;
     items: Array<z.infer<typeof agingItemSchema>>;
     sourcePdfPath?: string | null;
+    source?: "manual" | "claude-controlado";
   },
 ) {
   const parsed = z
@@ -409,6 +475,7 @@ async function saveAging(
       rawTotal: money,
       items: z.array(agingItemSchema).max(500),
       sourcePdfPath: z.string().max(500).nullable().optional(),
+      source: z.enum(["manual", "claude-controlado"]).optional().default("manual"),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisá el aging." };
@@ -428,6 +495,9 @@ async function saveAging(
         source_pdf_path: data.sourcePdfPath ?? null,
         extracted_at: new Date().toISOString(),
         updated_by: profile.id,
+        source: data.source,
+        loaded_by: profile.id,
+        loaded_at: new Date().toISOString(),
       },
       { onConflict: "report_id" },
     );
@@ -440,6 +510,12 @@ async function saveAging(
           report_id: data.reportId,
           [nameColumn]: item.name,
           balance: item.balance,
+          txn_date: item.txnDate ?? null,
+          txn_type: item.txnType ?? null,
+          num: item.num ?? null,
+          due_date: item.dueDate ?? null,
+          amount: item.amount ?? null,
+          open_balance: item.openBalance ?? null,
         })),
       );
       if (inserted.error) throw inserted.error;
@@ -465,7 +541,11 @@ export async function saveAgingCustomers(
 }
 
 // ---------------------------------------------------------------------------
-// Recurrentes del mes
+// Recurrentes del mes -- @deprecated: "Informes diarios" ya lee los
+// recurrentes de cutmeat_recurrentes (Fase 1, ver actions/
+// cutmeat-recurrentes.ts), no de cutmeat_daily_recurring_payments. Esta
+// tabla queda con 0 filas y sin UI que la use; su baja es una migración
+// reversible aparte (no esta), ver docs/CUTMEAT_DAILY_DATA_CONTRACT.md.
 // ---------------------------------------------------------------------------
 
 const recurringPaymentSchema = z.object({
@@ -483,6 +563,7 @@ const recurringPaymentSchema = z.object({
   note: z.string().trim().max(500).nullable().optional(),
 });
 
+/** @deprecated Ver la nota sobre cutmeat_daily_recurring_payments más arriba. */
 export async function saveRecurringPayment(
   input: z.infer<typeof recurringPaymentSchema>,
 ) {
@@ -538,6 +619,7 @@ export async function saveRecurringPayment(
   }
 }
 
+/** @deprecated Ver la nota sobre cutmeat_daily_recurring_payments más arriba. */
 export async function deleteRecurringPayment(input: { companyId: string; id: string }) {
   const parsed = z
     .object({ companyId: z.string().uuid(), id: z.string().uuid() })
@@ -717,6 +799,8 @@ export async function saveCutMeatSettings(input: {
   primeMeatsRecurring: number;
   defaultDailyIncome: number;
   flatWeeklyIncome: number;
+  gabrielStartingBalance: number;
+  currentWeekIncome: number;
 }) {
   const parsed = z
     .object({
@@ -725,6 +809,8 @@ export async function saveCutMeatSettings(input: {
       primeMeatsRecurring: money,
       defaultDailyIncome: positiveMoney,
       flatWeeklyIncome: positiveMoney,
+      gabrielStartingBalance: money,
+      currentWeekIncome: positiveMoney,
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisá la configuración." };
@@ -739,12 +825,90 @@ export async function saveCutMeatSettings(input: {
         prime_meats_recurring: data.primeMeatsRecurring,
         default_daily_income: data.defaultDailyIncome,
         flat_weekly_income: data.flatWeeklyIncome,
+        gabriel_starting_balance: data.gabrielStartingBalance,
+        current_week_income: data.currentWeekIncome,
         updated_by: profile.id,
       },
       { onConflict: "company_id" },
     );
     if (error) throw error;
     refresh(data.companyId);
+    return { success: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Variación Diaria: líneas libres (concepto + monto), sin tipos fijos ni
+// clasificación automática -- las carga el admin a mano, igual que hoy
+// las pone Hernan en la planilla.
+// ---------------------------------------------------------------------------
+
+const varianceLineSchema = z.object({
+  id: z.string().uuid().optional(),
+  companyId: z.string().uuid(),
+  reportId: z.string().uuid(),
+  concept: z.string().trim().min(1).max(200),
+  amount: money,
+});
+
+export async function saveVarianceLine(input: z.infer<typeof varianceLineSchema>) {
+  const parsed = varianceLineSchema.safeParse(input);
+  if (!parsed.success) return { error: "Revisá la línea de Variación Diaria." };
+  const data = parsed.data;
+  try {
+    const { profile } = await authorize(data.companyId);
+    await requireEditableReport(data.reportId);
+    const supabase = await createClient();
+    if (data.id) {
+      const { error } = await supabase
+        .from("cutmeat_daily_variance_lines")
+        .update({ concept: data.concept, amount: data.amount, updated_by: profile.id })
+        .eq("id", data.id)
+        .eq("report_id", data.reportId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("cutmeat_daily_variance_lines").insert({
+        report_id: data.reportId,
+        concept: data.concept,
+        amount: data.amount,
+        created_by: profile.id,
+        updated_by: profile.id,
+      });
+      if (error) throw error;
+    }
+    refresh(data.companyId);
+    return { success: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function deleteVarianceLine(input: {
+  companyId: string;
+  reportId: string;
+  id: string;
+}) {
+  const parsed = z
+    .object({
+      companyId: z.string().uuid(),
+      reportId: z.string().uuid(),
+      id: z.string().uuid(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: "Línea inválida." };
+  try {
+    await authorize(parsed.data.companyId);
+    await requireEditableReport(parsed.data.reportId);
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("cutmeat_daily_variance_lines")
+      .delete()
+      .eq("id", parsed.data.id)
+      .eq("report_id", parsed.data.reportId);
+    if (error) throw error;
+    refresh(parsed.data.companyId);
     return { success: true };
   } catch (error) {
     return failure(error);
@@ -780,6 +944,7 @@ const programmaticPayloadSchema = z.object({
   agingCustomers: z
     .object({ rawTotal: money, items: z.array(agingItemSchema), sourcePdfPath: z.string().max(500).nullable().optional() })
     .optional(),
+  varianceLines: z.array(z.object({ concept: z.string().trim().min(1).max(200), amount: money })).optional(),
 });
 
 /**
@@ -787,6 +952,10 @@ const programmaticPayloadSchema = z.object({
  * datos del día (todo lo que no sea editable sin pasar por ensureDailyReport
  * primero). Pensado para una skill de Claude que corra el proceso desde
  * afuera de la pantalla.
+ *
+ * El día queda SIEMPRE en borrador -- esta función nunca llama a
+ * closeDailyReport, así que una carga externa no puede cerrar un día
+ * por sí sola; solo un admin lo cierra desde la pantalla.
  */
 export async function loadDailyReportData(
   input: z.infer<typeof programmaticPayloadSchema>,
@@ -811,6 +980,7 @@ export async function loadDailyReportData(
             register: data.reconciliation.register,
             items: data.reconciliation.items,
             sourcePdfPath: data.reconciliation.sourcePdfPath,
+            source: "claude-controlado",
           })
         : null,
       data.bankExport
@@ -820,6 +990,7 @@ export async function loadDailyReportData(
             closingBalance: data.bankExport.closingBalance,
             movements: data.bankExport.movements,
             sourcePdfPath: data.bankExport.sourcePdfPath,
+            source: "claude-controlado",
           })
         : null,
       data.agingVendors
@@ -829,6 +1000,7 @@ export async function loadDailyReportData(
             rawTotal: data.agingVendors.rawTotal,
             items: data.agingVendors.items,
             sourcePdfPath: data.agingVendors.sourcePdfPath,
+            source: "claude-controlado",
           })
         : null,
       data.agingCustomers
@@ -838,6 +1010,7 @@ export async function loadDailyReportData(
             rawTotal: data.agingCustomers.rawTotal,
             items: data.agingCustomers.items,
             sourcePdfPath: data.agingCustomers.sourcePdfPath,
+            source: "claude-controlado",
           })
         : null,
     ]);
@@ -845,6 +1018,24 @@ export async function loadDailyReportData(
       (result): result is { error: string } => Boolean(result && "error" in result),
     );
     if (errors.length) return { error: errors.map((e) => e.error).join(" ") };
+
+    if (data.varianceLines?.length) {
+      const varianceResults = await Promise.all(
+        data.varianceLines.map((line) =>
+          saveVarianceLine({
+            companyId: data.companyId,
+            reportId,
+            concept: line.concept,
+            amount: line.amount,
+          }),
+        ),
+      );
+      const varianceErrors = varianceResults.filter(
+        (result): result is { error: string } => "error" in result,
+      );
+      if (varianceErrors.length) return { error: varianceErrors.map((e) => e.error).join(" ") };
+    }
+
     return { success: true, reportId };
   } catch (error) {
     return failure(error);
@@ -936,6 +1127,7 @@ export async function generateDailyPdf(input: {
           reportDate,
           items: workspace.vendorItems,
           rawTotal: workspace.vendorAging.rawTotal,
+          groups: workspace.vendorGroups,
         });
         break;
       }
@@ -946,6 +1138,7 @@ export async function generateDailyPdf(input: {
           reportDate,
           items: workspace.customerItems,
           rawTotal: workspace.customerAging.rawTotal,
+          groups: workspace.customerGroups,
         });
         break;
       }
@@ -960,7 +1153,8 @@ export async function generateDailyPdf(input: {
             thisWeekTotal: workspace.buckets.thisWeek.total,
           },
           financial: workspace.financial,
-          variance: workspace.variance,
+          varianceLines: workspace.varianceLines,
+          totalVariance: workspace.totalVariance,
           balanceGabriel: workspace.balanceGabriel,
           balanceWithNotEntered: workspace.balanceWithNotEntered,
           incomeDays: workspace.incomeDays,

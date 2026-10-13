@@ -7,15 +7,17 @@ import {
   buildBalanceGabriel,
   buildBalanceWithNotEnteredSales,
   buildFinancialReport,
-  buildVarianceReport,
   checkReconciliationControl,
   classifyBankMovements,
   consolidateCustomerAging,
   consolidateVendorAging,
+  groupAgingItems,
   splitRecurringByWeek,
-  sumCurrentWeekProjectedIncome,
+  totalVarianceOf,
+  type AgingDetailLine,
   type BankMovement,
   type RecurringPayment,
+  type VarianceLine,
 } from "@/lib/cutmeat-daily/calculations";
 import {
   addDays,
@@ -53,6 +55,12 @@ export type CutMeatSettings = {
   primeMeatsRecurring: number;
   defaultDailyIncome: number;
   flatWeeklyIncome: number;
+  /** Valor de arranque de Balance GABRIEL para el primer día sin un día
+   * cerrado anterior (ni en vivo ni en cutmeat_daily_history). */
+  gabrielStartingBalance: number;
+  /** Ingreso proyectado de la semana en curso, fijo toda la semana (no
+   * se prorratea por día ni se excluye el lunes). */
+  currentWeekIncome: number;
   dataSource: "manual" | "quickbooks_api";
 };
 
@@ -93,6 +101,8 @@ export async function getCutMeatSettings(
     primeMeatsRecurring: Number(data.prime_meats_recurring),
     defaultDailyIncome: Number(data.default_daily_income),
     flatWeeklyIncome: Number(data.flat_weekly_income),
+    gabrielStartingBalance: Number(data.gabriel_starting_balance),
+    currentWeekIncome: Number(data.current_week_income),
     dataSource: data.data_source,
   };
 }
@@ -214,40 +224,124 @@ export async function getGeneratedPdfHistory(
 }
 
 /** Un recurrente con todos sus campos editables -- superset de
- * RecurringPayment (que calculations.ts usa solo con lo que necesita para
- * calcular) para que la pantalla pueda editar sin perder datos. */
+ * RecurringPayment (que calculations.ts usa solo con lo que necesita
+ * para calcular) para que la pantalla pueda editar sin perder datos.
+ * Fuente única: cutmeat_recurrentes (Fase 1) -- "Informes diarios" ya
+ * NO lee cutmeat_daily_recurring_payments (@deprecated, 0 filas, queda
+ * para una baja reversible en una migración aparte). `concept` se
+ * mapea desde `vendor` (cutmeat_recurrentes no tiene un campo de
+ * concepto separado) para no tener que tocar calculations.ts/pdf.ts,
+ * que ya consumen RecurringPayment.concept. */
 export type CutMeatRecurringPayment = RecurringPayment & {
-  entryDate: IsoDate;
+  period: IsoDate;
+  entryDate: IsoDate | null;
   itemType: string | null;
   referenceNumber: string | null;
-  vendor: string | null;
+  vendor: string;
   note: string | null;
 };
 
-/** Todos los recurrentes de la empresa -- el volumen es bajo (se cargan
- * a principio de mes), así que no hace falta paginar por ventana. */
+function monthStartOf(date: IsoDate): IsoDate {
+  return `${date.slice(0, 7)}-01`;
+}
+
+/**
+ * Recurrentes de la empresa relevantes para este informe: el mes del
+ * informe y el mes 20 días después (la cubeta "semana después" puede
+ * caer en el mes siguiente). El volumen es bajo (se cargan a principio
+ * de mes), así que no hace falta paginar por ventana de fechas.
+ */
 export async function getRecurringPayments(
   companyId: string,
+  reportDate: IsoDate,
 ): Promise<CutMeatRecurringPayment[]> {
+  const periods = Array.from(
+    new Set([monthStartOf(reportDate), monthStartOf(addDays(reportDate, 20))]),
+  );
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("cutmeat_daily_recurring_payments")
+    .from("cutmeat_recurrentes")
     .select("*")
     .eq("company_id", companyId)
-    .order("due_date");
+    .in("period", periods)
+    .order("due_date", { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    concept: row.vendor,
+    dueDate: row.due_date,
+    amount: Number(row.amount),
+    isPaid: row.pagado,
+    actualAmount: row.paid_amount == null ? null : Number(row.paid_amount),
+    period: row.period,
+    entryDate: row.fecha,
+    itemType: row.tr_type,
+    referenceNumber: row.num,
+    vendor: row.vendor,
+    note: row.notes,
+  }));
+}
+
+/**
+ * B (Balance after Weekly Payments) del último informe CERRADO antes de
+ * `reportDate`: se lee de cutmeat_daily_history (backfill ya aprobado)
+ * o del informe cerrado más reciente en vivo (balance_after_weekly
+ * congelado al cerrar) -- lo que sea más reciente de los dos. null si
+ * no hay ningún día cerrado anterior (primer día del módulo).
+ */
+export async function getPreviousClosedBalance(
+  companyId: string,
+  reportDate: IsoDate,
+): Promise<{ date: IsoDate; balance: number } | null> {
+  const supabase = await createClient();
+  const [historyRes, reportRes] = await Promise.all([
+    supabase
+      .from("cutmeat_daily_history")
+      .select("report_date,balance_after_weekly")
+      .eq("company_id", companyId)
+      .lt("report_date", reportDate)
+      .order("report_date", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("cutmeat_daily_reports")
+      .select("report_date,balance_after_weekly")
+      .eq("company_id", companyId)
+      .eq("status", "closed")
+      .not("balance_after_weekly", "is", null)
+      .lt("report_date", reportDate)
+      .order("report_date", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (historyRes.error) throw historyRes.error;
+  if (reportRes.error) throw reportRes.error;
+  const candidates = [
+    historyRes.data
+      ? { date: historyRes.data.report_date as IsoDate, balance: Number(historyRes.data.balance_after_weekly) }
+      : null,
+    reportRes.data
+      ? { date: reportRes.data.report_date as IsoDate, balance: Number(reportRes.data.balance_after_weekly) }
+      : null,
+  ].filter((candidate): candidate is { date: IsoDate; balance: number } => candidate !== null);
+  if (!candidates.length) return null;
+  return candidates.reduce((latest, candidate) => (candidate.date > latest.date ? candidate : latest));
+}
+
+/** Líneas libres de Variación Diaria de este informe (concepto + monto,
+ * sin tipos fijos), en el orden en que se cargaron. */
+export async function getVarianceLines(reportId: string): Promise<VarianceLine[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("cutmeat_daily_variance_lines")
+    .select("id,concept,amount")
+    .eq("report_id", reportId)
+    .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []).map((row) => ({
     id: row.id,
     concept: row.concept,
-    dueDate: row.due_date,
     amount: Number(row.amount),
-    isPaid: row.is_paid,
-    actualAmount: row.actual_amount == null ? null : Number(row.actual_amount),
-    entryDate: row.entry_date,
-    itemType: row.item_type,
-    referenceNumber: row.reference_number,
-    vendor: row.vendor,
-    note: row.note,
   }));
 }
 
@@ -269,6 +363,32 @@ export async function getIncomeProjection(
     date: row.projection_date as IsoDate,
     amount: Number(row.amount),
   }));
+}
+
+type AgingItemRow = Record<string, unknown> & {
+  balance: number;
+  txn_date: string | null;
+  txn_type: string | null;
+  num: string | null;
+  due_date: string | null;
+  amount: number | null;
+  open_balance: number | null;
+};
+
+function mapAgingItemRow(
+  row: AgingItemRow,
+  nameColumn: "vendor_name" | "customer_name",
+): AgingDetailLine {
+  return {
+    name: row[nameColumn] as string,
+    balance: Number(row.balance),
+    txnDate: (row.txn_date as IsoDate | null) ?? null,
+    txnType: row.txn_type ?? null,
+    num: row.num ?? null,
+    dueDate: (row.due_date as IsoDate | null) ?? null,
+    amount: row.amount == null ? null : Number(row.amount),
+    openBalance: row.open_balance == null ? null : Number(row.open_balance),
+  };
 }
 
 /**
@@ -294,6 +414,7 @@ export async function getDailyReportWorkspace(
     holidays,
     recurring,
     incomeDays,
+    previousClosed,
     reconciliationRes,
     reconciliationItemsRes,
     bankExportRes,
@@ -303,12 +424,14 @@ export async function getDailyReportWorkspace(
     agingCustomersRes,
     agingCustomerItemsRes,
     generatedPdfs,
+    varianceLines,
   ] = await Promise.all([
     getCutMeatSettings(companyId),
     getCutMeatVendorConfig(companyId),
     getCutMeatHolidays(companyId),
-    getRecurringPayments(companyId),
+    getRecurringPayments(companyId, reportDate),
     getIncomeProjection(companyId, weekStart, addDays(weekStart, 6)),
+    getPreviousClosedBalance(companyId, reportDate),
     report
       ? supabase
           .from("cutmeat_daily_reconciliation")
@@ -362,6 +485,7 @@ export async function getDailyReportWorkspace(
           .eq("report_id", report.id)
       : Promise.resolve({ data: [], error: null }),
     report ? getGeneratedPdfHistory(report.id) : Promise.resolve([]),
+    report ? getVarianceLines(report.id) : Promise.resolve([]),
   ]);
   for (const result of [
     reconciliationRes,
@@ -428,7 +552,10 @@ export async function getDailyReportWorkspace(
   const weeklyPayments = reconciliationRow
     ? buildBalanceAfterWeeklyPayments(Number(reconciliationRow.register), buckets)
     : null;
-  const currentWeekIncome = sumCurrentWeekProjectedIncome(incomeDays, reportDate);
+  // Ingresos de la semana en curso: valor plano configurado (no se
+  // prorratea por día ni se excluye el lunes) -- ver
+  // cutmeat_daily_settings.current_week_income.
+  const currentWeekIncome = settings.currentWeekIncome;
   const financial = weeklyPayments
     ? buildFinancialReport({
         reportDate,
@@ -440,16 +567,15 @@ export async function getDailyReportWorkspace(
       })
     : null;
 
-  const { classified, notEnteredDeposits, unclassified } =
-    classifyBankMovements(bankMovements);
-  const paidWithActuals = buckets.paid.map((item) => {
-    const linked = classified.find((m) => m.linkedRecurringId === item.id);
-    return linked ? { ...item, actualAmount: linked.amount } : item;
-  });
-  const variance = buildVarianceReport(paidWithActuals);
-  const balanceGabriel = weeklyPayments
-    ? buildBalanceGabriel(weeklyPayments.balanceAfterWeeklyPayments, variance.totalVariance)
-    : null;
+  const { notEnteredDeposits, unclassified } = classifyBankMovements(bankMovements);
+  // Balance GABRIEL = B del último día CERRADO anterior (en vivo o del
+  // backfill de cutmeat_daily_history) -- no depende de la conciliación
+  // de HOY, así que se calcula aunque todavía no se haya cargado.
+  const balanceGabriel = buildBalanceGabriel(
+    previousClosed?.balance ?? null,
+    settings.gabrielStartingBalance,
+  );
+  const totalVariance = totalVarianceOf(varianceLines);
   const balanceWithNotEntered = weeklyPayments
     ? buildBalanceWithNotEnteredSales(
         weeklyPayments.balanceAfterWeeklyPayments,
@@ -466,10 +592,9 @@ export async function getDailyReportWorkspace(
       .map((v) => v.vendorName),
     primeMeatsBalance: settings.primeMeatsBalance,
   };
-  const vendorItems = ((agingVendorItemsRes.data ?? []) as Array<{
-    vendor_name: string;
-    balance: number;
-  }>).map((row) => ({ name: row.vendor_name, balance: Number(row.balance) }));
+  const vendorItemRows = (agingVendorItemsRes.data ?? []) as AgingItemRow[];
+  const vendorItems = vendorItemRows.map((row) => mapAgingItemRow(row, "vendor_name"));
+  const vendorGroups = groupAgingItems(vendorItems);
   const vendorAging = agingVendorsRes.data
     ? consolidateVendorAging(
         Number((agingVendorsRes.data as { raw_total: number }).raw_total),
@@ -477,10 +602,9 @@ export async function getDailyReportWorkspace(
         vendorAgingConfig,
       )
     : null;
-  const customerItems = ((agingCustomerItemsRes.data ?? []) as Array<{
-    customer_name: string;
-    balance: number;
-  }>).map((row) => ({ name: row.customer_name, balance: Number(row.balance) }));
+  const customerItemRows = (agingCustomerItemsRes.data ?? []) as AgingItemRow[];
+  const customerItems = customerItemRows.map((row) => mapAgingItemRow(row, "customer_name"));
+  const customerGroups = groupAgingItems(customerItems);
   const customerAging = agingCustomersRes.data
     ? consolidateCustomerAging(
         Number((agingCustomersRes.data as { raw_total: number }).raw_total),
@@ -542,13 +666,17 @@ export async function getDailyReportWorkspace(
     currentWeekIncome,
     weeklyPayments,
     financial,
-    variance,
+    varianceLines,
+    totalVariance,
     balanceGabriel,
+    previousClosedBalance: previousClosed,
     balanceWithNotEntered,
     vendorAging,
     vendorItems,
+    vendorGroups,
     customerAging,
     customerItems,
+    customerGroups,
     generatedPdfs,
     warnings,
   };

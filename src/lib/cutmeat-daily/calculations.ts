@@ -216,8 +216,8 @@ export function buildFinancialReport({
   nextWeekBuckets,
   weekAfterBuckets,
   /** Proyección plana de ingresos para una semana completa (lunes a
-   * sábado) más allá de la semana en curso -- por defecto 6 días x
-   * $1,500/día, igual que la planilla. */
+   * sábado) más allá de la semana en curso -- configurable en
+   * cutmeat_daily_settings (flat_weekly_income), por defecto $9,000. */
   flatWeeklyIncome = 9_000,
   agingAdjustments = { day7: 0, day14: 0, day21: 0 },
 }: {
@@ -244,11 +244,15 @@ export function buildFinancialReport({
       weekAfterBuckets.total +
       agingAdjustments.day21,
   );
+  // Las etiquetas 7/14/21 días son el sábado de la semana (domingo a
+  // sábado) que contiene reportDate, + 2/9/16 días -- no reportDate + 3/10/17
+  // directamente. Ej.: informe 10/06 -> sábado 10/10 -> 10/12, 10/19, 10/26.
+  const saturdayOfWeek = addDays(sundayWeekStartOf(reportDate), 6);
   return {
     balanceToday: balanceAfterWeeklyPayments,
     day7: {
       label: "7-day",
-      date: addDays(reportDate, 3),
+      date: addDays(saturdayOfWeek, 2),
       income: currentWeekIncome,
       recurrentes: 0,
       agingAdjustment: agingAdjustments.day7,
@@ -256,7 +260,7 @@ export function buildFinancialReport({
     },
     day14: {
       label: "14-day",
-      date: addDays(reportDate, 10),
+      date: addDays(saturdayOfWeek, 9),
       income: flatWeeklyIncome,
       recurrentes: nextWeekBuckets.total,
       agingAdjustment: agingAdjustments.day14,
@@ -264,7 +268,7 @@ export function buildFinancialReport({
     },
     day21: {
       label: "21-day",
-      date: addDays(reportDate, 17),
+      date: addDays(saturdayOfWeek, 16),
       income: flatWeeklyIncome,
       recurrentes: weekAfterBuckets.total,
       agingAdjustment: agingAdjustments.day21,
@@ -274,45 +278,35 @@ export function buildFinancialReport({
 }
 
 // ---------------------------------------------------------------------------
-// Variación Diaria y Balance GABRIEL
+// Variación Diaria (líneas libres) y Balance GABRIEL
 // ---------------------------------------------------------------------------
 
-export type VarianceItem = {
+/** Línea libre de Variación Diaria (concepto + monto), como la carga
+ * Hernan hoy -- sin tipos fijos ni clasificación automática. Conceptos ya
+ * vistos: "Diferencia Pago Recurrentes (vendor)", "First Bank - Service
+ * Charges", "Recurrentes de la Semana", "Aging", cheques/depósitos sin
+ * cobrar puntuales (Costco Wholesale, The Butcher). */
+export type VarianceLine = {
+  id?: string;
   concept: string;
-  recurringAmount: number;
-  actualAmount: number;
-  /** recurringAmount - actualAmount: positivo = se pagó menos de lo
-   * esperado (favorable); negativo = se pagó más. */
-  variance: number;
+  amount: number;
 };
 
-/**
- * Compara cada recurrente ya pagado contra su monto real (banco o
- * QuickBooks). Un recurrente pagado sin monto real informado no aporta
- * variación (se asume que coincidió).
- */
-export function buildVarianceReport(paidRecurring: RecurringPayment[]): {
-  items: VarianceItem[];
-  totalVariance: number;
-} {
-  const items = paidRecurring
-    .filter((item) => item.actualAmount != null)
-    .map((item) => ({
-      concept: item.concept,
-      recurringAmount: item.amount,
-      actualAmount: item.actualAmount as number,
-      variance: round(item.amount - (item.actualAmount as number)),
-    }));
-  return { items, totalVariance: sum(items.map((item) => item.variance)) };
+export function totalVarianceOf(lines: VarianceLine[]): number {
+  return sum(lines.map((line) => line.amount));
 }
 
-/** Balance after Weekly Payments - variación total de recurrentes. Gabriel
- * Manzanares es el dueño del negocio. */
+/**
+ * Balance GABRIEL = Balance after Weekly Payments del último informe
+ * CERRADO anterior (de cutmeat_daily_history o del día anterior cerrado
+ * en vivo) -- NO "B - variación". Para el primer día sin anterior, usa el
+ * valor de arranque configurable (cutmeat_daily_settings.gabriel_starting_balance).
+ */
 export function buildBalanceGabriel(
-  balanceAfterWeeklyPayments: number,
-  totalVariance: number,
+  previousClosedBalanceAfterWeeklyPayments: number | null,
+  startingBalance: number,
 ): number {
-  return round(balanceAfterWeeklyPayments - totalVariance);
+  return round(previousClosedBalanceAfterWeeklyPayments ?? startingBalance);
 }
 
 // ---------------------------------------------------------------------------
@@ -457,4 +451,64 @@ export type CustomerAgingResult = {
  * los llamadores si eso cambia. */
 export function consolidateCustomerAging(rawTotal: number): CustomerAgingResult {
   return { rawTotal, consolidated: rawTotal };
+}
+
+// ---------------------------------------------------------------------------
+// Detalle por factura del aging (Vendor/Customer Balance Detail Report)
+// ---------------------------------------------------------------------------
+
+/**
+ * Una línea del aging (vendor/customer): nombre + balance (el total
+ * atribuido a ese nombre, como hoy) más el detalle opcional por factura
+ * (txn_date/txn_type/num/due_date/amount/open_balance) que permite
+ * reproducir el PDF original agrupado con subtotal. Sin detalle
+ * cargado, es exactamente el modo de hoy (un nombre, un balance).
+ */
+export type AgingDetailLine = {
+  name: string;
+  balance: number;
+  txnDate: IsoDate | null;
+  txnType: string | null;
+  num: string | null;
+  dueDate: IsoDate | null;
+  amount: number | null;
+  openBalance: number | null;
+};
+
+export type AgingGroup = {
+  name: string;
+  lines: AgingDetailLine[];
+  /** Suma de open_balance por línea si hay detalle cargado, si no
+   * balance -- el subtotal que va debajo de cada nombre en el PDF. */
+  subtotal: number;
+  /** true si alguna línea de este nombre tiene detalle por factura. */
+  hasDetail: boolean;
+};
+
+/**
+ * Agrupa las líneas de aging por nombre (vendor/customer) con un
+ * subtotal, en el orden en que llegaron -- para reproducir el Vendor/
+ * Customer Balance Detail Report original (agrupado, con subtotal por
+ * nombre y total general).
+ */
+export function groupAgingItems(items: AgingDetailLine[]): AgingGroup[] {
+  const order: string[] = [];
+  const byName = new Map<string, AgingDetailLine[]>();
+  for (const item of items) {
+    if (!byName.has(item.name)) {
+      byName.set(item.name, []);
+      order.push(item.name);
+    }
+    byName.get(item.name)!.push(item);
+  }
+  return order.map((name) => {
+    const lines = byName.get(name)!;
+    const hasDetail = lines.some(
+      (line) => line.txnDate != null || line.num != null || line.txnType != null,
+    );
+    const subtotal = round(
+      lines.reduce((total, line) => total + (line.openBalance ?? line.balance), 0),
+    );
+    return { name, lines, subtotal, hasDetail };
+  });
 }

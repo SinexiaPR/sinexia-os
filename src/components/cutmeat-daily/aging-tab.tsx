@@ -1,21 +1,34 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition, type ReactNode } from "react";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { useState, useTransition, type ReactNode } from "react";
+import { Plus, Trash2 } from "lucide-react";
 
-import { extractAgingPdf, saveAgingCustomers, saveAgingVendors } from "@/actions/cutmeat-daily";
+import { saveAgingCustomers, saveAgingVendors } from "@/actions/cutmeat-daily";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { formatMoney } from "@/lib/cutmeat-daily/format";
 import type {
-  AgingLine,
+  AgingDetailLine,
   CustomerAgingResult,
   VendorAgingResult,
 } from "@/lib/cutmeat-daily/calculations";
 
-type Row = { name: string; balance: string };
+type Row = {
+  name: string;
+  balance: string;
+  txnDate: string;
+  txnType: string;
+  num: string;
+  dueDate: string;
+  amount: string;
+  openBalance: string;
+};
+
+function emptyRow(): Row {
+  return { name: "", balance: "", txnDate: "", txnType: "", num: "", dueDate: "", amount: "", openBalance: "" };
+}
 
 function AgingBlock({
   title,
@@ -30,7 +43,7 @@ function AgingBlock({
   companyId: string;
   reportId: string | null;
   readOnly: boolean;
-  items: AgingLine[];
+  items: AgingDetailLine[];
   save: typeof saveAgingVendors;
   extra?: ReactNode;
 }) {
@@ -38,36 +51,20 @@ function AgingBlock({
     String(items.reduce((sum, item) => sum + item.balance, 0)),
   );
   const [rows, setRows] = useState<Row[]>(
-    items.map((item) => ({ name: item.name, balance: String(item.balance) })),
+    items.map((item) => ({
+      name: item.name,
+      balance: String(item.balance),
+      txnDate: item.txnDate ?? "",
+      txnType: item.txnType ?? "",
+      num: item.num ?? "",
+      dueDate: item.dueDate ?? "",
+      amount: item.amount == null ? "" : String(item.amount),
+      openBalance: item.openBalance == null ? "" : String(item.openBalance),
+    })),
   );
-  const [sourcePdfPath, setSourcePdfPath] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [extracting, setExtracting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-
-  const onUpload = (file: File | undefined) => {
-    if (!file) return;
-    setExtracting(true);
-    setMessage(null);
-    const formData = new FormData();
-    formData.set("companyId", companyId);
-    formData.set("file", file);
-    startTransition(async () => {
-      const result = await extractAgingPdf(formData);
-      setExtracting(false);
-      if ("error" in result) {
-        setMessage(result.error);
-        return;
-      }
-      if (result.rawTotal != null) setRawTotal(String(result.rawTotal));
-      setRows(result.items.map((item) => ({ name: item.name, balance: String(item.balance) })));
-      setSourcePdfPath(result.sourcePdfPath);
-      setMessage("PDF leído -- revisá el detalle antes de guardar.");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    });
-  };
 
   const submit = () => {
     if (!reportId) {
@@ -81,8 +78,17 @@ function AgingBlock({
         rawTotal: Number(rawTotal) || 0,
         items: rows
           .filter((row) => row.name.trim())
-          .map((row) => ({ name: row.name.trim(), balance: Number(row.balance) || 0 })),
-        sourcePdfPath,
+          .map((row) => ({
+            name: row.name.trim(),
+            balance: Number(row.balance) || 0,
+            txnDate: row.txnDate || null,
+            txnType: row.txnType.trim() || null,
+            num: row.num.trim() || null,
+            dueDate: row.dueDate || null,
+            amount: row.amount ? Number(row.amount) : null,
+            openBalance: row.openBalance ? Number(row.openBalance) : null,
+          })),
+        sourcePdfPath: null,
       });
       setMessage("error" in result ? result.error : "Aging guardado.");
       if (!("error" in result)) router.refresh();
@@ -91,28 +97,7 @@ function AgingBlock({
 
   return (
     <SurfaceCard>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h2 className="text-base font-semibold">{title}</h2>
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            disabled={readOnly}
-            onChange={(event) => onUpload(event.target.files?.[0])}
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={readOnly || extracting}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="size-4" />
-            {extracting ? "Leyendo PDF…" : "Subir PDF"}
-          </Button>
-        </div>
-      </div>
+      <h2 className="text-base font-semibold">{title}</h2>
       <label className="mt-3 block max-w-xs space-y-1 text-sm">
         <span className="text-muted-foreground text-xs">
           TOTAL general (del PDF de QuickBooks)
@@ -128,51 +113,127 @@ function AgingBlock({
       {extra}
 
       <div className="mt-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Detalle</h3>
+        <div>
+          <h3 className="text-sm font-semibold">Detalle</h3>
+          <p className="text-muted-foreground text-xs">
+            Nombre + balance alcanza para el total. Para reproducir el
+            detalle por factura del PDF original, completá además fecha/
+            tipo/número/vencimiento/monto/saldo abierto -- un nombre puede
+            repetirse en varias filas (una por factura).
+          </p>
+        </div>
         <Button
           size="sm"
           variant="outline"
           disabled={readOnly}
-          onClick={() => setRows((current) => [...current, { name: "", balance: "" }])}
+          onClick={() => setRows((current) => [...current, emptyRow()])}
         >
           <Plus className="size-4" />
           Agregar
         </Button>
       </div>
-      <div className="mt-2 max-h-96 space-y-2 overflow-y-auto">
+      <div className="mt-2 max-h-[32rem] space-y-2 overflow-y-auto">
         {rows.map((row, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <Input
-              placeholder="Nombre"
-              value={row.name}
-              disabled={readOnly}
-              onChange={(event) => {
-                const next = [...rows];
-                next[index] = { ...row, name: event.target.value };
-                setRows(next);
-              }}
-            />
-            <Input
-              inputMode="decimal"
-              placeholder="Balance"
-              className="w-32"
-              value={row.balance}
-              disabled={readOnly}
-              onChange={(event) => {
-                const next = [...rows];
-                next[index] = { ...row, balance: event.target.value };
-                setRows(next);
-              }}
-            />
-            <button
-              type="button"
-              aria-label="Eliminar"
-              disabled={readOnly}
-              className="text-muted-foreground hover:text-destructive p-1"
-              onClick={() => setRows(rows.filter((_, i) => i !== index))}
-            >
-              <Trash2 className="size-4" />
-            </button>
+          <div key={index} className="space-y-1.5 rounded-lg border p-2">
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Nombre"
+                value={row.name}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, name: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                inputMode="decimal"
+                placeholder="Balance"
+                className="w-32"
+                value={row.balance}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, balance: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Eliminar"
+                disabled={readOnly}
+                className="text-muted-foreground hover:text-destructive p-1"
+                onClick={() => setRows(rows.filter((_, i) => i !== index))}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+            <div className="grid gap-1.5 sm:grid-cols-6">
+              <Input
+                type="date"
+                placeholder="Fecha"
+                value={row.txnDate}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, txnDate: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                placeholder="Tipo"
+                value={row.txnType}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, txnType: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                placeholder="Número"
+                value={row.num}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, num: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                type="date"
+                placeholder="Vencimiento"
+                value={row.dueDate}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, dueDate: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                inputMode="decimal"
+                placeholder="Monto"
+                value={row.amount}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, amount: event.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                inputMode="decimal"
+                placeholder="Saldo abierto"
+                value={row.openBalance}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = { ...row, openBalance: event.target.value };
+                  setRows(next);
+                }}
+              />
+            </div>
           </div>
         ))}
         {rows.length === 0 ? (
@@ -202,9 +263,9 @@ export function AgingTab({
   companyId: string;
   reportId: string | null;
   readOnly: boolean;
-  vendorItems: AgingLine[];
+  vendorItems: AgingDetailLine[];
   vendorAging: VendorAgingResult | null;
-  customerItems: AgingLine[];
+  customerItems: AgingDetailLine[];
   customerAging: CustomerAgingResult | null;
 }) {
   return (
