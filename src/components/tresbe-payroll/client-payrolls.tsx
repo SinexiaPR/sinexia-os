@@ -31,7 +31,7 @@ export function TresbeClientPayrolls({
   }, [selected]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header>
         <p className="text-muted-foreground text-sm">Tresbe</p>
         <h1 className="mt-2 text-xl font-semibold tracking-tight">Nóminas</h1>

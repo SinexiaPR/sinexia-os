@@ -29,16 +29,16 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className={cn("overflow-hidden rounded-md border border-border", className)}>
+    <div className={cn("overflow-hidden rounded-lg border border-border", className)}>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-full caption-bottom text-sm">
+        <table className="w-full min-w-full caption-bottom text-[13px]">
           <thead className="border-b border-border bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="h-11 px-4 text-left align-middle font-medium text-muted-foreground"
+                    className="h-9 px-3 text-left align-middle font-medium text-muted-foreground"
                   >
                     {header.isPlaceholder
                       ? null
@@ -59,7 +59,7 @@ export function DataTable<TData, TValue>({
                   className="border-b border-border transition-colors hover:bg-muted/30"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle">
+                    <td key={cell.id} className="px-3 py-2 align-middle">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext(),
@@ -72,7 +72,7 @@ export function DataTable<TData, TValue>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="h-24 px-4 text-center text-muted-foreground"
+                  className="h-24 px-3 text-center text-muted-foreground"
                 >
                   {emptyMessage}
                 </td>

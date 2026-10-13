@@ -48,7 +48,7 @@ export default async function InboxPage({
   const companies = profile.role === "admin" ? await getCompanies() : [];
 
   return (
-    <div className={isClient ? "space-y-8 pb-6 sm:space-y-10" : "space-y-12"}>
+    <div className={isClient ? "space-y-5 pb-6 sm:space-y-6" : "space-y-12"}>
       {isClient ? (
         <header className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">

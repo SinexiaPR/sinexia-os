@@ -97,7 +97,7 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
       : baseQuickActions;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <header className="space-y-2">
         <p className="text-muted-foreground text-sm">
           {company?.name ?? "Su empresa"}

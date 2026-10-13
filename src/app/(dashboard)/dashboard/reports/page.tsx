@@ -41,7 +41,7 @@ export default async function ReportsPage({
     ]);
 
     return (
-      <div className="space-y-10">
+      <div className="space-y-6">
         <PageHeader
           title="Reports"
           description="Publish report files to client companies."
@@ -102,7 +102,7 @@ export default async function ReportsPage({
   const viewedSet = new Set(viewedReportIds);
 
   return (
-    <div className="space-y-8 pb-6 sm:space-y-10">
+    <div className="space-y-5 pb-6 sm:space-y-6">
       <Suspense fallback={null}>
         <ReportsViewHandler profileId={profile.id} />
       </Suspense>

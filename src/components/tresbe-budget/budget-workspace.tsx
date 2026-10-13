@@ -100,7 +100,7 @@ export function TresbeBudgetWorkspace({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header className="space-y-5">
         <Button asChild variant="ghost" className="-ml-3">
           <Link href={`/dashboard/admin/companies/${company.id}`}>

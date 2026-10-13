@@ -57,7 +57,7 @@ export default async function AdminCompanyInvoicesPage({
     );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <Button asChild variant="ghost" className="-ml-3">
         <Link href={`/dashboard/admin/companies/${companyId}`}>
           <ArrowLeft className="size-4" />

@@ -6,7 +6,7 @@ export async function AdminDashboard() {
   const cards = await getAdminClientDashboard();
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         title="Dashboard"
         description="Estado de cada cliente activo: nómina, facturación y el resto de sus acciones principales."

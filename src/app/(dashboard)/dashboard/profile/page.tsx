@@ -26,7 +26,7 @@ export default async function ProfilePage() {
   const isClient = profile.role === "client";
 
   return (
-    <div className={isClient ? "space-y-10" : "space-y-12"}>
+    <div className={isClient ? "space-y-6" : "space-y-12"}>
       {isClient ? (
         <header className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">Perfil</h1>

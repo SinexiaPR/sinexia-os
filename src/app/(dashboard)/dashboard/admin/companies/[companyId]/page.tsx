@@ -93,7 +93,7 @@ export default async function AdminCompanyPage({
       : null;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <header className="space-y-5">
         <Button asChild variant="ghost" className="-ml-3">
           <Link href="/dashboard">← Dashboard</Link>

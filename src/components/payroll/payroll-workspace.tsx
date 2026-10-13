@@ -118,7 +118,7 @@ export function PayrollWorkspace({
     });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header className="space-y-4">
         {isAdmin ? (
           <Button asChild variant="ghost" className="-ml-3">
