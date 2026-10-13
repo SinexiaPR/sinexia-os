@@ -601,7 +601,7 @@ assert.doesNotMatch(
   "saveRecurringPayment/deleteRecurringPayment (tabla vieja) se eliminaron, no quedan como dead code",
 );
 assert.match(
-  read("supabase/migrations/20261013140000_cutmeat_daily_bank_movements_relink_recurring.sql"),
+  read("supabase/migrations/20261013114120_cutmeat_daily_bank_movements_relink_recurring.sql"),
   /REFERENCES public\.cutmeat_recurrentes\(id\) ON DELETE SET NULL/,
   "cutmeat_daily_bank_movements.linked_recurring_id apunta por FK a cutmeat_recurrentes",
 );

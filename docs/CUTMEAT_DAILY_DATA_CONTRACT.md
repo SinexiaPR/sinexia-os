@@ -6,7 +6,7 @@ Generado a partir de las migraciones reales del módulo "Informes diarios"
 `20261012121000_cutmeat_daily_seed_config.sql`,
 `20261013130000_cutmeat_daily_data_contract.sql`,
 `20261013131000_cutmeat_daily_calc_fixes.sql`,
-`20261013140000_cutmeat_daily_bank_movements_relink_recurring.sql` y
+`20261013114120_cutmeat_daily_bank_movements_relink_recurring.sql` y
 `20261013141000_cutmeat_daily_drop_old_recurring_payments.sql`.
 Documenta el esquema tal como quedó aplicado, no de memoria — si una
 migración nueva cambia una tabla, actualizar este archivo junto con
@@ -161,7 +161,7 @@ DELETE SET NULL`), `is_not_entered_deposit BOOLEAN`, `note`,
 
 `linked_recurring_id` se repuntó de la tabla vieja
 `cutmeat_daily_recurring_payments` a `cutmeat_recurrentes` en
-`20261013140000_cutmeat_daily_bank_movements_relink_recurring.sql` — el
+`20261013114120_cutmeat_daily_bank_movements_relink_recurring.sql` — el
 desplegable de BankTab ya ofrecía recurrentes de `cutmeat_recurrentes`
 (vía `getRecurringPayments`), así que vincular un movimiento a un
 recurrente real fallaba contra el FK viejo hasta ese cambio.
