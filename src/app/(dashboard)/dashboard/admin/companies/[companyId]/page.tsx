@@ -101,7 +101,7 @@ export default async function AdminCompanyPage({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Empresa · Admin workspace
+              Empresa
             </p>
             <h1 className="mt-2 text-xl font-semibold tracking-tight">
               {company.name}
