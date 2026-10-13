@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarClock, FileText, FolderOpen } from "lucide-react";
+import { CalendarClock, FileText, FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { MetricCard, SurfaceCard } from "@/components/ui/surface-card";
@@ -96,10 +96,7 @@ export default async function AdminCompanyPage({
     <div className="space-y-10">
       <header className="space-y-5">
         <Button asChild variant="ghost" className="-ml-3">
-          <Link href="/dashboard">
-            <ArrowLeft className="size-4" />
-            Volver a Empresas
-          </Link>
+          <Link href="/dashboard">← Dashboard</Link>
         </Button>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -263,7 +260,7 @@ export default async function AdminCompanyPage({
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="font-semibold">{category.label}</h3>
                   {category.urgentCount ? (
-                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
                       {category.urgentCount} urgentes
                     </span>
                   ) : null}
@@ -377,108 +374,34 @@ export default async function AdminCompanyPage({
         </section>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <SurfaceCard className="lg:col-span-3">
-          <div className="flex items-center gap-2">
-            <CalendarClock className="text-muted-foreground size-5" />
-            <h2 className="text-lg font-semibold">
-              Actividad reciente de {company.name}
-            </h2>
-          </div>
-          <div className="mt-5 space-y-3">
-            {activity.length ? (
-              activity.map((item) => (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className="hover:border-primary/40 block rounded-lg border px-4 py-3 transition"
-                >
-                  <p className="text-sm font-medium">{item.title}</p>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {item.description} · {formatDate(item.timestamp)}
-                  </p>
-                </Link>
-              ))
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                No hay actividad reciente para esta empresa.
-              </p>
-            )}
-          </div>
-        </SurfaceCard>
-        <SurfaceCard className="lg:col-span-2">
-          <h2 className="text-lg font-semibold">Acceso rápido</h2>
-          <div className="mt-4 grid gap-2">
-            {company.slug === "tresbe" ? (
-              <Button asChild variant="outline" className="justify-start">
-                <Link href={`/dashboard/admin/companies/${company.id}/payroll`}>
-                  Nómina semanal
-                </Link>
-              </Button>
-            ) : null}
-            {company.slug === "sibarita" ? (
-              <Button asChild variant="outline" className="justify-start">
-                <Link href={`/dashboard/payroll?company=${company.id}`}>
-                  Nómina semanal
-                </Link>
-              </Button>
-            ) : null}
-            {company.slug === "cut-meat-distributors" ? (
-              <>
-                <Button asChild variant="outline" className="justify-start">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/daily-reports`}
-                  >
-                    Informes diarios
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="justify-start">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/recurrentes`}
-                  >
-                    Recurrentes
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="justify-start">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/historial-diario`}
-                  >
-                    Historial diario
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="justify-start">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/paquete-dueno`}
-                  >
-                    Paquete para el dueño
-                  </Link>
-                </Button>
-              </>
-            ) : null}
-            <Button asChild variant="outline" className="justify-start">
-              <Link href={`/dashboard/inbox?company=${company.id}`}>
-                <FileText className="size-4" />
-                Ver todos los documentos
-              </Link>
-            </Button>
-            {categories.slice(0, 4).map((category) => (
-              <Button
-                key={category.slug}
-                asChild
-                variant="outline"
-                className="justify-start"
+      <SurfaceCard>
+        <div className="flex items-center gap-2">
+          <CalendarClock className="text-muted-foreground size-5" />
+          <h2 className="text-lg font-semibold">
+            Actividad reciente de {company.name}
+          </h2>
+        </div>
+        <div className="mt-5 space-y-3">
+          {activity.length ? (
+            activity.map((item) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="hover:border-primary/40 block rounded-lg border px-4 py-3 transition"
               >
-                <Link
-                  href={`/dashboard/admin/companies/${company.id}/${category.slug}`}
-                >
-                  <FolderOpen className="size-4" />
-                  Ver {category.label.toLocaleLowerCase("es")}
-                </Link>
-              </Button>
-            ))}
-          </div>
-        </SurfaceCard>
-      </div>
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {item.description} · {formatDate(item.timestamp)}
+                </p>
+              </Link>
+            ))
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              No hay actividad reciente para esta empresa.
+            </p>
+          )}
+        </div>
+      </SurfaceCard>
     </div>
   );
 }
