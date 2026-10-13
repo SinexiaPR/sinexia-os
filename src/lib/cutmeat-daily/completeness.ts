@@ -23,6 +23,18 @@ export type DailyReportSources = {
   hasCustomerAging: boolean;
 };
 
+/** "blocking": no se puede cerrar el día ni armar el Paquete para el
+ * dueño mientras exista una (control de conciliación distinto de
+ * $0.00, proveedor nuevo sin clasificar, movimiento del banco sin
+ * clasificar, o una fuente de datos todavía no cargada). "info": se
+ * muestra igual en pantalla, pero no bloquea nada -- hoy solo
+ * "recurrente vencido sin pago", que es el bucket normal "Prior + This
+ * week" (ya descontado del Balance after Weekly Payments), no un error. */
+export type DailyReportWarning = {
+  severity: "blocking" | "info";
+  message: string;
+};
+
 export function checkDailyReportCompleteness({
   reportDate,
   reconciliationControl,
@@ -39,35 +51,37 @@ export function checkDailyReportCompleteness({
   vendorAgingItems: AgingLine[];
   vendorAgingConfig: VendorAgingConfig;
   sources: DailyReportSources;
-}): string[] {
-  const warnings: string[] = [];
+}): DailyReportWarning[] {
+  const warnings: DailyReportWarning[] = [];
+  const blocking = (message: string) => warnings.push({ severity: "blocking", message });
+  const info = (message: string) => warnings.push({ severity: "info", message });
 
   if (!sources.hasReconciliation) {
-    warnings.push("Falta cargar el Reconciliation Report de QuickBooks.");
+    blocking("Falta cargar el Reconciliation Report de QuickBooks.");
   } else if (reconciliationControl && !reconciliationControl.balanced) {
-    warnings.push(
+    blocking(
       `El control de conciliación no da $0.00 (diferencia: ${reconciliationControl.control.toFixed(2)}).`,
     );
   }
   if (!sources.hasBankExport) {
-    warnings.push("Falta cargar el export del banco (PDF).");
+    blocking("Falta cargar el export del banco (PDF).");
   }
   if (!sources.hasVendorAging) {
-    warnings.push("Falta cargar el Vendor Balance Detail Report.");
+    blocking("Falta cargar el Vendor Balance Detail Report.");
   }
   if (!sources.hasCustomerAging) {
-    warnings.push("Falta cargar el Customer Balance Detail Report.");
+    blocking("Falta cargar el Customer Balance Detail Report.");
   }
 
   const { unclassified } = classifyBankMovements(bankMovements);
   for (const movement of unclassified) {
-    warnings.push(
+    blocking(
       `Movimiento del banco sin clasificar: "${movement.description}" (${movement.amount.toFixed(2)}).`,
     );
   }
 
   for (const item of overdueUnpaidRecurring(recurring, reportDate)) {
-    warnings.push(
+    info(
       `Recurrente vencido sin pago: ${item.concept}, vencía el ${formatDayLabel(item.dueDate)}.`,
     );
   }
@@ -77,7 +91,7 @@ export function checkDailyReportCompleteness({
     vendorAgingConfig,
   );
   for (const vendor of unconfiguredVendors) {
-    warnings.push(
+    blocking(
       `Proveedor nuevo en el aging, sin configurar como incluido ni excluido: ${vendor.name}.`,
     );
   }

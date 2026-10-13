@@ -33,7 +33,7 @@ export const DEFAULT_PACKAGE_HIGHLIGHTS: HighlightTarget[] = [
   {
     key: "aging_vendors_consolidated",
     label: "Aging Vendors - Consolidated Total",
-    xEnd: 576,
+    xEnd: 606,
     y: 501,
     fontSize: 9,
   },

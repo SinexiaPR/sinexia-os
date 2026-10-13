@@ -12,7 +12,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import {
+  buildAgingCustomersPdf,
   buildAgingVendorsPdf,
+  buildConsolidatedPdf,
   money,
 } from "../src/lib/cutmeat-daily/pdf";
 import {
@@ -307,9 +309,22 @@ const completenessWarnings = checkDailyReportCompleteness({
   vendorAgingConfig: vendorConfig,
   sources: { hasReconciliation: true, hasBankExport: true, hasVendorAging: true, hasCustomerAging: true },
 });
-assert.ok(completenessWarnings.some((w) => w.includes("sin clasificar")));
-assert.ok(completenessWarnings.some((w) => w.includes("Suplidor Nuevo LLC")));
-assert.ok(completenessWarnings.some((w) => w.includes("Recurrente vencido")));
+assert.ok(
+  completenessWarnings.some((w) => w.severity === "blocking" && w.message.includes("sin clasificar")),
+  "movimiento sin clasificar bloquea",
+);
+assert.ok(
+  completenessWarnings.some(
+    (w) => w.severity === "blocking" && w.message.includes("Suplidor Nuevo LLC"),
+  ),
+  "proveedor nuevo sin configurar bloquea",
+);
+assert.ok(
+  completenessWarnings.some(
+    (w) => w.severity === "info" && w.message.includes("Recurrente vencido"),
+  ),
+  "recurrente vencido sin pago es informativo (el bucket normal Prior + This week, no bloquea)",
+);
 
 console.log("Alertas de completitud (sin clasificar, vencidos, proveedor nuevo): OK.");
 
@@ -375,7 +390,213 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   }
 }
 
+type PositionedTextItem = { str: string; x: number; y: number; width: number };
+
+/**
+ * Posición real de cada fragmento de texto de una página (vía
+ * pdfjs-dist, no pdf-parse) -- para detectar colisiones visuales que el
+ * texto extraído no revela (dos textos se pueden superponer en el PDF y
+ * seguir extrayéndose bien como texto plano).
+ */
+async function extractPdfTextPositions(
+  bytes: Uint8Array,
+  pageNumber: number,
+): Promise<PositionedTextItem[]> {
+  await import("@napi-rs/canvas");
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false }).promise;
+  try {
+    const page = await doc.getPage(pageNumber);
+    const content = await page.getTextContent();
+    return content.items
+      .filter((item) => "str" in item && "transform" in item && item.str.trim().length > 0)
+      .map((item) => {
+        const textItem = item as { str: string; transform: number[]; width: number };
+        return { str: textItem.str, x: textItem.transform[4], y: textItem.transform[5], width: textItem.width };
+      });
+  } finally {
+    await doc.destroy();
+  }
+}
+
+/** Dos fragmentos "colisionan" si están en la misma línea (y parecido) y
+ * sus rangos horizontales se superponen -- exactamente lo que le pasó a
+ * "Aging Vendors (consolidado...)" y "Excluidos (...)" en la portada del
+ * Paquete para el dueño antes de este fix. */
+function assertNoHorizontalOverlap(
+  items: PositionedTextItem[],
+  startsWithA: string,
+  startsWithB: string,
+  message: string,
+) {
+  const a = items.find((item) => item.str.startsWith(startsWithA));
+  const b = items.find((item) => item.str.startsWith(startsWithB));
+  assert.ok(a, `no se encontró el texto "${startsWithA}"`);
+  assert.ok(b, `no se encontró el texto "${startsWithB}"`);
+  if (Math.abs(a!.y - b!.y) < 3) {
+    assert.ok(a!.x + a!.width <= b!.x + 0.5, message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Aging real del 09/10/2026 (24 líneas de proveedores, 22 de clientes,
+// con detalle por factura) -- paginación y total general de
+// buildAgingVendorsPdf/buildAgingCustomersPdf contra el PDF que de verdad
+// se entrega. Hernan entrega Aging Vendors en 1 página y Aging Customers
+// en 2; esto verifica que el PDF generado haga lo mismo con estos datos
+// (no se corte, con el total general visible) en vez de solo revisar el
+// cálculo puro.
+// ---------------------------------------------------------------------------
+
+function detailLine(
+  name: string,
+  balance: number,
+  txnDate: string,
+  txnType: string,
+  num: string,
+  dueDate: string,
+): AgingDetailLine {
+  return { name, balance, txnDate: txnDate as never, txnType, num, dueDate: dueDate as never, amount: balance, openBalance: balance };
+}
+
+const realVendorLines1009: AgingDetailLine[] = [
+  detailLine("MAYS CHEMICAL COMP. PR INC.", 171.16, "2026-09-07", "Bill", "170315", "2026-10-07"),
+  detailLine("NORTHWESTERN SELECTA", 1637.22, "2026-09-08", "Bill", "4146373", "2026-09-15"),
+  detailLine("NORTHWESTERN SELECTA", 1444.11, "2026-09-09", "Bill", "4147526", "2026-09-16"),
+  detailLine("NORTHWESTERN SELECTA", 786.21, "2026-09-10", "Bill", "4148368", "2026-09-17"),
+  detailLine("NORTHWESTERN SELECTA", 167.10, "2026-09-11", "Bill", "4149416", "2026-09-18"),
+  detailLine("NORTHWESTERN SELECTA", 386.86, "2026-09-30", "Bill", "4161273", "2026-10-07"),
+  detailLine("PUENTE SELECTIONS", 151.25, "2026-09-11", "Bill", "21751", "2026-10-02"),
+  detailLine("QUIRCH FOODS CO.", 1096.50, "2026-09-08", "Bill", "14647309", "2026-10-08"),
+  detailLine("QUIRCH FOODS CO.", 915.92, "2026-09-09", "Bill", "14651351", "2026-10-09"),
+  detailLine("QUIRCH FOODS CO.", 915.92, "2026-09-10", "Bill", "14654880", "2026-10-10"),
+  detailLine("QUIRCH FOODS CO.", 312.06, "2026-09-11", "Bill", "14658946", "2026-10-11"),
+  detailLine("QUIRCH FOODS CO.", 47.03, "2026-09-11", "Bill", "14659161", "2026-10-11"),
+  detailLine("QUIRCH FOODS CO.", 1428.34, "2026-09-17", "Bill", "14675310", "2026-10-17"),
+  detailLine("QUIRCH FOODS CO.", 2263.74, "2026-09-18", "Bill", "14678674", "2026-10-18"),
+  detailLine("QUIRCH FOODS CO.", 442.00, "2026-09-21", "Bill", "14683237", "2026-10-21"),
+  detailLine("QUIRCH FOODS CO.", 1974.41, "2026-09-23", "Bill", "14690855", "2026-10-23"),
+  detailLine("QUIRCH FOODS CO.", 3216.15, "2026-09-25", "Bill", "14698378", "2026-10-25"),
+  detailLine("QUIRCH FOODS CO.", 697.70, "2026-09-30", "Bill", "14711299", "2026-10-30"),
+  detailLine("QUIRCH FOODS CO.", 1669.48, "2026-10-02", "Bill", "14718130", "2026-11-01"),
+  detailLine("QUIRCH FOODS CO.", 509.30, "2026-10-05", "Bill", "14723127", "2026-11-04"),
+  detailLine("Service Zone, Inc.", 252.21, "2026-09-12", "Bill", "G26-09-0908", "2026-09-12"),
+  detailLine("Service Zone, Inc.", 159.14, "2026-09-19", "Bill", "G26-09-0936", "2026-09-19"),
+  detailLine("Service Zone, Inc.", 169.58, "2026-09-26", "Bill", "G26-09-0962", "2026-09-26"),
+  detailLine("Service Zone, Inc.", 92.40, "2026-10-03", "Bill", "G26-10-0987", "2026-10-03"),
+];
+assert.equal(realVendorLines1009.length, 24, "24 líneas de aging de proveedores del 09/10");
+const realVendorRawTotal1009 = Math.round(
+  realVendorLines1009.reduce((total, line) => total + line.balance, 0) * 100,
+) / 100;
+assert.equal(realVendorRawTotal1009, 20905.79);
+
+const realCustomerLines1009: AgingDetailLine[] = [
+  detailLine("ANTONIOS REST.", 694.13, "2026-09-23", "Invoice", "0729", "2026-10-14"),
+  detailLine("BARDOT REST.", 433.58, "2026-08-28", "Invoice", "0698", "2026-09-18"),
+  detailLine("CASA MANOLO", 319.35, "2026-09-11", "Invoice", "0718", "2026-10-02"),
+  detailLine("EL CHOTIS", 763.17, "2026-09-02", "Invoice", "0702", "2026-09-23"),
+  detailLine("EL CHOTIS", 699.56, "2026-09-16", "Invoice", "0722", "2026-10-07"),
+  detailLine("EL CHOTIS", 737.15, "2026-09-30", "Invoice", "0740", "2026-10-21"),
+  detailLine("EL RODABALLO REST.", 1663.65, "2026-09-23", "Invoice", "0728", "2026-10-14"),
+  detailLine("KIMPO GARDEN", 542.07, "2026-09-21", "Invoice", "0726", "2026-10-12"),
+  detailLine("LA BRAZA SMOKE HOUSE", 1257.33, "2026-08-21", "Invoice", "0686", "2026-09-11"),
+  detailLine("LA BRAZA SMOKE HOUSE", 747.78, "2026-10-02", "Invoice", "0743", "2026-10-23"),
+  detailLine("MARMALADE CORP", 1885.22, "2026-09-25", "Invoice", "0733", "2026-10-16"),
+  detailLine("PAULINA ESCANES", 444.00, "2026-09-25", "Invoice", "0735", "2026-10-25"),
+  detailLine("PAULINA ESCANES", 444.00, "2026-10-02", "Invoice", "0742", "2026-11-01"),
+  detailLine("RARE 125 REST", 819.77, "2026-09-02", "Invoice", "0699", "2026-09-23"),
+  detailLine("REST. MIRAFLORES 19", 1549.28, "2026-07-02", "Invoice", "0588", "2026-07-23"),
+  detailLine("SABORES GOURMET", 885.85, "2026-09-10", "Invoice", "0715", "2026-10-01"),
+  detailLine("SABORES GOURMET", 1007.37, "2026-09-25", "Invoice", "0734", "2026-10-16"),
+  detailLine("SUR BARRA NIKKEI REST.", 548.44, "2026-08-26", "Invoice", "0693", "2026-09-16"),
+  detailLine("SUR BARRA NIKKEI REST.", 265.52, "2026-09-02", "Invoice", "0701", "2026-09-23"),
+  detailLine("SUR BARRA NIKKEI REST.", 541.29, "2026-09-23", "Invoice", "0730", "2026-10-14"),
+  detailLine("TIJUANA'S SAN PATRICIO", 137.17, "2026-08-20", "Invoice", "0681", "2026-09-10"),
+  detailLine("TIJUANAS'S VIEJO SAN JUAN", 272.40, "2026-08-20", "Invoice", "0680", "2026-09-10"),
+];
+assert.equal(realCustomerLines1009.length, 22, "22 líneas de aging de clientes del 09/10");
+const realCustomerRawTotal1009 = Math.round(
+  realCustomerLines1009.reduce((total, line) => total + line.balance, 0) * 100,
+) / 100;
+assert.equal(realCustomerRawTotal1009, 16658.08);
+
 async function main() {
+  const realVendorPdf = await buildAgingVendorsPdf({
+    reportDate: REPORT_DATE,
+    items: realVendorLines1009,
+    rawTotal: realVendorRawTotal1009,
+    groups: groupAgingItems(realVendorLines1009),
+  });
+  const realVendorText = await extractPdfText(realVendorPdf);
+  assert.ok(
+    realVendorText.includes(`Total general ${money(20905.79)}`),
+    "Aging Vendors del 09/10: total general visible y correcto ($20,905.79)",
+  );
+  assert.ok(
+    realVendorText.includes("-- 1 of 1 --"),
+    "Aging Vendors del 09/10 entra en 1 página, igual que la planilla de Hernan",
+  );
+
+  const realCustomerPdf = await buildAgingCustomersPdf({
+    reportDate: REPORT_DATE,
+    items: realCustomerLines1009,
+    rawTotal: realCustomerRawTotal1009,
+    groups: groupAgingItems(realCustomerLines1009),
+  });
+  const realCustomerText = await extractPdfText(realCustomerPdf);
+  assert.ok(
+    realCustomerText.includes(`Total general ${money(16658.08)}`),
+    "Aging Customers del 09/10: total general visible y correcto ($16,658.08)",
+  );
+  assert.ok(
+    realCustomerText.includes("-- 2 of 2 --") && !realCustomerText.includes("-- 3 of"),
+    "Aging Customers del 09/10 entra en 2 páginas, igual que la planilla de Hernan",
+  );
+
+  console.log(
+    "Aging real del 09/10 (24 proveedores, 22 clientes): paginación y total " +
+      "general del PDF generado -- OK.",
+  );
+
+  // Portada del Paquete para el dueño (página 2 de buildConsolidatedPdf):
+  // "Aging Vendors (consolidado Wagyu + Prime Meats)" y "Excluidos
+  // (Prime Meats & Seafoods, Jose Santiago Inc)" son etiquetas largas
+  // que llegaron a superponerse con su propio valor (texto encima de
+  // texto, ilegible) cuando el raw total y el consolidado coinciden en
+  // longitud -- vendorAging (rawTotal 23096.75, excludedSubtotal
+  // 1276.75, primeMeatsBalance 914.21, consolidated 20905.79, 4 valores
+  // distintos) ya está definido arriba. Se verifica por posición real
+  // del texto (pdfjs), no solo que el texto esté presente -- dos
+  // textos superpuestos igual se extraen bien como texto plano.
+  const consolidatedPdf = await buildConsolidatedPdf({
+    reportDate: REPORT_DATE,
+    control: null,
+    recurrentes: { prior: [], priorTotal: 0, thisWeek: [], thisWeekTotal: 0 },
+    financial: null,
+    varianceLines: [],
+    totalVariance: 0,
+    balanceGabriel: null,
+    balanceWithNotEntered: null,
+    incomeDays: [],
+    vendorAging,
+    customerAgingTotal: 16658.08,
+  });
+  const page2Items = await extractPdfTextPositions(consolidatedPdf, 2);
+  assertNoHorizontalOverlap(
+    page2Items,
+    "Aging Vendors (consolidado",
+    money(vendorAging.consolidated),
+    "la etiqueta \"Aging Vendors (consolidado...)\" no debe superponerse con su valor",
+  );
+  assertNoHorizontalOverlap(
+    page2Items,
+    "Excluidos (Prime Meats",
+    money(vendorAging.excludedSubtotal),
+    "la etiqueta \"Excluidos (...)\" no debe superponerse con su valor",
+  );
+  console.log("Portada del Paquete para el dueño: etiquetas largas sin superponerse con su valor -- OK.");
+
   const withDetailPdf = await buildAgingVendorsPdf({
     reportDate: REPORT_DATE,
     items: detailLines,

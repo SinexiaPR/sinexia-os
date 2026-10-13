@@ -81,7 +81,15 @@ fecha de vencimiento de cada recurrente.
 - **Recurrentes prior to this week**: pendientes (no pagados) con
   vencimiento antes del domingo de la semana en curso. **For this week**:
   pendientes dentro de esa semana. Un recurrente pagado nunca suma en
-  ninguna de las dos (no es deuda pendiente).
+  ninguna de las dos (no es deuda pendiente). Un recurrente vencido sin
+  pago es justamente ese bucket normal "Prior + This week" (ya
+  descontado de B) — `checkDailyReportCompleteness` lo muestra como
+  aviso **informativo** (`severity: "info"`), no como bloqueante: no
+  impide cerrar el día ni armar el Paquete para el dueño. Los únicos
+  avisos que bloquean el paquete (`checkPackageEligibility`) son
+  `severity: "blocking"`: control de conciliación distinto de $0.00,
+  proveedor nuevo sin clasificar, movimiento del banco sin clasificar, y
+  una fuente de datos todavía no cargada.
 - **Balance after Weekly Payments (B)** = `Register − recurrentes prior −
   recurrentes this week`. Se congela en `cutmeat_daily_reports.balance_after_weekly`
   al cerrar el día (`closeDailyReport`) — el día siguiente lo lee tal cual
