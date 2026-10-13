@@ -229,24 +229,39 @@ export async function buildAndStorePackage(
   const packageBytes = await packageDoc.save();
   const contentHash = createHash("sha256").update(packageBytes).digest("hex");
 
+  // La portada se renderiza ANTES de tocar Storage: si pdfjs-dist/
+  // @napi-rs/canvas fallan acá (p. ej. el worker faltante en
+  // producción), todavía no se subió nada, así que no queda ningún
+  // archivo huérfano por ese motivo.
+  const cover = await renderPdfPageToPng(packageBytes, 1, 1600);
+
   const supabase = await createClient();
   const latestVersion = await getLatestPackage(companyId, reportDate);
   const version = (latestVersion?.version ?? 0) + 1;
 
   const packagePath = `${companyId}/${reportDate}/package/v${version}-CUTD-Package-${reportDate}.pdf`;
+  const coverPath = `${companyId}/${reportDate}/package/v${version}-CUTD-Portada-${reportDate}.png`;
+
+  // Todo o nada: si algo falla después de subir el PDF (la portada, o
+  // la fila en cutmeat_report_packages), se borra lo que ya se subió en
+  // este intento en vez de dejarlo huérfano. upsert:true además deja
+  // que un reintento posterior pise limpio un archivo que haya quedado
+  // de un intento anterior fallido con la misma versión (p. ej. uno
+  // interrumpido antes de este fix).
   const uploadedPdf = await admin.storage.from("cutmeat-daily").upload(packagePath, packageBytes, {
     contentType: "application/pdf",
-    upsert: false,
+    upsert: true,
   });
   if (uploadedPdf.error) throw uploadedPdf.error;
 
-  const cover = await renderPdfPageToPng(packageBytes, 1, 1600);
-  const coverPath = `${companyId}/${reportDate}/package/v${version}-CUTD-Portada-${reportDate}.png`;
   const uploadedCover = await admin.storage.from("cutmeat-daily").upload(coverPath, cover.png, {
     contentType: "image/png",
-    upsert: false,
+    upsert: true,
   });
-  if (uploadedCover.error) throw uploadedCover.error;
+  if (uploadedCover.error) {
+    await admin.storage.from("cutmeat-daily").remove([packagePath]);
+    throw uploadedCover.error;
+  }
 
   const inserted = await supabase
     .from("cutmeat_report_packages")
@@ -261,7 +276,10 @@ export async function buildAndStorePackage(
     })
     .select("*")
     .single();
-  if (inserted.error) throw inserted.error;
+  if (inserted.error) {
+    await admin.storage.from("cutmeat-daily").remove([packagePath, coverPath]);
+    throw inserted.error;
+  }
   return mapRow(inserted.data);
 }
 

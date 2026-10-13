@@ -11,6 +11,8 @@
 
 import { join } from "node:path";
 
+import { ensurePdfjsNodeWorker } from "@/lib/pdfjs-node-worker";
+
 const STANDARD_FONT_DATA_URL = `${join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts")}/`;
 
 export type RenderedPage = { png: Buffer; width: number; height: number };
@@ -30,6 +32,7 @@ export async function renderPdfPageToPng(
   await import("@napi-rs/canvas");
   const { createCanvas } = await import("@napi-rs/canvas");
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  await ensurePdfjsNodeWorker();
 
   const doc = await pdfjsLib.getDocument({
     data: pdfBytes,
