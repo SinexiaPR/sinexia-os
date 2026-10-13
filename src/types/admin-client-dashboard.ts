@@ -35,6 +35,6 @@ export type DashboardItem = {
 
 export type ClientDashboardCard = {
   company: { id: string; name: string; slug: string };
-  semaphore: "green" | "amber" | "red";
+  semaphore: "green" | "amber";
   items: DashboardItem[];
 };
