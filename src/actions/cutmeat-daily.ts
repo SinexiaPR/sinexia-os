@@ -1094,9 +1094,14 @@ export async function generateDailyPdf(input: {
     const version = (existing.data?.version ?? 0) + 1;
     const filename = buildPdfFilename(data.docType, reportDate);
     const storagePath = `${data.companyId}/${data.reportDate}/${data.docType}/v${version}-${filename}`;
+    // upsert:true -- la versión se recalcula de cutmeat_daily_generated_pdfs,
+    // así que si esa fila no está (se borró/movió aparte, o un intento
+    // anterior subió el archivo pero falló antes de insertarla) un
+    // reintento recalcula la MISMA versión y pisa limpio ese archivo
+    // huérfano en vez de chocar con un 409 "The resource already exists".
     const uploaded = await admin.storage.from("cutmeat-daily").upload(storagePath, bytes, {
       contentType: "application/pdf",
-      upsert: false,
+      upsert: true,
     });
     if (uploaded.error) throw uploaded.error;
     const inserted = await supabase
@@ -1110,7 +1115,10 @@ export async function generateDailyPdf(input: {
       })
       .select("id")
       .single();
-    if (inserted.error) throw inserted.error;
+    if (inserted.error) {
+      await admin.storage.from("cutmeat-daily").remove([storagePath]);
+      throw inserted.error;
+    }
     await logEvent(report.id, "pdf_generated", profile.id, {
       docType: data.docType,
       version,
