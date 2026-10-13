@@ -33,7 +33,7 @@ const printable = (value: string) =>
     .replace(/[""]/g, '"')
     .replace(/[^ -ÿ]/g, "?");
 
-const money = (value: number | null | undefined) =>
+export const money = (value: number | null | undefined) =>
   value == null
     ? "-"
     : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -449,7 +449,13 @@ export async function buildConsolidatedPdf(params: {
   const doc2: Doc = { page: page2, bold: doc.bold, regular: doc.regular };
   let y2 = HEIGHT - 60;
   y2 = sectionTitle(doc2, "Consolidated Report", y2);
-  keyValueRow(doc2, "First Bank Accounts (Wagyu + Prime Meats)", "", MARGIN, y2);
+  keyValueRow(
+    doc2,
+    "First Bank Accounts (Wagyu + Prime Meats)",
+    money(params.financial?.balanceToday ?? null),
+    MARGIN,
+    y2,
+  );
   y2 -= 18;
   if (params.vendorAging) {
     keyValueRow(doc2, "Aging Vendors (raw total)", money(params.vendorAging.rawTotal), MARGIN, y2);

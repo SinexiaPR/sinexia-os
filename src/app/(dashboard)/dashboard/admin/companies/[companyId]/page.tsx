@@ -162,6 +162,13 @@ export default async function AdminCompanyPage({
                     Historial diario
                   </Link>
                 </Button>
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/paquete-dueno`}
+                  >
+                    Paquete para el dueño
+                  </Link>
+                </Button>
               </>
             ) : null}
             <Button asChild variant="outline">
@@ -437,6 +444,13 @@ export default async function AdminCompanyPage({
                     href={`/dashboard/admin/companies/${company.id}/historial-diario`}
                   >
                     Historial diario
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start">
+                  <Link
+                    href={`/dashboard/admin/companies/${company.id}/paquete-dueno`}
+                  >
+                    Paquete para el dueño
                   </Link>
                 </Button>
               </>

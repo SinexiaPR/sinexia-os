@@ -230,6 +230,10 @@ const ownAllowedDirs = [
   "src/app/(dashboard)/dashboard/admin/companies/[companyId]/recurrentes",
   "src/app/(dashboard)/dashboard/admin/companies/[companyId]/historial-diario",
   "src/app/(dashboard)/dashboard/admin/companies/[companyId]/page.tsx",
+  // Módulo separado (Fase 2 "Paquete para el dueño") -- su servicio
+  // menciona este módulo solo en un comentario de documentación, no lo
+  // importa ni lo muestra al portal cliente. Ver docs/CUTMEAT_PACKAGE.md.
+  "src/services/cutmeat-report-packages.ts",
 ];
 function isOwnAllowed(filePath: string) {
   return ownAllowedDirs.some(
