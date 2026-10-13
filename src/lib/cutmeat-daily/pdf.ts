@@ -89,6 +89,29 @@ function fit(value: string, font: PDFFont, size: number, width: number) {
   return `${short.trim()}...`;
 }
 
+/** Parte `value` en líneas que entran en `width`, por palabra completa
+ * (nunca recorta ni agrega "..."). Si una sola palabra no entra, la deja
+ * igual en su propia línea -- desborda un poco en vez de partir la
+ * palabra a la mitad. */
+function wrapText(value: string, font: PDFFont, size: number, width: number): string[] {
+  const clean = printable(value);
+  const words = clean.split(" ").filter(Boolean);
+  if (words.length === 0) return [""];
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const attempt = current ? `${current} ${word}` : word;
+    if (!current || font.widthOfTextAtSize(attempt, size) <= width) {
+      current = attempt;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 type Doc = { page: PDFPage; bold: PDFFont; regular: PDFFont };
 
 async function newDoc(): Promise<{ pdf: PDFDocument; doc: Doc }> {
@@ -135,6 +158,48 @@ function keyValueRow(
 ) {
   doc.page.drawText(printable(label), { x, y, size: 8.5, font: doc.regular, color: MUTED });
   right(doc.page, value, doc.bold, 9, x + valueOffset, y);
+}
+
+const LABEL_VALUE_LINE_HEIGHT = 11;
+
+/**
+ * Como keyValueRow, pero para etiquetas largas (RECONCILIATION
+ * INFORMATION, FINANCIAL REPORT): la etiqueta vive en una columna de
+ * ancho fijo (`labelWidth`) y el valor en otra columna fija a la
+ * derecha, separada por un margen -- nunca se tocan, sin importar cuán
+ * larga sea la etiqueta. Si la etiqueta no entra en una línea, hace
+ * salto de línea dentro de su columna (nunca la recorta ni la
+ * superpone); si ni así entra en 2 líneas, reduce un poco la fuente.
+ * Devuelve la próxima Y libre (ya contempla las líneas que ocupó).
+ */
+function labelValueRow(
+  doc: Doc,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  labelWidth = 250,
+  valueWidth = 85,
+  gap = 8,
+): number {
+  let size = 8.5;
+  let lines = wrapText(label, doc.regular, size, labelWidth);
+  if (lines.length > 2) {
+    size = 7.3;
+    lines = wrapText(label, doc.regular, size, labelWidth);
+  }
+  lines.forEach((line, index) => {
+    doc.page.drawText(line, {
+      x,
+      y: y - index * LABEL_VALUE_LINE_HEIGHT,
+      size,
+      font: doc.regular,
+      color: MUTED,
+    });
+  });
+  const valueXEnd = x + labelWidth + gap + valueWidth;
+  right(doc.page, value, doc.bold, 9, valueXEnd, y);
+  return y - lines.length * LABEL_VALUE_LINE_HEIGHT;
 }
 
 const BOTTOM_MARGIN = 40;
@@ -510,19 +575,16 @@ function financialHorizonRow(
   recurrentesLabel: string | null,
 ) {
   const range = `${formatSpanishLongDate(rangeStart)} al ${formatSpanishLongDate(rangeEnd)}`;
-  keyValueRow(doc, `Weekly income projection - Proyección del ${range}`, money(step.income), MARGIN, y, 300);
-  y -= 12;
+  y = labelValueRow(doc, `Weekly income projection - Proyección del ${range}`, money(step.income), MARGIN, y) - 2;
   // Solo day7 (sin recurrentesLabel) usa "Aging at" a secas; day14/day21
   // lo escriben "Total Aging at", tal como Hernan.
   const agingLabel = recurrentesLabel ? "Total Aging at" : "Aging at";
   if (recurrentesLabel) {
-    keyValueRow(doc, `${recurrentesLabel} - Recurrentes del ${range}`, money(-step.recurrentes), MARGIN, y, 300);
-    y -= 12;
+    y = labelValueRow(doc, `${recurrentesLabel} - Recurrentes del ${range}`, money(-step.recurrentes), MARGIN, y) - 2;
   }
-  keyValueRow(doc, `${agingLabel} - Aging del ${range}`, money(step.agingAdjustment), MARGIN, y, 300);
-  y -= 12;
-  keyValueRow(doc, `${step.label} balance ${formatSlashDate(step.date)}`, money(step.balance), MARGIN, y, 300);
-  return y - 16;
+  y = labelValueRow(doc, `${agingLabel} - Aging del ${range}`, money(step.agingAdjustment), MARGIN, y) - 2;
+  y = labelValueRow(doc, `${step.label} balance ${formatSlashDate(step.date)}`, money(step.balance), MARGIN, y) - 2;
+  return y - 14;
 }
 
 function recurringRowCells(row: RecurringDetailRow): string[] {
@@ -535,6 +597,110 @@ function recurringRowCells(row: RecurringDetailRow): string[] {
     row.dueDate ? formatSlashDate(row.dueDate) : "",
     money(row.amount),
   ];
+}
+
+type RecurringTableRowSpec = { cells: string[]; kind: "data" | "paid" | "bold" };
+
+const RECURRING_TABLE_COLUMNS: Array<{ label: string; width: number; align?: "right"; wrap?: boolean }> = [
+  { label: "Date", width: 42 },
+  { label: "Tr Type", width: 30 },
+  { label: "Num", width: 78, wrap: true },
+  { label: "Vendor", width: 110, wrap: true },
+  { label: "Due Date", width: 42 },
+  { label: "Amount", width: 64, align: "right" },
+];
+
+/**
+ * Tabla de "A/P Aging Detail Recurrentes": a diferencia de drawTable
+ * (pensada para filas de una sola línea), acá Vendor y Num hacen salto
+ * de línea dentro de su columna en vez de recortarse con "..." -- los
+ * nombres largos (p.ej. "Deposito Oriental Bank - Seg de vida - J
+ * Manzanares") tienen que verse completos, como en el original de
+ * Hernan. Cada fila mide lo que necesite (1-3 líneas); sin zebra-stripe
+ * (alternar el fondo por fila no tiene sentido con alto variable, y fue
+ * la causa de un recuadro gris suelto que no correspondía a ninguna
+ * fila real).
+ */
+function drawRecurringDetailTable(
+  pdf: PDFDocument,
+  doc: Doc,
+  x: number,
+  y: number,
+  rows: RecurringTableRowSpec[],
+): number {
+  const columns = RECURRING_TABLE_COLUMNS;
+  const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+  const lineHeight = 9;
+  const vPad = 3;
+  const dataSize = 7;
+  const boldSize = 7.3;
+
+  const drawHeader = (yy: number) => {
+    doc.page.drawRectangle({ x, y: yy - 16, width: tableWidth, height: 16, color: NAVY });
+    let cx = x;
+    for (const col of columns) {
+      if (col.align === "right") {
+        right(doc.page, col.label, doc.bold, 7, cx + col.width - 4, yy - 11, rgb(1, 1, 1));
+      } else {
+        doc.page.drawText(printable(col.label), { x: cx + 4, y: yy - 11, size: 7, font: doc.bold, color: rgb(1, 1, 1) });
+      }
+      cx += col.width;
+    }
+    return yy - 16;
+  };
+
+  let pageTop = y;
+  let yy = drawHeader(y);
+
+  for (const row of rows) {
+    const bold = row.kind === "bold";
+    const paid = row.kind === "paid";
+    const size = bold ? boldSize : dataSize;
+    const font = bold ? doc.bold : doc.regular;
+    const color = paid ? GRAY_TEXT : NAVY;
+    // Las filas "bold" (Total-Week / TOTAL RECURRENTES A PAGAR) solo
+    // usan la columna Vendor + Amount -- Date/Tr Type/Num/Due Date van
+    // vacíos -- así que la etiqueta puede usar el ancho de Vendor + Due
+    // Date combinado (esa celda igual queda vacía) en vez de recortarse
+    // a solo 110pt, que no le alcanza a "TOTAL RECURRENTES A PAGAR".
+    const vendorIndex = 3;
+    const dueDateIndex = 4;
+    const vendorWidth = bold ? columns[vendorIndex]!.width + columns[dueDateIndex]!.width : columns[vendorIndex]!.width;
+    const wrapped = columns.map((col, i) => {
+      if (bold && i === dueDateIndex) return [""];
+      const width = i === vendorIndex ? vendorWidth : col.width;
+      return col.wrap && row.cells[i] ? wrapText(row.cells[i]!, font, size, width - 8) : [printable(row.cells[i] ?? "")];
+    });
+    const lineCount = Math.max(1, ...wrapped.map((lines) => lines.length));
+    const rowHeight = lineCount * lineHeight + vPad * 2;
+
+    if (yy - rowHeight < BOTTOM_MARGIN) {
+      doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+      pageTop = addPage(pdf, doc);
+      yy = drawHeader(pageTop);
+    }
+
+    if (bold) {
+      doc.page.drawRectangle({ x, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: rgb(0.9, 0.92, 0.94) });
+    }
+    let colX = x;
+    columns.forEach((col, i) => {
+      const lines = wrapped[i]!;
+      lines.forEach((line, lineIndex) => {
+        const lineY = yy - vPad - lineHeight * (lineIndex + 1) + 2;
+        if (col.align === "right") {
+          right(doc.page, line, font, size, colX + col.width - 4, lineY, color);
+        } else {
+          doc.page.drawText(line, { x: colX + 4, y: lineY, size, font, color });
+        }
+      });
+      colX += col.width;
+    });
+    yy -= rowHeight;
+  }
+
+  doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+  return yy - 6;
 }
 
 export async function buildConsolidatedPdf(params: {
@@ -564,35 +730,26 @@ export async function buildConsolidatedPdf(params: {
   right(doc.page, formatSlashDate(params.reportDate), doc.bold, 9, MARGIN + 380, y);
   y -= 18;
   if (params.control) {
-    keyValueRow(doc, "Statement ending balance S/RECONCILIATION REPORT", money(params.control.statementEnding), MARGIN, y, 300);
-    y -= 12;
-    keyValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedChecksTotal), MARGIN, y, 300);
-    y -= 12;
-    keyValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y, 300);
-    y -= 12;
-    keyValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedDepositsTotal), MARGIN, y, 300);
-    y -= 12;
-    keyValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y, 300);
-    y -= 12;
-    keyValueRow(doc, "Register balance", money(params.control.register), MARGIN, y, 300);
-    y -= 12;
+    y = labelValueRow(doc, "Statement ending balance S/RECONCILIATION REPORT", money(params.control.statementEnding), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedChecksTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedDepositsTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y) - 2;
+    y = labelValueRow(doc, "Register balance", money(params.control.register), MARGIN, y) - 2;
   }
   const recurring = buildRecurringDetailTable(params.recurring, params.reportDate);
-  keyValueRow(doc, "Recurrentes prior to this week", money(-recurring.prior.total), MARGIN, y, 300);
-  y -= 12;
-  keyValueRow(doc, "Recurrentes for this week", money(-recurring.thisWeek.total), MARGIN, y, 300);
-  y -= 12;
-  keyValueRow(doc, "Balance after Weekly Payments", money(params.financial?.balanceToday ?? null), MARGIN, y, 300);
-  y -= 12;
-  keyValueRow(doc, "A/P Aging", money(0), MARGIN, y, 300);
-  y -= 24;
+  y = labelValueRow(doc, "Recurrentes prior to this week", money(-recurring.prior.total), MARGIN, y) - 2;
+  y = labelValueRow(doc, "Recurrentes for this week", money(-recurring.thisWeek.total), MARGIN, y) - 2;
+  y = labelValueRow(doc, "Balance after Weekly Payments", money(params.financial?.balanceToday ?? null), MARGIN, y) - 2;
+  y = labelValueRow(doc, "A/P Aging", money(0), MARGIN, y) - 2;
+  y -= 10;
 
   if (params.financial) {
     doc.page.drawText("FINANCIAL REPORT", { x: MARGIN, y, size: 11, font: doc.bold, color: NAVY });
     right(doc.page, formatSlashDate(params.reportDate), doc.bold, 9, MARGIN + 380, y);
     y -= 18;
-    keyValueRow(doc, "Balance - Today", money(params.financial.balanceToday), MARGIN, y, 300);
-    y -= 16;
+    y = labelValueRow(doc, "Balance - Today", money(params.financial.balanceToday), MARGIN, y) - 2;
+    y -= 4;
     const weekStart = sundayWeekStartOf(params.reportDate);
     y = financialHorizonRow(doc, y, params.financial.day7, addDays(weekStart, 0), addDays(weekStart, 6), null);
     y = financialHorizonRow(doc, y, params.financial.day14, addDays(weekStart, 7), addDays(weekStart, 13), "Recurrentes for next 14 days");
@@ -607,33 +764,22 @@ export async function buildConsolidatedPdf(params: {
     { x: rightX, y: ry, size: 10, font: doc.bold, color: NAVY },
   );
   ry -= 18;
-  const recurringColumns = [
-    { label: "Date", width: 50 },
-    { label: "Tr Type", width: 32 },
-    { label: "Num", width: 52 },
-    { label: "Vendor", width: 118 },
-    { label: "Due Date", width: 50 },
-    { label: "Amount", width: 64, align: "right" as const },
-  ];
-  const recurringRows: TableRow[] = [];
+  const recurringRows: RecurringTableRowSpec[] = [];
   for (const [bucket, label] of [
     [recurring.prior, "Total-Week"],
     [recurring.thisWeek, "Total-Week"],
     [recurring.nextWeek, "Total-Week"],
   ] as const) {
     for (const row of bucket.rows) {
-      recurringRows.push(row.isPaid ? { gray: recurringRowCells(row) } : recurringRowCells(row));
+      recurringRows.push({ cells: recurringRowCells(row), kind: row.isPaid ? "paid" : "data" });
     }
-    recurringRows.push({ bold: ["", "", "", label, "", money(bucket.total)] });
+    recurringRows.push({ cells: ["", "", "", label, "", money(bucket.total)], kind: "bold" });
   }
-  drawTable(pdf, doc, rightX, ry, recurringColumns, recurringRows, [
-    "",
-    "",
-    "",
-    "TOTAL RECURRENTES A PAGAR",
-    "",
-    money(recurring.grandTotal),
-  ]);
+  recurringRows.push({
+    cells: ["", "", "", "TOTAL RECURRENTES A PAGAR", "", money(recurring.grandTotal)],
+    kind: "bold",
+  });
+  drawRecurringDetailTable(pdf, doc, rightX, ry, recurringRows);
 
   // -------------------------------------------------------------------
   // Página 2: Balance - GABRIEL + Variación Diaria + Balance after Weekly

@@ -195,7 +195,7 @@ export function buildRecurringDetailTable(
 
   type BucketKey = "prior" | "thisWeek" | "nextWeek";
   const classify = (dueDate: IsoDate | null): BucketKey | null => {
-    if (dueDate == null) return "prior";
+    if (dueDate == null) return null;
     if (dueDate < weekStart) return "prior";
     if (dueDate <= thisWeekEnd) return "thisWeek";
     if (dueDate <= nextWeekEnd) return "nextWeek";
@@ -207,33 +207,58 @@ export function buildRecurringDetailTable(
     thisWeek: [],
     nextWeek: [],
   };
+  // Los recurrentes sin vencimiento (p.ej. un recordatorio todavía sin
+  // facturar, monto $0) no tienen una cubeta propia -- se insertan
+  // aparte, abajo, en el mismo lugar donde Hernan los pone a mano: uno
+  // cerca del principio de "prior" y, si hay un segundo, al principio de
+  // "nextWeek" (justo donde termina "this week"). Un tercero en
+  // adelante (no visto todavía) se agrega al final de "prior" para no
+  // perderlo en silencio.
+  const undated: RecurringDetailRow[] = [];
   for (const item of recurring) {
+    if (item.dueDate == null) {
+      undated.push(item);
+      continue;
+    }
     const key = classify(item.dueDate);
     if (key) grouped[key].push(item);
   }
 
   const sortRows = (rows: RecurringDetailRow[]) =>
     [...rows].sort((a, b) => {
-      // Sin vencimiento, al final de su cubeta (antes del subtotal).
-      const ad = a.dueDate ?? "9999-99-99";
-      const bd = b.dueDate ?? "9999-99-99";
+      const ad = a.dueDate ?? "";
+      const bd = b.dueDate ?? "";
       if (ad !== bd) return ad < bd ? -1 : 1;
       const ae = a.entryDate ?? "";
       const be = b.entryDate ?? "";
       return ae < be ? -1 : ae > be ? 1 : 0;
     });
 
-  const makeBucket = (rows: RecurringDetailRow[]): RecurringDetailBucket => {
-    const sorted = sortRows(rows);
-    return {
-      rows: sorted,
-      total: sum(sorted.filter((row) => !row.isPaid).map((row) => row.amount)),
-    };
-  };
+  const priorRows = sortRows(grouped.prior);
+  const nextWeekRows = sortRows(grouped.nextWeek);
+  undated.forEach((item, index) => {
+    if (index % 2 === 0) {
+      // Primero: después de la primera fila de "prior" (o al principio
+      // si "prior" está vacío).
+      priorRows.splice(Math.min(1, priorRows.length), 0, item);
+    } else if (index === 1) {
+      // Segundo: al principio de "nextWeek".
+      nextWeekRows.unshift(item);
+    } else {
+      // Un tercero (o más) en adelante: al final de "prior", para no
+      // perderlo.
+      priorRows.push(item);
+    }
+  });
 
-  const prior = makeBucket(grouped.prior);
-  const thisWeek = makeBucket(grouped.thisWeek);
-  const nextWeek = makeBucket(grouped.nextWeek);
+  const makeBucket = (rows: RecurringDetailRow[]): RecurringDetailBucket => ({
+    rows,
+    total: sum(rows.filter((row) => !row.isPaid).map((row) => row.amount)),
+  });
+
+  const prior = makeBucket(priorRows);
+  const thisWeek = makeBucket(sortRows(grouped.thisWeek));
+  const nextWeek = makeBucket(nextWeekRows);
   return {
     prior,
     thisWeek,

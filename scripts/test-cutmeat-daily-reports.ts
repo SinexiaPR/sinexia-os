@@ -607,7 +607,13 @@ async function main() {
   assert.equal(realRecurringTable1009.thisWeek.total, 1180, "Total-Week (this week) = 1,180.00, igual que Hernan");
   assert.equal(realRecurringTable1009.nextWeek.total, 580, "Total-Week (next week) = 580.00, igual que Hernan");
   assert.equal(realRecurringTable1009.grandTotal, 4589, "TOTAL RECURRENTES A PAGAR = 4,589.00, igual que Hernan");
-  console.log("A/P Aging Detail Recurrentes del 09/10 (datos reales de cutmeat_recurrentes): Total-Week por semana y total general -- OK.");
+  // Orden de las 2 filas "Carlos Mercado Seguros" (sin vencimiento, $0):
+  // una cerca del principio de "prior" (después de Caparra 9/3, como en
+  // el original de Hernan) y la otra al principio de "nextWeek" (antes
+  // de NOMINA 10/15) -- no las dos juntas en "prior".
+  assert.equal(realRecurringTable1009.prior.rows[1]?.vendor, "Carlos Mercado Seguros", "1er Carlos Mercado Seguros justo después de la primera fila de prior");
+  assert.equal(realRecurringTable1009.nextWeek.rows[0]?.vendor, "Carlos Mercado Seguros", "2do Carlos Mercado Seguros al principio de nextWeek");
+  console.log("A/P Aging Detail Recurrentes del 09/10 (datos reales de cutmeat_recurrentes): Total-Week por semana, total general y orden de filas (Carlos Mercado Seguros) -- OK.");
 
   // Paquete para el dueño del 09/10: Consolidated real de 3 páginas
   // (RECONCILIATION INFORMATION + FINANCIAL REPORT / A/P Aging Detail
@@ -645,6 +651,27 @@ async function main() {
   assert.ok(page1Text.includes("Departamento de Hacienda"), "título corregido (Departameno -> Departamento)");
   assert.ok(page1Text.includes(`Total-Week ${money(2829)}`), "A/P Aging Detail Recurrentes: Total-Week prior visible");
   assert.ok(page1Text.includes(`TOTAL RECURRENTES A PAGAR ${money(4589)}`), "A/P Aging Detail Recurrentes: total general visible");
+
+  // Bug reportado por María: las etiquetas largas de FINANCIAL REPORT
+  // ("Weekly income projection - Proyección del...") invadían la
+  // columna de montos y se superponían con "$7,500.00" -- labelValueRow
+  // ahora las envuelve en su propia columna de ancho fijo. Se verifica
+  // por posición real del texto (pdfjs), no solo que el texto esté
+  // presente.
+  const page1Items = await extractPdfTextPositions(consolidatedPdf, 1);
+  assertNoHorizontalOverlap(
+    page1Items,
+    "Weekly income projection",
+    money(7500),
+    "\"Weekly income projection...\" no debe superponerse con $7,500.00",
+  );
+  assertNoHorizontalOverlap(
+    page1Items,
+    "Uncleared deposits and other credits as of",
+    money(-500),
+    "\"Uncleared deposits and other credits as of...\" no debe superponerse con su valor",
+  );
+  console.log("FINANCIAL REPORT / RECONCILIATION INFORMATION: etiquetas largas sin superponerse con su valor -- OK.");
 
   const page2Text = await extractPdfText(consolidatedPdf);
   assert.ok(page2Text.includes("Variación Diaria"), "título corregido (Variacion -> Variación)");
