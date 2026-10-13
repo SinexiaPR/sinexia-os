@@ -17,6 +17,7 @@ import {
   buildConsolidatedPdf,
   money,
 } from "../src/lib/cutmeat-daily/pdf";
+import { renderPdfPageToPng } from "../src/lib/cutmeat-reports/package/render";
 import {
   buildBalanceAfterWeeklyPayments,
   buildBalanceGabriel,
@@ -596,6 +597,29 @@ async function main() {
     "la etiqueta \"Excluidos (...)\" no debe superponerse con su valor",
   );
   console.log("Portada del Paquete para el dueño: etiquetas largas sin superponerse con su valor -- OK.");
+
+  // buildAndStorePackage reusa los mismos bytes del PDF del paquete
+  // para renderizar la portada (renderPdfPageToPng) y para subirlos a
+  // Storage. pdfjs-dist manda el ArrayBuffer de `data` como
+  // transferable al worker (GetDocRequest en pdf.mjs) incluso en Node
+  // (el "fake worker" pasa por el mismo postMessage con transfer
+  // list) -- eso DEJA EN 0 BYTES el Uint8Array original apenas
+  // getDocument() lo recibe. Sin el .slice() defensivo en
+  // renderPdfPageToPng, el PDF subido a Storage después de renderizar
+  // la portada queda vacío (confirmado en producción: el archivo
+  // quedó con size:0 en storage.objects tras generar el paquete real
+  // del 09/10). Este test reproduce exactamente eso: los bytes que SE
+  // LE PASAN a renderPdfPageToPng tienen que seguir intactos después.
+  const consolidatedPdfLengthBefore = consolidatedPdf.length;
+  assert.ok(consolidatedPdfLengthBefore > 0, "el PDF de prueba no está vacío antes de renderizar");
+  await renderPdfPageToPng(consolidatedPdf, 1, 400);
+  assert.equal(
+    consolidatedPdf.length,
+    consolidatedPdfLengthBefore,
+    "renderPdfPageToPng no debe vaciar/destruir los bytes del PDF que recibió " +
+      "(pdfjs-dist transfiere el ArrayBuffer al worker si no se le pasa una copia)",
+  );
+  console.log("renderPdfPageToPng no destruye el buffer de entrada (bug del 09/10 en producción) -- OK.");
 
   const withDetailPdf = await buildAgingVendorsPdf({
     reportDate: REPORT_DATE,
