@@ -80,3 +80,56 @@ export function formatMDY(value: IsoDate, separator = "-") {
   const [year, month, day] = value.split("-");
   return `${month}${separator}${day}${separator}${year}`;
 }
+
+/** MM/DD/YYYY -- formato de fecha de Hernan en los 5 PDF (nunca "lun, 7
+ * sept"), tanto para encabezados como para columnas de fecha en tablas. */
+export function formatSlashDate(value: IsoDate): string {
+  return formatMDY(value, "/");
+}
+
+const spanishMonthFormat = new Intl.DateTimeFormat("es-PR", {
+  month: "long",
+  timeZone: "UTC",
+});
+
+/** "04 de Octubre" -- rango de fechas del Financial Report (Weekly income
+ * projection / Recurrentes for next N days / Total Agin at), con el mes
+ * en mayúscula inicial como lo escribe Hernan. */
+export function formatSpanishLongDate(value: IsoDate): string {
+  const date = toDate(value);
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = spanishMonthFormat.format(date);
+  return `${day} de ${month.charAt(0).toUpperCase()}${month.slice(1)}`;
+}
+
+const englishShortDateFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** "Oct 9, 2026" -- título "As of ..." del Customer Balance Detail Report. */
+export function formatEnglishShortDate(value: IsoDate): string {
+  return englishShortDateFormat.format(toDate(value));
+}
+
+const englishLongDateFormat = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** "October 31, 2026" -- título "As of ..." de A/P Aging Detail Recurrentes. */
+export function formatEnglishLongDate(value: IsoDate): string {
+  return englishLongDateFormat.format(toDate(value));
+}
+
+/** Último día del mes que contiene `value`, como YYYY-MM-DD -- el "As of"
+ * del título de A/P Aging Detail Recurrentes (fin del mes vigente). */
+export function lastDayOfMonth(value: IsoDate): IsoDate {
+  const [year, month] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year!, month!, 0, 12));
+  return toIso(date);
+}

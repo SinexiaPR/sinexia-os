@@ -17,11 +17,13 @@ import {
   buildConsolidatedPdf,
   money,
 } from "../src/lib/cutmeat-daily/pdf";
+import { renderPdfPageToPng } from "../src/lib/cutmeat-reports/package/render";
 import {
   buildBalanceAfterWeeklyPayments,
   buildBalanceGabriel,
   buildBalanceWithNotEnteredSales,
   buildFinancialReport,
+  buildRecurringDetailTable,
   checkReconciliationControl,
   classifyBankMovements,
   consolidateCustomerAging,
@@ -34,6 +36,7 @@ import {
   splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingDetailLine,
+  type RecurringDetailRow,
   type RecurringPayment,
   type VarianceLine,
 } from "../src/lib/cutmeat-daily/calculations";
@@ -42,6 +45,8 @@ import {
 } from "../src/lib/cutmeat-daily/completeness";
 import {
   addDays,
+  formatEnglishShortDate,
+  formatSlashDate,
   isoWeekday,
   lastBusinessDayBefore,
   sundayWeekStartOf,
@@ -445,7 +450,10 @@ function assertNoHorizontalOverlap(
 // se entrega. Hernan entrega Aging Vendors en 1 página y Aging Customers
 // en 2; esto verifica que el PDF generado haga lo mismo con estos datos
 // (no se corte, con el total general visible) en vez de solo revisar el
-// cálculo puro.
+// cálculo puro. El Paquete para el dueño (buildAndStorePackage, vía
+// generateDailyPdf) copia este mismo PDF tal cual al armar el paquete
+// -- no lo reconstruye con otra lógica -- así que este test también
+// cubre lo que termina viendo el dueño.
 // ---------------------------------------------------------------------------
 
 function detailLine(
@@ -530,13 +538,19 @@ async function main() {
   });
   const realVendorText = await extractPdfText(realVendorPdf);
   assert.ok(
-    realVendorText.includes(`Total general ${money(20905.79)}`),
-    "Aging Vendors del 09/10: total general visible y correcto ($20,905.79)",
+    realVendorText.includes(`TOTAL ${money(20905.79)}`),
+    "Aging Vendors del 09/10: TOTAL visible y correcto ($20,905.79), etiqueta \"TOTAL\" (no \"Total general\")",
   );
   assert.ok(
     realVendorText.includes("-- 1 of 1 --"),
     "Aging Vendors del 09/10 entra en 1 página, igual que la planilla de Hernan",
   );
+  assert.ok(
+    realVendorText.includes("Wagyu Food Service LLC") && realVendorText.includes("Vendor Balance Detail Report - New"),
+    "título exacto del Vendor Balance Detail Report (sin SINEXIA/Fecha del informe)",
+  );
+  assert.ok(!realVendorText.includes("SINEXIA"), "sin el banner SINEXIA");
+  assert.ok(realVendorText.includes("1/1"), "pie de página con paginación 1/1");
 
   const realCustomerPdf = await buildAgingCustomersPdf({
     reportDate: REPORT_DATE,
@@ -546,56 +560,167 @@ async function main() {
   });
   const realCustomerText = await extractPdfText(realCustomerPdf);
   assert.ok(
-    realCustomerText.includes(`Total general ${money(16658.08)}`),
-    "Aging Customers del 09/10: total general visible y correcto ($16,658.08)",
+    realCustomerText.includes(`TOTAL ${money(16658.08)}`),
+    "Aging Customers del 09/10: TOTAL visible y correcto ($16,658.08), etiqueta \"TOTAL\" (no \"Total general\")",
   );
   assert.ok(
     realCustomerText.includes("-- 2 of 2 --") && !realCustomerText.includes("-- 3 of"),
     "Aging Customers del 09/10 entra en 2 páginas, igual que la planilla de Hernan",
   );
+  assert.ok(
+    realCustomerText.includes("Customer Balance Detail Report - New") &&
+      realCustomerText.includes(`As of ${formatEnglishShortDate(REPORT_DATE)}`),
+    "título exacto del Customer Balance Detail Report, con \"As of <fecha>\"",
+  );
+  assert.ok(realCustomerText.includes("2/2"), "pie de página con paginación 2/2");
 
   console.log(
     "Aging real del 09/10 (24 proveedores, 22 clientes): paginación y total " +
       "general del PDF generado -- OK.",
   );
 
-  // Portada del Paquete para el dueño (página 2 de buildConsolidatedPdf):
-  // "Aging Vendors (consolidado Wagyu + Prime Meats)" y "Excluidos
-  // (Prime Meats & Seafoods, Jose Santiago Inc)" son etiquetas largas
-  // que llegaron a superponerse con su propio valor (texto encima de
-  // texto, ilegible) cuando el raw total y el consolidado coinciden en
-  // longitud -- vendorAging (rawTotal 23096.75, excludedSubtotal
-  // 1276.75, primeMeatsBalance 914.21, consolidated 20905.79, 4 valores
-  // distintos) ya está definido arriba. Se verifica por posición real
-  // del texto (pdfjs), no solo que el texto esté presente -- dos
-  // textos superpuestos igual se extraen bien como texto plano.
+  // Datos reales de cutmeat_recurrentes para el 09/10/2026 (consultados
+  // directamente en Supabase, proyecto lrlzqgkfalbuunkixdbd, período
+  // 2026-10-01) -- incluye los 2 "Carlos Mercado Seguros" sin fecha ($0,
+  // no afectan ningún total) y los 4 pagados (gris) que Hernan muestra
+  // pero no suma: Liberty Movil 284.39, ACH Scotiabank 350.00, ACH
+  // PenFed 800.00, SINERGIA LLC 180.00 (09/10).
+  const realRecurring1009: RecurringDetailRow[] = [
+    { entryDate: "2026-09-03", itemType: "Bill", referenceNumber: null, vendor: "Caparra Country - Gabriel Manzanares", dueDate: "2026-09-03", amount: 692, isPaid: false },
+    { entryDate: "2026-10-01", itemType: "ACH", referenceNumber: "3004592793 Plaza las Cumbres", vendor: "Deposito - Jose Manzanares", dueDate: "2026-10-01", amount: 1200, isPaid: false },
+    { entryDate: "2026-10-01", itemType: "Bill", referenceNumber: null, vendor: "Caparra Country - Gabriel Manzanares", dueDate: "2026-10-01", amount: 692, isPaid: false },
+    { entryDate: "2026-10-01", itemType: "ACH", referenceNumber: "1755670185 Scotiabank", vendor: "Deposito Oriental Bank - Seg de vida - J Manzanares", dueDate: "2026-10-01", amount: 350, isPaid: true },
+    { entryDate: "2026-10-01", itemType: "Bill", referenceNumber: null, vendor: "Juan Diaz", dueDate: "2026-10-01", amount: 150, isPaid: false },
+    { entryDate: "2026-10-01", itemType: "ACH", referenceNumber: "724492-5025 PenFed", vendor: "PenFed - Jose Manzanares", dueDate: "2026-10-01", amount: 800, isPaid: true },
+    { entryDate: "2026-10-02", itemType: "Bill", referenceNumber: null, vendor: "CCC Logistic - Storage", dueDate: "2026-10-02", amount: 95, isPaid: false },
+    { entryDate: "2026-10-08", itemType: "Bill", referenceNumber: null, vendor: "NOMINA", dueDate: "2026-10-08", amount: 400, isPaid: false },
+    { entryDate: "2026-09-30", itemType: "Bill", referenceNumber: "\"SS Med Jul-26\"", vendor: "Internal Revenue Service", dueDate: "2026-10-09", amount: 600, isPaid: false },
+    { entryDate: "2026-09-30", itemType: "Bill", referenceNumber: "\"Ret Jul-2026\"", vendor: "Departamento de Hacienda", dueDate: "2026-10-09", amount: 180, isPaid: false },
+    { entryDate: "2026-10-09", itemType: "Bill", referenceNumber: null, vendor: "SINERGIA LLC", dueDate: "2026-10-09", amount: 180, isPaid: true },
+    { entryDate: "2026-10-15", itemType: "Bill", referenceNumber: null, vendor: "NOMINA", dueDate: "2026-10-15", amount: 400, isPaid: false },
+    { entryDate: "2026-10-16", itemType: "Bill", referenceNumber: null, vendor: "SINERGIA LLC", dueDate: "2026-10-16", amount: 180, isPaid: false },
+    { entryDate: null, itemType: null, referenceNumber: null, vendor: "Carlos Mercado Seguros", dueDate: null, amount: 0, isPaid: false },
+    { entryDate: null, itemType: null, referenceNumber: null, vendor: "Carlos Mercado Seguros", dueDate: null, amount: 0, isPaid: false },
+  ];
+  const realRecurringTable1009 = buildRecurringDetailTable(realRecurring1009, REPORT_DATE);
+  assert.equal(realRecurringTable1009.prior.total, 2829, "A/P Aging Detail Recurrentes: Total-Week (prior) = 2,829.00, igual que Hernan");
+  assert.equal(realRecurringTable1009.thisWeek.total, 1180, "Total-Week (this week) = 1,180.00, igual que Hernan");
+  assert.equal(realRecurringTable1009.nextWeek.total, 580, "Total-Week (next week) = 580.00, igual que Hernan");
+  assert.equal(realRecurringTable1009.grandTotal, 4589, "TOTAL RECURRENTES A PAGAR = 4,589.00, igual que Hernan");
+  // Orden de las 2 filas "Carlos Mercado Seguros" (sin vencimiento, $0):
+  // una cerca del principio de "prior" (después de Caparra 9/3, como en
+  // el original de Hernan) y la otra al principio de "nextWeek" (antes
+  // de NOMINA 10/15) -- no las dos juntas en "prior".
+  assert.equal(realRecurringTable1009.prior.rows[1]?.vendor, "Carlos Mercado Seguros", "1er Carlos Mercado Seguros justo después de la primera fila de prior");
+  assert.equal(realRecurringTable1009.nextWeek.rows[0]?.vendor, "Carlos Mercado Seguros", "2do Carlos Mercado Seguros al principio de nextWeek");
+  console.log("A/P Aging Detail Recurrentes del 09/10 (datos reales de cutmeat_recurrentes): Total-Week por semana, total general y orden de filas (Carlos Mercado Seguros) -- OK.");
+
+  // Paquete para el dueño del 09/10: Consolidated real de 3 páginas
+  // (RECONCILIATION INFORMATION + FINANCIAL REPORT / A/P Aging Detail
+  // Recurrentes -- Balance GABRIEL + Variación Diaria -- portada
+  // CONSOLIDATED REPORT), con los datos reales de esta sesión. El bug de
+  // Costco (ver services/cutmeat-daily.ts) hacía que "Variación Diaria
+  // (total)" mostrara 223.56 en vez de -122.72 por sumar el depósito sin
+  // cobrar (uncollected_deposit) junto con la variación propiamente
+  // dicha (variance) -- acá se verifica la cadena completa: Balance
+  // GABRIEL (35,249.49) + variación (-122.72) + depósito sin cobrar
+  // (346.28) = 35,473.05 ("Balance after Weekly Payments" de la página 2).
+  const realVarianceLines1009: VarianceLine[] = [
+    { concept: "Jose Manzanares - Diferencia Recurrentes", amount: -150, section: "variance" },
+    { concept: "Diferencia Pago Recurrentes (Liberty)", amount: 27.28, section: "variance" },
+    { concept: "The Butcher - Costco", amount: 346.28, section: "uncollected_deposit" },
+  ];
   const consolidatedPdf = await buildConsolidatedPdf({
     reportDate: REPORT_DATE,
-    control: null,
-    recurrentes: { prior: [], priorTotal: 0, thisWeek: [], thisWeekTotal: 0 },
-    financial: null,
-    varianceLines: [],
-    totalVariance: 0,
-    balanceGabriel: null,
-    balanceWithNotEntered: null,
-    incomeDays: [],
+    control: reconciliation,
+    financial,
+    recurring: realRecurring1009,
+    varianceLines: realVarianceLines1009,
+    balanceGabriel: 35249.49,
+    notEnteredDepositsTotal: 346.28,
     vendorAging,
-    customerAgingTotal: 16658.08,
+    customerAgingRawTotal: 16658.08,
+    customerAgingConsolidated: 16658.08,
+    primeMeatsRecurring: 0,
   });
-  const page2Items = await extractPdfTextPositions(consolidatedPdf, 2);
+  assert.ok(consolidatedPdf.length > 0, "el Consolidated del 09/10 no está vacío");
+  const page1Text = await extractPdfText(consolidatedPdf);
+  assert.ok(page1Text.includes("RECONCILIATION INFORMATION"), "título corregido (INFORM -> INFORMATION)");
+  assert.ok(page1Text.includes("Aging at"), "título corregido (Agin -> Aging)");
+  assert.ok(!page1Text.includes("del del"), "sin el \"del del\" duplicado (Recurrentes/Aging for next weeks)");
+  assert.ok(page1Text.includes("Departamento de Hacienda"), "título corregido (Departameno -> Departamento)");
+  assert.ok(page1Text.includes(`Total-Week ${money(2829)}`), "A/P Aging Detail Recurrentes: Total-Week prior visible");
+  assert.ok(page1Text.includes(`TOTAL RECURRENTES A PAGAR ${money(4589)}`), "A/P Aging Detail Recurrentes: total general visible");
+
+  // Bug reportado por María: las etiquetas largas de FINANCIAL REPORT
+  // ("Weekly income projection - Proyección del...") invadían la
+  // columna de montos y se superponían con "$7,500.00" -- labelValueRow
+  // ahora las envuelve en su propia columna de ancho fijo. Se verifica
+  // por posición real del texto (pdfjs), no solo que el texto esté
+  // presente.
+  const page1Items = await extractPdfTextPositions(consolidatedPdf, 1);
   assertNoHorizontalOverlap(
-    page2Items,
-    "Aging Vendors (consolidado",
-    money(vendorAging.consolidated),
-    "la etiqueta \"Aging Vendors (consolidado...)\" no debe superponerse con su valor",
+    page1Items,
+    "Weekly income projection",
+    money(7500),
+    "\"Weekly income projection...\" no debe superponerse con $7,500.00",
   );
   assertNoHorizontalOverlap(
-    page2Items,
-    "Excluidos (Prime Meats",
-    money(vendorAging.excludedSubtotal),
-    "la etiqueta \"Excluidos (...)\" no debe superponerse con su valor",
+    page1Items,
+    "Uncleared deposits and other credits as of",
+    money(-500),
+    "\"Uncleared deposits and other credits as of...\" no debe superponerse con su valor",
   );
-  console.log("Portada del Paquete para el dueño: etiquetas largas sin superponerse con su valor -- OK.");
+  console.log("FINANCIAL REPORT / RECONCILIATION INFORMATION: etiquetas largas sin superponerse con su valor -- OK.");
+
+  const page2Text = await extractPdfText(consolidatedPdf);
+  assert.ok(page2Text.includes("Variación Diaria"), "título corregido (Variacion -> Variación)");
+  assert.ok(page2Text.includes(`Balance after Weekly Payments ${money(35473.05)}`), "Balance after Weekly Payments (pág. 2) = Gabriel + variación + depósito sin cobrar = 35,473.05 (bug de Costco corregido, no 35,596.05 ni 223.56 de variación)");
+  assert.ok(page2Text.includes(`Depósitos ${formatSlashDate(REPORT_DATE)} ${money(0)}`), "título corregido (Depositos -> Depósitos); Depósitos del día = notEntered - uncollected = 0.00 (Costco ya contado arriba, sin duplicar)");
+
+  const page3Items = await extractPdfTextPositions(consolidatedPdf, 3);
+  const page3Text = page3Items.map((item) => item.str).join(" ");
+  assert.ok(page3Text.includes("CONSOLIDATED REPORT"), "título de la portada preservado tal cual (mayúsculas)");
+  assert.ok(!page3Text.includes("SINEXIA"), "la portada no tiene el banner SINEXIA que Hernan no tiene");
+  assert.ok(!page3Text.includes("Fecha del informe"), "la portada no tiene \"Fecha del informe\" -- Hernan no lo tiene");
+  assert.ok(!page3Text.includes("raw total"), "la portada no tiene \"Aging Vendors (raw total)\" -- ya no existe");
+  assert.ok(!page3Text.includes("Excluidos"), "la portada no tiene \"Excluidos (...)\" -- ya no existe");
+  assert.ok(page3Text.includes("Total First Bank Accounts"), "etiqueta de portada exacta (resaltada)");
+  assert.ok(page3Text.includes("Aging Vendors - Consolidated Total"), "etiqueta de portada exacta (resaltada)");
+  assert.ok(page3Text.includes("Aging Customers - Consolidated Total"), "etiqueta de portada exacta (resaltada)");
+  assertNoHorizontalOverlap(
+    page3Items,
+    "Total First Bank Accounts",
+    money(financial!.balanceToday),
+    "\"Total First Bank Accounts\" no debe superponerse con su valor",
+  );
+  console.log(
+    "Paquete del 09/10 (Consolidated real, 3 páginas): títulos corregidos, sin banners de más, " +
+      "bug de Costco en Variación Diaria corregido (35,473.05, no 223.56/35,596.05) -- OK.",
+  );
+
+  // buildAndStorePackage reusa los mismos bytes del PDF del paquete
+  // para renderizar la portada (renderPdfPageToPng) y para subirlos a
+  // Storage. pdfjs-dist manda el ArrayBuffer de `data` como
+  // transferable al worker (GetDocRequest en pdf.mjs) incluso en Node
+  // (el "fake worker" pasa por el mismo postMessage con transfer
+  // list) -- eso DEJA EN 0 BYTES el Uint8Array original apenas
+  // getDocument() lo recibe. Sin el .slice() defensivo en
+  // renderPdfPageToPng, el PDF subido a Storage después de renderizar
+  // la portada queda vacío (confirmado en producción: el archivo
+  // quedó con size:0 en storage.objects tras generar el paquete real
+  // del 09/10). Este test reproduce exactamente eso: los bytes que SE
+  // LE PASAN a renderPdfPageToPng tienen que seguir intactos después.
+  const consolidatedPdfLengthBefore = consolidatedPdf.length;
+  assert.ok(consolidatedPdfLengthBefore > 0, "el PDF de prueba no está vacío antes de renderizar");
+  await renderPdfPageToPng(consolidatedPdf, 1, 400);
+  assert.equal(
+    consolidatedPdf.length,
+    consolidatedPdfLengthBefore,
+    "renderPdfPageToPng no debe vaciar/destruir los bytes del PDF que recibió " +
+      "(pdfjs-dist transfiere el ArrayBuffer al worker si no se le pasa una copia)",
+  );
+  console.log("renderPdfPageToPng no destruye el buffer de entrada (bug del 09/10 en producción) -- OK.");
 
   const withDetailPdf = await buildAgingVendorsPdf({
     reportDate: REPORT_DATE,

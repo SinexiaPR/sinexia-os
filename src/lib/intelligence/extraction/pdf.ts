@@ -2,6 +2,7 @@ import "server-only";
 
 import { INTELLIGENCE_LIMITS } from "@/lib/intelligence/constants";
 import type { ExtractedChunk, ExtractionResult } from "@/lib/intelligence/types";
+import { ensurePdfjsNodeWorker } from "@/lib/pdfjs-node-worker";
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
@@ -13,6 +14,7 @@ export async function extractPdf(buffer: Buffer): Promise<ExtractionResult> {
   // must load before pdf-parse so Node/serverless runtimes polyfill correctly.
   await import("@napi-rs/canvas");
   const { PDFParse } = await import("pdf-parse");
+  await ensurePdfjsNodeWorker();
 
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
 

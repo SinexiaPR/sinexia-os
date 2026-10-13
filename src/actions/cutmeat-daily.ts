@@ -20,7 +20,7 @@ import {
   buildReconciliationPdf,
 } from "@/lib/cutmeat-daily/pdf";
 import { getDailyReportWorkspace, resolveCutMeatCompany } from "@/services/cutmeat-daily";
-import type { IsoDate } from "@/lib/cutmeat-daily/dates";
+import { lastBusinessDayBefore, type IsoDate } from "@/lib/cutmeat-daily/dates";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const money = z.number().finite().min(-9_999_999).max(9_999_999);
@@ -1011,8 +1011,13 @@ export async function generateDailyPdf(input: {
       case "reconciliation": {
         if (!workspace.reconciliation || !workspace.reconciliationControl)
           return { error: "Todavía no se cargó la conciliación de este día." };
+        const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
         bytes = await buildReconciliationPdf({
           reportDate,
+          periodEnding: lastBusinessDayBefore(reportDate, holidaySet),
+          reconciledOn: workspace.reconciliation.loadedAt
+            ? (workspace.reconciliation.loadedAt.slice(0, 10) as IsoDate)
+            : null,
           control: workspace.reconciliationControl,
           checks: workspace.reconciliation.unclearedChecks.map((item) => ({
             name: item.reference,
@@ -1061,20 +1066,26 @@ export async function generateDailyPdf(input: {
         bytes = await buildConsolidatedPdf({
           reportDate,
           control: workspace.reconciliationControl,
-          recurrentes: {
-            prior: workspace.buckets.prior.items,
-            priorTotal: workspace.buckets.prior.total,
-            thisWeek: workspace.buckets.thisWeek.items,
-            thisWeekTotal: workspace.buckets.thisWeek.total,
-          },
           financial: workspace.financial,
+          recurring: workspace.recurring.map((item) => ({
+            entryDate: item.entryDate,
+            itemType: item.itemType,
+            referenceNumber: item.referenceNumber,
+            vendor: item.vendor,
+            dueDate: item.dueDate,
+            amount: item.amount,
+            isPaid: item.isPaid,
+          })),
           varianceLines: workspace.varianceLines,
-          totalVariance: workspace.totalVariance,
           balanceGabriel: workspace.balanceGabriel,
-          balanceWithNotEntered: workspace.balanceWithNotEntered,
-          incomeDays: workspace.incomeDays,
+          notEnteredDepositsTotal: workspace.notEnteredDeposits.reduce(
+            (sum, item) => sum + item.amount,
+            0,
+          ),
           vendorAging: workspace.vendorAging,
-          customerAgingTotal: workspace.customerAging?.consolidated ?? null,
+          customerAgingRawTotal: workspace.customerAging?.rawTotal ?? null,
+          customerAgingConsolidated: workspace.customerAging?.consolidated ?? null,
+          primeMeatsRecurring: workspace.settings.primeMeatsRecurring,
         });
         break;
       }
@@ -1094,9 +1105,14 @@ export async function generateDailyPdf(input: {
     const version = (existing.data?.version ?? 0) + 1;
     const filename = buildPdfFilename(data.docType, reportDate);
     const storagePath = `${data.companyId}/${data.reportDate}/${data.docType}/v${version}-${filename}`;
+    // upsert:true -- la versión se recalcula de cutmeat_daily_generated_pdfs,
+    // así que si esa fila no está (se borró/movió aparte, o un intento
+    // anterior subió el archivo pero falló antes de insertarla) un
+    // reintento recalcula la MISMA versión y pisa limpio ese archivo
+    // huérfano en vez de chocar con un 409 "The resource already exists".
     const uploaded = await admin.storage.from("cutmeat-daily").upload(storagePath, bytes, {
       contentType: "application/pdf",
-      upsert: false,
+      upsert: true,
     });
     if (uploaded.error) throw uploaded.error;
     const inserted = await supabase
@@ -1110,7 +1126,10 @@ export async function generateDailyPdf(input: {
       })
       .select("id")
       .single();
-    if (inserted.error) throw inserted.error;
+    if (inserted.error) {
+      await admin.storage.from("cutmeat-daily").remove([storagePath]);
+      throw inserted.error;
+    }
     await logEvent(report.id, "pdf_generated", profile.id, {
       docType: data.docType,
       version,

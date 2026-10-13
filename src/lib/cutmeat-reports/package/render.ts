@@ -11,6 +11,8 @@
 
 import { join } from "node:path";
 
+import { ensurePdfjsNodeWorker } from "@/lib/pdfjs-node-worker";
+
 const STANDARD_FONT_DATA_URL = `${join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts")}/`;
 
 export type RenderedPage = { png: Buffer; width: number; height: number };
@@ -30,9 +32,16 @@ export async function renderPdfPageToPng(
   await import("@napi-rs/canvas");
   const { createCanvas } = await import("@napi-rs/canvas");
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  await ensurePdfjsNodeWorker();
 
+  // pdfjs-dist manda data.buffer como transferable al worker (incluso
+  // al "fake worker" en Node -- GetDocRequest en pdf.mjs), así que
+  // DESTRUYE el ArrayBuffer original: pdfBytes queda en 0 bytes apenas
+  // vuelve esta llamada. .slice() copia a un buffer nuevo para que
+  // quien nos pasó pdfBytes lo pueda seguir usando después (p. ej.
+  // subirlo a Storage) sin que haya quedado vaciado por este render.
   const doc = await pdfjsLib.getDocument({
-    data: pdfBytes,
+    data: pdfBytes.slice(),
     useWorkerFetch: false,
     isEvalSupported: false,
     standardFontDataUrl: STANDARD_FONT_DATA_URL,
