@@ -116,9 +116,12 @@ export type PackageEligibility = {
 
 /**
  * El botón "Paquete para el dueño" solo se habilita con el día cerrado y
- * sin alertas abiertas -- reutiliza exactamente las mismas alertas que ya
- * se muestran en "Informes diarios" (checkDailyReportCompleteness), no
- * se inventa un segundo criterio.
+ * sin alertas bloqueantes abiertas -- reutiliza exactamente las mismas
+ * alertas que ya se muestran en "Informes diarios"
+ * (checkDailyReportCompleteness), no se inventa un segundo criterio.
+ * Las alertas "info" (hoy, recurrente vencido sin pago -- el bucket
+ * normal Prior + This week) se siguen mostrando en pantalla pero no
+ * bloquean el paquete.
  */
 export async function checkPackageEligibility(
   companyId: string,
@@ -132,7 +135,11 @@ export async function checkPackageEligibility(
     reasons.push("El día no está cerrado.");
   }
   const additionalWarnings = "warnings" in workspace ? workspace.warnings ?? [] : [];
-  reasons.push(...additionalWarnings);
+  reasons.push(
+    ...additionalWarnings
+      .filter((warning) => warning.severity === "blocking")
+      .map((warning) => warning.message),
+  );
   return { eligible: reasons.length === 0, reasons };
 }
 

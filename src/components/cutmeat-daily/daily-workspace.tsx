@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Info,
   Lock,
   Unlock,
 } from "lucide-react";
@@ -130,6 +131,8 @@ export function CutMeatDailyWorkspace({
   }
 
   const readOnly = workspace.report?.status === "closed";
+  const blockingWarnings = workspace.warnings.filter((warning) => warning.severity === "blocking");
+  const infoWarnings = workspace.warnings.filter((warning) => warning.severity === "info");
 
   return (
     <div className="space-y-5">
@@ -211,13 +214,26 @@ export function CutMeatDailyWorkspace({
         </div>
       </header>
 
-      {workspace.warnings.length ? (
+      {blockingWarnings.length ? (
         <SurfaceCard padding="sm" className="border-amber-300 bg-amber-50">
           <div className="flex items-start gap-3 px-1">
             <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700" />
             <ul className="space-y-1 text-sm text-amber-900">
-              {workspace.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
+              {blockingWarnings.map((warning) => (
+                <li key={warning.message}>{warning.message}</li>
+              ))}
+            </ul>
+          </div>
+        </SurfaceCard>
+      ) : null}
+
+      {infoWarnings.length ? (
+        <SurfaceCard padding="sm" className="border-sky-300 bg-sky-50">
+          <div className="flex items-start gap-3 px-1">
+            <Info className="mt-0.5 size-5 shrink-0 text-sky-700" />
+            <ul className="space-y-1 text-sm text-sky-900">
+              {infoWarnings.map((warning) => (
+                <li key={warning.message}>{warning.message}</li>
               ))}
             </ul>
           </div>
