@@ -7,7 +7,7 @@ Generado a partir de las migraciones reales del módulo "Informes diarios"
 `20261013130000_cutmeat_daily_data_contract.sql`,
 `20261013131000_cutmeat_daily_calc_fixes.sql`,
 `20261013114120_cutmeat_daily_bank_movements_relink_recurring.sql` y
-`20261013141000_cutmeat_daily_drop_old_recurring_payments.sql`.
+`20261013123815_cutmeat_daily_retire_old_recurring_payments.sql`.
 Documenta el esquema tal como quedó aplicado, no de memoria — si una
 migración nueva cambia una tabla, actualizar este archivo junto con
 ella.
@@ -166,20 +166,30 @@ desplegable de BankTab ya ofrecía recurrentes de `cutmeat_recurrentes`
 (vía `getRecurringPayments`), así que vincular un movimiento a un
 recurrente real fallaba contra el FK viejo hasta ese cambio.
 
-### `cutmeat_daily_recurring_payments` / `cutmeat_daily_recurring_payment_history` — **retiradas**
+### `cutmeat_daily_recurring_payments_retired_20261013` / `cutmeat_daily_recurring_payment_history_retired_20261013` — **retiradas**
 
-Eran la tabla vieja de recurrentes, duplicada desde que "Informes
-diarios" pasó a leer/escribir recurrentes solo en `cutmeat_recurrentes`
-(Fase 1, ver `docs/CUTMEAT_RECURRENTES.md`). Tenían **0 filas** y
-ninguna UI las usaba (`RecurringTab` ya usaba `saveRecurrente`/
-`deleteRecurrente`/`markRecurrentePaid` de `actions/cutmeat-recurrentes.ts`).
+Eran `cutmeat_daily_recurring_payments` / `cutmeat_daily_recurring_payment_history`,
+la tabla vieja de recurrentes, duplicada desde que "Informes diarios"
+pasó a leer/escribir recurrentes solo en `cutmeat_recurrentes` (Fase 1,
+ver `docs/CUTMEAT_RECURRENTES.md`). Tenían **0 filas** y ninguna UI las
+usaba (`RecurringTab` ya usaba `saveRecurrente`/`deleteRecurrente`/
+`markRecurrentePaid` de `actions/cutmeat-recurrentes.ts`).
 
 Se retiraron en
-`20261013141000_cutmeat_daily_drop_old_recurring_payments.sql`, después
-de repuntar `cutmeat_daily_bank_movements.linked_recurring_id` (ver
-arriba) y de eliminar las acciones `saveRecurringPayment`/
+`20261013123815_cutmeat_daily_retire_old_recurring_payments.sql`,
+después de repuntar `cutmeat_daily_bank_movements.linked_recurring_id`
+(ver arriba) y de eliminar las acciones `saveRecurringPayment`/
 `deleteRecurringPayment` (que escribían en estas tablas, marcadas
-`@deprecated`, sin ningún caller en la UI).
+`@deprecated`, sin ningún caller en la UI). El retiro es un
+`ALTER TABLE ... RENAME` (a `..._retired_20261013`), no un `DROP TABLE`:
+contra el proyecto real, cualquier `DROP TABLE` (probado varias veces,
+con y sin `CASCADE`, incluso sobre una tabla de prueba sin ninguna
+relación) se quedó colgado sin ningún lock ni actividad bloqueante del
+lado de Postgres, mientras que `ALTER TABLE ... RENAME` funciona con
+normalidad. Las tablas quedan vacías, sin RLS ni FK rotos (Postgres los
+sigue por OID, no por nombre), fuera del camino bajo un nombre que deja
+claro que están retiradas. Si en algún momento el `DROP` dejara de
+colgarse, se pueden borrar con un `DROP TABLE` normal.
 
 ### `cutmeat_daily_income_projection`
 

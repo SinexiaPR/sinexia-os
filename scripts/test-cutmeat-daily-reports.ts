@@ -606,9 +606,9 @@ assert.match(
   "cutmeat_daily_bank_movements.linked_recurring_id apunta por FK a cutmeat_recurrentes",
 );
 assert.match(
-  read("supabase/migrations/20261013141000_cutmeat_daily_drop_old_recurring_payments.sql"),
-  /DROP TABLE IF EXISTS public\.cutmeat_daily_recurring_payments/,
-  "migración de baja de cutmeat_daily_recurring_payments existe",
+  read("supabase/migrations/20261013123815_cutmeat_daily_retire_old_recurring_payments.sql"),
+  /RENAME TO cutmeat_daily_recurring_payments_retired_20261013/,
+  "migración de retiro de cutmeat_daily_recurring_payments existe",
 );
 
 console.log(
