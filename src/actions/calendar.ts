@@ -227,6 +227,52 @@ export async function completeCalendarItem(
   return { success: true };
 }
 
+export async function completeCalendarItems(
+  items: { id: string; occurrenceDate: string; recurring: boolean }[],
+) {
+  const profile = await requireAdmin();
+  if (!items.length) return { success: true };
+  const supabase = await createClient();
+  const completedAt = new Date().toISOString();
+  const nonRecurringIds = [
+    ...new Set(items.filter((i) => !i.recurring).map((i) => i.id)),
+  ];
+  const recurringRows = items
+    .filter((i) => i.recurring)
+    .map((i) => ({
+      calendar_item_id: i.id,
+      occurrence_date: i.occurrenceDate,
+      status: "completed" as const,
+      completed_at: completedAt,
+      updated_by: profile.id,
+    }));
+
+  const [plainResult, recurringResult] = await Promise.all([
+    nonRecurringIds.length
+      ? supabase
+          .from("calendar_items")
+          .update({
+            status: "completed",
+            completed_at: completedAt,
+            updated_by: profile.id,
+          })
+          .in("id", nonRecurringIds)
+      : Promise.resolve({ error: null }),
+    recurringRows.length
+      ? supabase
+          .from("calendar_item_occurrence_status")
+          .upsert(recurringRows, {
+            onConflict: "calendar_item_id,occurrence_date",
+          })
+      : Promise.resolve({ error: null }),
+  ]);
+  if (plainResult.error || recurringResult.error)
+    return { error: "No se pudieron completar algunas tareas." };
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/calendar");
+  return { success: true };
+}
+
 export async function deleteCalendarItem(
   itemId: string,
   occurrenceDate?: string,

@@ -21,16 +21,6 @@ export async function getBillingSettings() {
   return data as BillingSettings | null;
 }
 
-export async function getRecurringInvoiceProfiles() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("recurring_invoice_profiles")
-    .select("*,companies(name)")
-    .order("next_generation_date", { ascending: true, nullsFirst: false });
-  if (error) throw error;
-  return (data ?? []) as RecurringInvoiceProfile[];
-}
-
 export async function getBillingCompanies(): Promise<BillingCompany[]> {
   const supabase = await createClient();
   const [

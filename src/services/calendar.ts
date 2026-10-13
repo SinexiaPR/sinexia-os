@@ -1,8 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import {
-  expandCalendarItems,
-  sortCalendarItems,
-} from "@/lib/calendar/recurrence";
+import { expandCalendarItems } from "@/lib/calendar/recurrence";
 import type {
   CalendarComment,
   CalendarItem,
@@ -130,57 +127,6 @@ export async function getCalendarItems(
         }
       : item;
   });
-}
-
-export async function getCalendarDashboard(today: string) {
-  const start = new Date(`${today}T12:00:00Z`);
-  start.setUTCDate(start.getUTCDate() - 31);
-  const end = new Date(`${today}T12:00:00Z`);
-  end.setUTCDate(end.getUTCDate() + 40);
-  const items = sortCalendarItems(
-    await getCalendarItems(
-      start.toISOString().slice(0, 10),
-      end.toISOString().slice(0, 10),
-    ),
-    today,
-  );
-  const upcomingEnd = new Date(`${today}T12:00:00Z`);
-  upcomingEnd.setUTCDate(upcomingEnd.getUTCDate() + 7);
-  const upcomingDate = upcomingEnd.toISOString().slice(0, 10);
-  const weekStart = new Date(`${today}T12:00:00Z`);
-  weekStart.setUTCDate(weekStart.getUTCDate() - 6);
-  return {
-    items,
-    dueToday: items.filter(
-      (i) =>
-        i.occurrenceDate === today &&
-        i.status !== "completed" &&
-        i.status !== "cancelled",
-    ),
-    upcoming: items
-      .filter(
-        (i) =>
-          i.occurrenceDate > today &&
-          i.occurrenceDate <= upcomingDate &&
-          i.status !== "completed" &&
-          i.status !== "cancelled",
-      )
-      .slice(0, 5),
-    overdue: items
-      .filter(
-        (i) =>
-          i.occurrenceDate < today &&
-          i.status !== "completed" &&
-          i.status !== "cancelled",
-      )
-      .slice(0, 5),
-    completedThisWeek: items.filter(
-      (i) =>
-        i.status === "completed" &&
-        i.completedAt &&
-        i.completedAt.slice(0, 10) >= weekStart.toISOString().slice(0, 10),
-    ).length,
-  };
 }
 
 export async function getCalendarComments(
