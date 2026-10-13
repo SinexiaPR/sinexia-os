@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 const initialState: { error?: string; success?: boolean } = {};
 
 const selectClassName =
-  "flex h-12 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:h-11 sm:text-sm";
+  "flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:h-11 sm:text-sm";
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) {
@@ -138,7 +138,7 @@ export function DocumentUploadForm() {
               name="document_type_description"
               maxLength={DOCUMENT_TYPE_DESCRIPTION_MAX_LENGTH}
               disabled={isPending}
-              className="h-12 rounded-xl text-base sm:h-11 sm:text-sm"
+              className="h-12 rounded-md text-base sm:h-11 sm:text-sm"
             />
           </div>
         ) : null}
@@ -146,7 +146,7 @@ export function DocumentUploadForm() {
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Prioridad</legend>
           <div className="grid grid-cols-2 gap-3">
-            <label className="border-border bg-muted/20 flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm">
+            <label className="border-border bg-muted/20 flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-sm">
               <input
                 type="radio"
                 name="priority"
@@ -157,7 +157,7 @@ export function DocumentUploadForm() {
               />
               Rutina
             </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/[0.03] px-4 py-3 text-sm text-red-700">
+            <label className="flex cursor-pointer items-center gap-3 rounded-md border border-red-500/20 bg-red-500/[0.03] px-4 py-3 text-sm text-red-700">
               <input
                 type="radio"
                 name="priority"
@@ -182,7 +182,7 @@ export function DocumentUploadForm() {
             rows={4}
             disabled={isPending}
             placeholder="Información útil para el equipo de Sinexia."
-            className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 flex w-full resize-y rounded-xl border bg-transparent px-3 py-3 text-base shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50 sm:text-sm"
+            className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 flex w-full resize-y rounded-md border bg-transparent px-3 py-3 text-base shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50 sm:text-sm"
           />
           <p className="text-muted-foreground text-xs">
             Máximo 500 caracteres.
@@ -198,7 +198,7 @@ export function DocumentUploadForm() {
             variant="outline"
             disabled={isPending}
             onClick={() => cameraInputRef.current?.click()}
-            className="h-14 justify-center gap-2 rounded-xl text-base sm:h-12 sm:text-sm"
+            className="h-14 justify-center gap-2 rounded-md text-base sm:h-12 sm:text-sm"
           >
             <Camera className="size-5 shrink-0" /> Tomar foto
           </Button>
@@ -207,7 +207,7 @@ export function DocumentUploadForm() {
             variant="outline"
             disabled={isPending}
             onClick={() => fileInputRef.current?.click()}
-            className="h-14 justify-center gap-2 rounded-xl text-base sm:h-12 sm:text-sm"
+            className="h-14 justify-center gap-2 rounded-md text-base sm:h-12 sm:text-sm"
           >
             <FileUp className="size-5 shrink-0" /> Elegir archivo
           </Button>
@@ -230,7 +230,7 @@ export function DocumentUploadForm() {
           onChange={(event) => handleFileSelect(event.target.files?.[0])}
         />
         {selectedFile ? (
-          <div className="border-border/80 bg-muted/40 flex items-start gap-3 rounded-xl border p-4">
+          <div className="border-border/80 bg-muted/40 flex items-start gap-3 rounded-md border p-4">
             <div className="min-w-0 flex-1">
               <p className="text-foreground truncate text-sm font-medium">
                 {selectedFile.name}
@@ -257,19 +257,19 @@ export function DocumentUploadForm() {
       </div>
 
       {localError ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           {localError}
         </p>
       ) : null}
 
       {state.error ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           {state.error}
         </p>
       ) : null}
 
       {state.success ? (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+        <p className="rounded-md bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
           Documento recibido por Sinexia.
         </p>
       ) : null}
@@ -279,7 +279,7 @@ export function DocumentUploadForm() {
         size="lg"
         disabled={isPending || !selectedFile}
         className={cn(
-          "h-14 w-full rounded-xl text-base font-semibold sm:h-12 sm:text-sm",
+          "h-14 w-full rounded-md text-base font-semibold sm:h-12 sm:text-sm",
           "sticky bottom-4 z-10 shadow-md sm:static sm:shadow-none",
         )}
       >

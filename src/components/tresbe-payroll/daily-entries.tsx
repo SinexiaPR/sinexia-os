@@ -167,7 +167,7 @@ export function TresbeDailyEntriesTab({
               const isAdding =
                 addForm?.workDate === date && addForm.shift === shift;
               return (
-                <div key={shift} className="rounded-xl border p-4">
+                <div key={shift} className="rounded-md border p-4">
                   <div className="flex items-center justify-between gap-3">
                     <h4 className="text-sm font-semibold">Turno {shift}</h4>
                     <label className="flex items-center gap-2 text-xs">

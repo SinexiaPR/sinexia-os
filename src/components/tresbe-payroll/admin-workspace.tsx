@@ -70,7 +70,7 @@ const shortDate = new Intl.DateTimeFormat("es", {
   year: "numeric",
 });
 const inputClass =
-  "h-8 w-full rounded-md border border-input bg-background px-2 text-xs sm:text-[13px]";
+  "h-8 w-full rounded-md border border-input bg-background px-2 text-xs sm:text-sm";
 const statusLabel: Record<TresbePayroll["status"], string> = {
   draft: "Borrador",
   calculated: "Calculada",
@@ -1154,7 +1154,7 @@ function CompactPayrollEntries({
         className={numericInput}
       />
     ) : (
-      <span className="block text-right text-xs tabular-nums sm:text-[13px]">
+      <span className="block text-right text-xs tabular-nums sm:text-sm">
         {formatGridNumber(entry[field] as number | null)}
       </span>
     );
@@ -1180,7 +1180,7 @@ function CompactPayrollEntries({
             >
               <span className="font-semibold">
                 {group.label}{" "}
-                <span className="text-muted-foreground font-normal">
+                <span className="text-muted-foreground font-medium">
                   · {group.entries.length}{" "}
                   {group.entries.length === 1 ? "empleado" : "empleados"}
                 </span>
@@ -1199,7 +1199,7 @@ function CompactPayrollEntries({
             </button>
             {isOpen ? (
               <div className="border-border mt-3 overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[1850px] border-collapse text-xs sm:text-[13px]">
+                <table className="w-full min-w-[1850px] border-collapse text-xs sm:text-sm">
                   <thead className="bg-muted text-[11px] tracking-wide uppercase">
                     <tr className="border-border border-b">
                       {GRID_COLUMNS.map((heading) => (
@@ -1231,7 +1231,7 @@ function CompactPayrollEntries({
                         >
                           <td className="max-w-44 px-2 py-1.5 align-top font-medium">
                             {entry.employee_name_snapshot}
-                            <div className="mt-0.5 flex gap-1 text-[10px] font-normal">
+                            <div className="mt-0.5 flex gap-1 text-[11px] font-medium">
                               {entry.is_new_employee ? (
                                 <span className="text-blue-700">Nuevo</span>
                               ) : null}
@@ -1307,7 +1307,7 @@ function CompactPayrollEntries({
                                   "Cheque de servicios",
                                 )}
                                 {result.serviceCheckAmount > 0 ? (
-                                  <div className="text-muted-foreground mt-0.5 text-right text-[10px] tabular-nums">
+                                  <div className="text-muted-foreground mt-0.5 text-right text-[11px] tabular-nums">
                                     Calculado:{" "}
                                     {money.format(result.serviceCheckAmount)}
                                   </div>
@@ -1327,7 +1327,7 @@ function CompactPayrollEntries({
                                         event.target.value,
                                       )
                                     }
-                                    className="border-input bg-background mt-1 h-6 w-full rounded border px-1 text-[10px]"
+                                    className="border-input bg-background mt-1 h-6 w-full rounded border px-1 text-[11px]"
                                   >
                                     <option value="Empleado por servicios">
                                       Servicios
@@ -1342,7 +1342,7 @@ function CompactPayrollEntries({
                                   </select>
                                 ) : !editable &&
                                   Number(entry.fixed_service_amount) > 0 ? (
-                                  <div className="text-muted-foreground mt-0.5 text-[10px]">
+                                  <div className="text-muted-foreground mt-0.5 text-[11px]">
                                     {entry.service_reason ??
                                       "Empleado por servicios"}
                                   </div>
@@ -1594,7 +1594,7 @@ function TresbeEmployeeDialog({
   >(employee?.worker_classification ?? "w2");
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
-      <SurfaceCard className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-b-none sm:rounded-b-2xl">
+      <SurfaceCard className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-b-none sm:rounded-b-lg">
         <h2 className="text-lg font-semibold">
           {employee ? "Editar empleado" : "Agregar empleado"}
         </h2>

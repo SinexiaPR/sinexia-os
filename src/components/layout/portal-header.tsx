@@ -13,7 +13,7 @@ export function PortalHeader({ className }: PortalHeaderProps) {
       <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
         <Link
           href="/"
-          className="text-[13px] font-semibold tracking-[0.18em] text-foreground uppercase"
+          className="text-xs font-semibold tracking-[0.18em] text-foreground uppercase"
         >
           {siteConfig.name}
         </Link>

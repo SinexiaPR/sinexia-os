@@ -35,7 +35,7 @@ function AlertCard({
         className="border-red-500/15 bg-red-500/[0.03] transition-colors hover:border-red-500/25 hover:bg-red-500/[0.05]"
       >
         <div className="flex items-start gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-600">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-red-500/10 text-red-600">
             <Icon className="size-4" />
           </div>
           <div className="min-w-0 flex-1">

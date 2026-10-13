@@ -25,7 +25,7 @@ export function SurfaceCard({
     <div
       id={id}
       className={cn(
-        "border-border/80 bg-card rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        "border-border/80 bg-card rounded-lg border",
         paddingMap[padding],
         className,
       )}

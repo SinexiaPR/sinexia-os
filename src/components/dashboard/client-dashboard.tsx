@@ -130,7 +130,7 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <SurfaceCard padding="lg" className="flex flex-col">
-          <p className="text-muted-foreground text-[13px] font-medium tracking-wide uppercase">
+          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             Último reporte
           </p>
           {stats.lastReport ? (
@@ -159,7 +159,7 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
         </SurfaceCard>
 
         <SurfaceCard padding="lg" className="flex flex-col">
-          <p className="text-muted-foreground text-[13px] font-medium tracking-wide uppercase">
+          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             Última actualización
           </p>
           {stats.lastUpdate ? (
@@ -191,7 +191,7 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
                 padding="md"
                 className="hover:bg-muted/30 flex h-full flex-col transition-colors"
               >
-                <div className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-xl">
+                <div className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-md">
                   <Icon className="size-4" />
                 </div>
                 <p className="text-foreground mt-4 text-sm font-semibold">

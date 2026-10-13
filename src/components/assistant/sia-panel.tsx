@@ -136,7 +136,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
     <div className="space-y-6">
       <SurfaceCard padding="lg" className="space-y-6">
         <div className="space-y-1">
-          <p className="text-[13px] font-medium tracking-wide text-primary uppercase">
+          <p className="text-xs font-medium tracking-wide text-primary uppercase">
             {assistantConfig.name}
           </p>
           <p className="text-sm font-medium text-foreground">
@@ -261,7 +261,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                 className={cn(
                   "max-w-[92%] text-sm leading-relaxed",
                   entry.role === "user"
-                    ? "ml-auto rounded-2xl bg-muted px-4 py-3 text-foreground"
+                    ? "ml-auto rounded-lg bg-muted px-4 py-3 text-foreground"
                     : "space-y-3",
                 )}
               >
@@ -271,7 +271,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                       {entry.content}
                     </p>
                     {entry.sources?.length ? (
-                      <div className="space-y-1 rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                      <div className="space-y-1 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                         <p className="font-medium text-foreground">Fuentes</p>
                         {entry.sources.map((source, i) => (
                           <div
@@ -303,7 +303,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                       </div>
                     ) : null}
                     {entry.disclaimer ? (
-                      <p className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                      <p className="rounded-md border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-900">
                         {entry.disclaimer}
                       </p>
                     ) : null}
@@ -317,7 +317,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
         ) : null}
 
         {error ? (
-          <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
           </p>
         ) : null}

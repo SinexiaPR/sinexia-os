@@ -54,7 +54,7 @@ export default async function InboxPage({
           <h1 className="text-xl font-semibold tracking-tight">
             Inbox
           </h1>
-          <p className="text-muted-foreground text-[15px] leading-relaxed sm:text-base">
+          <p className="text-muted-foreground text-sm leading-relaxed">
             Envíe documentos desde su teléfono o computadora. Todo llega aquí
             automáticamente.
           </p>

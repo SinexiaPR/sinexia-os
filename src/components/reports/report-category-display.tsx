@@ -26,7 +26,7 @@ export function ReportCategoryDisplay({
           <Icon className="size-4" aria-hidden />
         </div>
       ) : null}
-      <p className="text-[13px] font-medium tracking-wide text-primary uppercase">
+      <p className="text-xs font-medium tracking-wide text-primary uppercase">
         {label}
       </p>
     </div>

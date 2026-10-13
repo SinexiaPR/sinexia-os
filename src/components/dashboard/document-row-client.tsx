@@ -66,7 +66,7 @@ export function DocumentRowClient({
       className={cn(
         "border-border/60 flex flex-col gap-3 border-b py-5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
         !isViewed &&
-          "-mx-1 rounded-xl border border-red-500/15 bg-red-500/[0.03] px-3 sm:px-4",
+          "-mx-1 rounded-md border border-red-500/15 bg-red-500/[0.03] px-3 sm:px-4",
         className,
       )}
     >

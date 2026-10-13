@@ -50,7 +50,7 @@ export function RecentActivityFeed({ items, className }: RecentActivityFeedProps
               <Link
                 key={item.id}
                 href={item.href}
-                className="flex items-start gap-3 rounded-xl border border-border/70 px-4 py-3 transition-colors hover:bg-muted/40"
+                className="flex items-start gap-3 rounded-md border border-border/70 px-4 py-3 transition-colors hover:bg-muted/40"
               >
                 <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600">
                   <Icon className="size-4" />
@@ -97,12 +97,12 @@ export function PendingMetricCard({
     >
       {value > 0 ? (
         <span className="absolute top-6 right-6">
-          <span className="flex size-5 items-center justify-center rounded-full bg-red-500/90 text-[10px] font-semibold text-white">
+          <span className="flex size-5 items-center justify-center rounded-full bg-red-500/90 text-[11px] font-semibold text-white">
             {value > 9 ? "9+" : value}
           </span>
         </span>
       ) : null}
-      <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
+      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {label}
       </p>
       <div className="mt-6">

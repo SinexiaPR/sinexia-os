@@ -20,7 +20,7 @@ import type { Company } from "@/types";
 import { cn } from "@/lib/utils";
 
 const selectClassName =
-  "flex h-12 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:h-11 sm:text-sm";
+  "flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:h-11 sm:text-sm";
 
 type AdminReportFormProps = {
   companies: Company[];
@@ -147,7 +147,7 @@ export function AdminReportForm({
             placeholder="e.g. January 2026"
             required
             disabled={isPending}
-            className="h-12 rounded-xl sm:h-11"
+            className="h-12 rounded-md sm:h-11"
           />
         </div>
 
@@ -158,7 +158,7 @@ export function AdminReportForm({
             name="title"
             required
             disabled={isPending}
-            className="h-12 rounded-xl sm:h-11"
+            className="h-12 rounded-md sm:h-11"
           />
         </div>
 
@@ -169,7 +169,7 @@ export function AdminReportForm({
             name="notes"
             rows={3}
             disabled={isPending}
-            className="border-input focus-visible:border-ring focus-visible:ring-ring/50 flex w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50 sm:text-sm"
+            className="border-input focus-visible:border-ring focus-visible:ring-ring/50 flex w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50 sm:text-sm"
             placeholder="Optional message visible to the client"
           />
         </div>
@@ -181,7 +181,7 @@ export function AdminReportForm({
             variant="outline"
             disabled={isPending}
             onClick={() => pickerInputRef.current?.click()}
-            className="h-12 w-full rounded-xl sm:h-11"
+            className="h-12 w-full rounded-md sm:h-11"
           >
             {selectedFile ? selectedFile.name : "Choose file"}
           </Button>
@@ -197,19 +197,19 @@ export function AdminReportForm({
       </div>
 
       {localError ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           {localError}
         </p>
       ) : null}
 
       {showError ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           {state.error}
         </p>
       ) : null}
 
       {state.success === true ? (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <p className="rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Reporte publicado correctamente.
         </p>
       ) : null}
@@ -217,7 +217,7 @@ export function AdminReportForm({
       <Button
         type="submit"
         disabled={isPending || !selectedFile}
-        className={cn("h-12 rounded-xl sm:h-11")}
+        className={cn("h-12 rounded-md sm:h-11")}
       >
         {isPending ? "Saving…" : "Save report"}
       </Button>

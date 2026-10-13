@@ -39,7 +39,7 @@ export function ClientReportActions({
             reportId={reportId}
             href={signedUrl}
             onViewed={markLocalViewed}
-            className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-border px-5 text-sm font-medium text-primary sm:min-w-[140px]"
+            className="inline-flex h-11 w-full items-center justify-center rounded-md border border-border px-5 text-sm font-medium text-primary sm:min-w-[140px]"
           >
             Ver reporte
           </ReportViewLink>
@@ -48,7 +48,7 @@ export function ClientReportActions({
             href={signedUrl}
             download
             onViewed={markLocalViewed}
-            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground sm:min-w-[140px]"
+            className="inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground sm:min-w-[140px]"
           >
             Descargar
           </ReportViewLink>
@@ -63,7 +63,7 @@ export function ClientReportActions({
         href={`/dashboard/sia?reportId=${reportId}`}
         onViewed={markLocalViewed}
         className={cn(
-          "inline-flex h-11 w-full items-center justify-center rounded-xl border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]",
+          "inline-flex h-11 w-full items-center justify-center rounded-md border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]",
           isUnread && "ring-1 ring-red-500/20",
         )}
       >
@@ -86,7 +86,7 @@ export function ClientReportSiaLink({
       reportId={reportId}
       href={`/dashboard/sia?reportId=${reportId}`}
       onViewed={() => addLocalViewedReport(profileId, reportId)}
-      className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]"
+      className="inline-flex h-11 w-full items-center justify-center rounded-md border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]"
     >
       Preguntar a SinexIA
     </ReportViewLink>

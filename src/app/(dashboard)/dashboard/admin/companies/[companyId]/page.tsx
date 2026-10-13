@@ -255,7 +255,7 @@ export default async function AdminCompanyPage({
               <Link
                 key={category.slug}
                 href={`/dashboard/admin/companies/${company.id}/${category.slug}`}
-                className="border-border/80 bg-card hover:border-primary/40 focus-visible:ring-ring/50 rounded-2xl border p-5 shadow-sm transition outline-none hover:shadow-md focus-visible:ring-[3px]"
+                className="border-border/80 bg-card hover:border-primary/40 focus-visible:ring-ring/50 rounded-lg border p-5 shadow-sm transition outline-none focus-visible:ring-[3px]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="font-semibold">{category.label}</h3>

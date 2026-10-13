@@ -29,7 +29,7 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border", className)}>
+    <div className={cn("overflow-hidden rounded-md border border-border", className)}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-full caption-bottom text-sm">
           <thead className="border-b border-border bg-muted/50">

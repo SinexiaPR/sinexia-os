@@ -110,7 +110,7 @@ export default async function ReportsPage({
         <h1 className="text-xl font-semibold tracking-tight">
           Reportes
         </h1>
-        <p className="text-muted-foreground text-[15px] leading-relaxed sm:text-base">
+        <p className="text-muted-foreground text-sm leading-relaxed">
           Reportes publicados por Sinexia para su empresa. Consulte, descargue y
           pregunte a SinexIA cuando el análisis esté listo.
         </p>

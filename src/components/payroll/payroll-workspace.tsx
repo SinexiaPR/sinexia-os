@@ -246,7 +246,7 @@ export function PayrollWorkspace({
                 </div>
               </SurfaceCard>
               <SurfaceCard padding="sm">
-                <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-3 py-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   <div>Empleado</div>
                   <div className="text-right">Rate</div>
                   <div className="text-right">Horas</div>
@@ -606,7 +606,7 @@ export function PayrollWorkspace({
       ) : null}
       {showReopenDialog && selected ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
-          <SurfaceCard className="w-full max-w-lg rounded-b-none sm:rounded-b-2xl">
+          <SurfaceCard className="w-full max-w-lg rounded-b-none sm:rounded-b-lg">
             <h2 className="text-lg font-semibold">Reabrir nómina</h2>
             <p className="text-muted-foreground mt-2 text-sm">
               La nómina volverá a borrador y conservará todos sus datos. El
@@ -678,7 +678,7 @@ function EmployeeDialog({
   >(employee?.worker_classification ?? "w2");
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
-      <SurfaceCard className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-b-none sm:rounded-b-2xl">
+      <SurfaceCard className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-b-none sm:rounded-b-lg">
         <h2 className="text-lg font-semibold">
           {employee ? "Editar empleado y tarifas" : "Agregar empleado"}
         </h2>

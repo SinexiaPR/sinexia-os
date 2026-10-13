@@ -429,7 +429,7 @@ export function CalendarBoard({
       </div>
 
       {view === "month" ? (
-        <div className="bg-card hidden overflow-hidden rounded-2xl border md:block">
+        <div className="bg-card hidden overflow-hidden rounded-lg border md:block">
           <div className="bg-muted/40 grid grid-cols-7 border-b">
             {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
               <div

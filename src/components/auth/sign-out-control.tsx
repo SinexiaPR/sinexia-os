@@ -50,7 +50,7 @@ export function SignOutControl({
     return (
       <div className={cn("space-y-1", className)}>
         <form action={formAction}>
-          <SignOutSubmitButton className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60" />
+          <SignOutSubmitButton className="flex w-full items-center rounded-md px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60" />
         </form>
         <SignOutError message={state.error} />
       </div>
@@ -61,7 +61,7 @@ export function SignOutControl({
     return (
       <div className={cn("space-y-2", className)}>
         <form action={formAction}>
-          <SignOutSubmitButton className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-border px-5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60 sm:w-auto" />
+          <SignOutSubmitButton className="inline-flex h-11 w-full items-center justify-center rounded-md border border-border px-5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60 sm:w-auto" />
         </form>
         {state.error ? (
           <p className="text-sm text-destructive">{state.error}</p>
