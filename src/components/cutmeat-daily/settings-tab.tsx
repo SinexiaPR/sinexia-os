@@ -50,6 +50,8 @@ export function SettingsTab({
     primeMeatsRecurring: String(settings.primeMeatsRecurring),
     defaultDailyIncome: String(settings.defaultDailyIncome),
     flatWeeklyIncome: String(settings.flatWeeklyIncome),
+    gabrielStartingBalance: String(settings.gabrielStartingBalance),
+    currentWeekIncome: String(settings.currentWeekIncome),
   });
 
   const addVendor = () => {
@@ -107,6 +109,8 @@ export function SettingsTab({
         primeMeatsRecurring: Number(settingsForm.primeMeatsRecurring) || 0,
         defaultDailyIncome: Number(settingsForm.defaultDailyIncome) || 0,
         flatWeeklyIncome: Number(settingsForm.flatWeeklyIncome) || 0,
+        gabrielStartingBalance: Number(settingsForm.gabrielStartingBalance) || 0,
+        currentWeekIncome: Number(settingsForm.currentWeekIncome) || 0,
       });
       setMessage("error" in result ? result.error : "Configuración guardada.");
     });
@@ -156,6 +160,30 @@ export function SettingsTab({
               value={settingsForm.flatWeeklyIncome}
               onChange={(e) =>
                 setSettingsForm((c) => ({ ...c, flatWeeklyIncome: e.target.value }))
+              }
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground text-xs">
+              Ingresos semana en curso (fijo, toda la semana)
+            </span>
+            <Input
+              inputMode="decimal"
+              value={settingsForm.currentWeekIncome}
+              onChange={(e) =>
+                setSettingsForm((c) => ({ ...c, currentWeekIncome: e.target.value }))
+              }
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground text-xs">
+              Balance GABRIEL de arranque (sin día cerrado anterior)
+            </span>
+            <Input
+              inputMode="decimal"
+              value={settingsForm.gabrielStartingBalance}
+              onChange={(e) =>
+                setSettingsForm((c) => ({ ...c, gabrielStartingBalance: e.target.value }))
               }
             />
           </label>

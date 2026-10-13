@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Plus, Trash2 } from "lucide-react";
 
-import { extractBankExportPdf, saveBankExport } from "@/actions/cutmeat-daily";
+import { saveBankExport } from "@/actions/cutmeat-daily";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
@@ -60,11 +60,8 @@ export function BankTab({
       note: "",
     })),
   );
-  const [sourcePdfPath, setSourcePdfPath] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [extracting, setExtracting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const update = (index: number, patch: Partial<Movement>) => {
@@ -72,37 +69,6 @@ export function BankTab({
       const next = [...current];
       next[index] = { ...next[index], ...patch };
       return next;
-    });
-  };
-
-  const onUpload = (file: File | undefined) => {
-    if (!file) return;
-    setExtracting(true);
-    setMessage(null);
-    const formData = new FormData();
-    formData.set("companyId", companyId);
-    formData.set("file", file);
-    startTransition(async () => {
-      const result = await extractBankExportPdf(formData);
-      setExtracting(false);
-      if ("error" in result) {
-        setMessage(result.error);
-        return;
-      }
-      if (result.closingBalance != null) setClosingBalance(String(result.closingBalance));
-      setMovements(
-        result.movements.map((m) => ({
-          description: m.description,
-          amount: String(m.amount),
-          direction: m.direction,
-          linkedRecurringId: "",
-          isNotEnteredDeposit: false,
-          note: "",
-        })),
-      );
-      setSourcePdfPath(result.sourcePdfPath);
-      setMessage("PDF leído -- revisá los movimientos antes de guardar.");
-      if (fileInputRef.current) fileInputRef.current.value = "";
     });
   };
 
@@ -126,7 +92,7 @@ export function BankTab({
           isNotEnteredDeposit: m.isNotEnteredDeposit,
           note: m.note.trim() || null,
         })),
-        sourcePdfPath,
+        sourcePdfPath: null,
       });
       setMessage("error" in result ? result.error : "Export del banco guardado.");
       if (!("error" in result)) router.refresh();
@@ -136,28 +102,7 @@ export function BankTab({
   return (
     <div className="space-y-6">
       <SurfaceCard>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-base font-semibold">Deposit Accounts Activity Summary</h2>
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              disabled={readOnly}
-              onChange={(event) => onUpload(event.target.files?.[0])}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={readOnly || extracting}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="size-4" />
-              {extracting ? "Leyendo PDF…" : "Subir PDF del export del banco"}
-            </Button>
-          </div>
-        </div>
+        <h2 className="text-base font-semibold">Deposit Accounts Activity Summary</h2>
         <label className="mt-4 block max-w-xs space-y-1 text-sm">
           <span className="text-muted-foreground text-xs">Closing balance</span>
           <Input

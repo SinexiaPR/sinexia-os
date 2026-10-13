@@ -60,6 +60,12 @@ function extractUnclearedItems(
  * según la versión de QuickBooks; esto busca las etiquetas estándar del
  * reporte de conciliación y dos secciones de pendientes (cheques y
  * depósitos sin aclarar).
+ *
+ * @deprecated La pantalla de "Informes diarios" ya no sube PDF para
+ * extraer estos datos (ver docs/CUTMEAT_DAILY_DATA_CONTRACT.md) -- la
+ * carga es manual o programática (loadDailyReportData). No se borra
+ * porque la acción `extractReconciliationPdf` sigue existiendo para
+ * quien la llame directamente.
  */
 export function extractReconciliationReport(text: string): ExtractedReconciliation {
   const statementEnding = findLabeledAmount(text, [
@@ -100,6 +106,9 @@ const CREDIT_HINTS = /deposit|credit|refund|ach\s*credit/i;
  * Export del banco (Deposit Accounts Activity Summary). Busca líneas con
  * fecha + descripción + un monto final; clasifica ingreso/egreso por
  * palabras clave como primera aproximación -- se revisa en pantalla.
+ *
+ * @deprecated Ver extractReconciliationReport más arriba -- la pantalla
+ * ya no sube PDF; no se borra por si alguien la llama directamente.
  */
 export function extractBankExport(text: string): ExtractedBankExport {
   const closingBalance = findLabeledAmount(text, [
@@ -140,6 +149,9 @@ export type ExtractedAging = {
  * QuickBooks comparten el mismo formato de "Balance Detail" (nombre,
  * facturas, "Total for X", TOTAL general); se reutiliza el parser que
  * ya existe para SinexIA en vez de duplicar la lógica de líneas.
+ *
+ * @deprecated Ver extractReconciliationReport más arriba -- la pantalla
+ * ya no sube PDF; no se borra por si alguien la llama directamente.
  */
 export function extractAgingBalanceDetail(text: string): ExtractedAging {
   const { customers, grandTotal } = parseCustomerBalanceDetailPdfText(text);

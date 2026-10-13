@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Plus, Trash2 } from "lucide-react";
 
-import { extractReconciliationPdf, saveReconciliation } from "@/actions/cutmeat-daily";
+import { saveReconciliation } from "@/actions/cutmeat-daily";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
@@ -46,48 +46,9 @@ export function ReconciliationTab({
       amount: String(item.amount),
     })),
   );
-  const [sourcePdfPath, setSourcePdfPath] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [extracting, setExtracting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-
-  const onUpload = (file: File | undefined) => {
-    if (!file) return;
-    setExtracting(true);
-    setMessage(null);
-    const formData = new FormData();
-    formData.set("companyId", companyId);
-    formData.set("file", file);
-    startTransition(async () => {
-      const result = await extractReconciliationPdf(formData);
-      setExtracting(false);
-      if ("error" in result) {
-        setMessage(result.error);
-        return;
-      }
-      if (result.statementEnding != null) setStatementEnding(String(result.statementEnding));
-      if (result.register != null) setRegister(String(result.register));
-      setChecks(
-        result.unclearedChecks.map((item) => ({
-          itemType: "uncleared_check" as const,
-          reference: item.reference,
-          amount: String(item.amount),
-        })),
-      );
-      setDeposits(
-        result.unclearedDeposits.map((item) => ({
-          itemType: "uncleared_deposit" as const,
-          reference: item.reference,
-          amount: String(item.amount),
-        })),
-      );
-      setSourcePdfPath(result.sourcePdfPath);
-      setMessage("PDF leído -- revisá los datos antes de guardar.");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    });
-  };
 
   const checksTotal = checks.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const depositsTotal = deposits.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -112,7 +73,7 @@ export function ReconciliationTab({
             reference: item.reference.trim(),
             amount: Number(item.amount) || 0,
           })),
-        sourcePdfPath,
+        sourcePdfPath: null,
       });
       setMessage("error" in result ? result.error : "Conciliación guardada.");
       if (!("error" in result)) router.refresh();
@@ -187,33 +148,12 @@ export function ReconciliationTab({
   return (
     <div className="space-y-6">
       <SurfaceCard>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">Reconciliation Report (FIRST BANK)</h2>
-            <p className="text-muted-foreground text-sm">
-              Statement ending + uncleared checks + uncleared deposits −
-              Register debe dar $0.00.
-            </p>
-          </div>
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              disabled={readOnly}
-              onChange={(event) => onUpload(event.target.files?.[0])}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={readOnly || extracting}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="size-4" />
-              {extracting ? "Leyendo PDF…" : "Subir PDF del Reconciliation Report"}
-            </Button>
-          </div>
+        <div>
+          <h2 className="text-base font-semibold">Reconciliation Report (FIRST BANK)</h2>
+          <p className="text-muted-foreground text-sm">
+            Statement ending + uncleared checks + uncleared deposits −
+            Register debe dar $0.00.
+          </p>
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm">

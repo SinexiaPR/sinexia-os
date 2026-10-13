@@ -234,6 +234,14 @@ const ownAllowedDirs = [
   // menciona este módulo solo en un comentario de documentación, no lo
   // importa ni lo muestra al portal cliente. Ver docs/CUTMEAT_PACKAGE.md.
   "src/services/cutmeat-report-packages.ts",
+  // "Informes diarios" ahora lee cutmeat_recurrentes como fuente única
+  // de recurrentes (ya no cutmeat_daily_recurring_payments) -- mismo
+  // admin, misma empresa, no se expone distinto al portal cliente. Ver
+  // docs/CUTMEAT_DAILY_DATA_CONTRACT.md.
+  "src/actions/cutmeat-daily.ts",
+  "src/components/cutmeat-daily/recurring-tab.tsx",
+  "src/lib/cutmeat-daily/calculations.ts",
+  "src/services/cutmeat-daily.ts",
 ];
 function isOwnAllowed(filePath: string) {
   return ownAllowedDirs.some(

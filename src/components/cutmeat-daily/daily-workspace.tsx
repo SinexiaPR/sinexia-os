@@ -252,7 +252,9 @@ export function CutMeatDailyWorkspace({
         </ul>
       </nav>
 
-      {tab === "resumen" ? <SummaryTab workspace={workspace} /> : null}
+      {tab === "resumen" ? (
+        <SummaryTab companyId={company.id} workspace={workspace} readOnly={readOnly} />
+      ) : null}
       {tab === "conciliacion" ? (
         <ReconciliationTab
           companyId={company.id}
@@ -272,7 +274,11 @@ export function CutMeatDailyWorkspace({
         />
       ) : null}
       {tab === "recurrentes" ? (
-        <RecurringTab companyId={company.id} recurring={workspace.recurring} />
+        <RecurringTab
+          companyId={company.id}
+          reportDate={reportDate}
+          recurring={workspace.recurring}
+        />
       ) : null}
       {tab === "proyeccion" ? (
         <IncomeTab

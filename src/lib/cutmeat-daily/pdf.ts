@@ -7,12 +7,13 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
 import type {
+  AgingGroup,
   AgingLine,
   BankMovement,
   FinancialReportResult,
   RecurringPayment,
   ReconciliationControlResult,
-  VarianceItem,
+  VarianceLine,
   VendorAgingResult,
 } from "./calculations";
 import { formatDayLabel, type IsoDate } from "./dates";
@@ -322,13 +323,82 @@ function drawAgingTable(
   );
 }
 
+/**
+ * Reproduce el formato original (Vendor/Customer Balance Detail Report):
+ * agrupado por nombre, una fila por factura (fecha/tipo/número/
+ * vencimiento/monto/saldo abierto), con "Total for <nombre>" como
+ * subtotal, y el total general al final. Se usa en cuanto un solo grupo
+ * tiene detalle cargado (txn_date/num/txn_type); si ninguno lo tiene,
+ * `drawAgingTable` (nombre + balance) sigue siendo exactamente igual
+ * que antes.
+ */
+function drawAgingDetailTable(
+  doc: Doc,
+  y: number,
+  title: string,
+  groups: AgingGroup[],
+  grandTotal: number,
+): number {
+  y = sectionTitle(doc, title, y);
+  const columns = [
+    { label: "Fecha", width: 70 },
+    { label: "Tipo", width: 90 },
+    { label: "Número", width: 90 },
+    { label: "Vencimiento", width: 80 },
+    { label: "Monto", width: 100, align: "right" as const },
+    { label: "Saldo abierto", width: 100, align: "right" as const },
+  ];
+  for (const group of groups) {
+    y -= 4;
+    doc.page.drawText(printable(group.name), {
+      x: MARGIN,
+      y,
+      size: 9,
+      font: doc.bold,
+      color: NAVY,
+    });
+    y -= 14;
+    y = drawTable(
+      doc,
+      MARGIN,
+      y,
+      columns,
+      group.lines.map((line) => [
+        line.txnDate ? formatDayLabel(line.txnDate) : "",
+        line.txnType ?? "",
+        line.num ?? "",
+        line.dueDate ? formatDayLabel(line.dueDate) : "",
+        line.amount == null ? "" : money(line.amount),
+        money(line.openBalance ?? line.balance),
+      ]),
+      [`Total for ${group.name}`, "", "", "", "", money(group.subtotal)],
+    );
+    y -= 8;
+  }
+  doc.page.drawText(printable("Total general"), {
+    x: MARGIN,
+    y,
+    size: 9,
+    font: doc.bold,
+    color: NAVY,
+  });
+  right(doc.page, money(grandTotal), doc.bold, 9, MARGIN + 530, y);
+  return y - 16;
+}
+
 export async function buildAgingVendorsPdf(params: {
   reportDate: IsoDate;
   items: AgingLine[];
   rawTotal: number;
+  groups?: AgingGroup[];
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc("Vendor Balance Detail Report", params.reportDate);
-  drawAgingTable(doc, HEIGHT - 90, "Aging Vendors", params.items, params.rawTotal);
+  const hasDetail = params.groups?.some((group) => group.hasDetail);
+  if (hasDetail && params.groups) {
+    drawAgingDetailTable(doc, HEIGHT - 90, "Aging Vendors", params.groups, params.rawTotal);
+  } else {
+    drawAgingTable(doc, HEIGHT - 90, "Aging Vendors", params.items, params.rawTotal);
+  }
   return pdf.save();
 }
 
@@ -336,9 +406,15 @@ export async function buildAgingCustomersPdf(params: {
   reportDate: IsoDate;
   items: AgingLine[];
   rawTotal: number;
+  groups?: AgingGroup[];
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc("Customer Balance Detail Report", params.reportDate);
-  drawAgingTable(doc, HEIGHT - 90, "Aging Customers", params.items, params.rawTotal);
+  const hasDetail = params.groups?.some((group) => group.hasDetail);
+  if (hasDetail && params.groups) {
+    drawAgingDetailTable(doc, HEIGHT - 90, "Aging Customers", params.groups, params.rawTotal);
+  } else {
+    drawAgingTable(doc, HEIGHT - 90, "Aging Customers", params.items, params.rawTotal);
+  }
   return pdf.save();
 }
 
@@ -352,7 +428,8 @@ export async function buildConsolidatedPdf(params: {
     thisWeekTotal: number;
   };
   financial: FinancialReportResult | null;
-  variance: { items: VarianceItem[]; totalVariance: number };
+  varianceLines: VarianceLine[];
+  totalVariance: number;
   balanceGabriel: number | null;
   balanceWithNotEntered: number | null;
   incomeDays: Array<{ date: IsoDate; amount: number }>;
@@ -390,14 +467,30 @@ export async function buildConsolidatedPdf(params: {
     );
     y -= 20;
   }
-  keyValueRow(doc, "Variación Diaria (total)", money(params.variance.totalVariance), MARGIN, y);
-  keyValueRow(doc, "Balance GABRIEL", money(params.balanceGabriel), MARGIN + 260, y);
-  y -= 14;
+  if (params.varianceLines.length) {
+    y = sectionTitle(doc, "Variación Diaria", y);
+    y = drawTable(
+      doc,
+      MARGIN,
+      y,
+      [
+        { label: "Concepto", width: 400 },
+        { label: "Monto", width: 120, align: "right" },
+      ],
+      params.varianceLines.map((line) => [line.concept, money(line.amount)]),
+      ["Total", money(params.totalVariance)],
+    );
+    y -= 10;
+  } else {
+    keyValueRow(doc, "Variación Diaria (total)", money(params.totalVariance), MARGIN, y);
+    y -= 14;
+  }
+  keyValueRow(doc, "Balance GABRIEL", money(params.balanceGabriel), MARGIN, y);
   keyValueRow(
     doc,
     "Balance + Not entered Sales",
     money(params.balanceWithNotEntered),
-    MARGIN,
+    MARGIN + 260,
     y,
   );
   y -= 20;
