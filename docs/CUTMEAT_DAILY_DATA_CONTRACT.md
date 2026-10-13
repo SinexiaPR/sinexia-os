@@ -4,10 +4,13 @@ Generado a partir de las migraciones reales del módulo "Informes diarios"
 (Cut Meat Distributors / Wagyu Food Service LLC):
 `20261012120000_cutmeat_daily_reports.sql`,
 `20261012121000_cutmeat_daily_seed_config.sql`,
-`20261013130000_cutmeat_daily_data_contract.sql` y
-`20261013131000_cutmeat_daily_calc_fixes.sql`. Documenta el esquema tal
-como quedó aplicado, no de memoria — si una migración nueva cambia una
-tabla, actualizar este archivo junto con ella.
+`20261013130000_cutmeat_daily_data_contract.sql`,
+`20261013131000_cutmeat_daily_calc_fixes.sql`,
+`20261013140000_cutmeat_daily_bank_movements_relink_recurring.sql` y
+`20261013141000_cutmeat_daily_drop_old_recurring_payments.sql`.
+Documenta el esquema tal como quedó aplicado, no de memoria — si una
+migración nueva cambia una tabla, actualizar este archivo junto con
+ella.
 
 La tarea que generó la segunda mitad de este contrato (quitar la subida
 de PDF, origen de los datos, bloqueo de días cerrados, controles de solo
@@ -152,26 +155,31 @@ CASCADE), `closing_balance`, `source_pdf_path`, `extracted_at`,
 
 Movimientos del banco. `report_id` (FK, sin UNIQUE), `description`,
 `amount CHECK (> 0)`, `direction CHECK IN ('ingreso','egreso')`,
-`linked_recurring_id` (FK **nullable** a `cutmeat_daily_recurring_payments`
-— ver nota de deprecación más abajo), `is_not_entered_deposit BOOLEAN`,
-`note`, `updated_by`/`updated_at`.
+`linked_recurring_id` (FK **nullable** a `cutmeat_recurrentes(id) ON
+DELETE SET NULL`), `is_not_entered_deposit BOOLEAN`, `note`,
+`updated_by`/`updated_at`.
 
-### `cutmeat_daily_recurring_payments` / `cutmeat_daily_recurring_payment_history` — **@deprecated**
+`linked_recurring_id` se repuntó de la tabla vieja
+`cutmeat_daily_recurring_payments` a `cutmeat_recurrentes` en
+`20261013140000_cutmeat_daily_bank_movements_relink_recurring.sql` — el
+desplegable de BankTab ya ofrecía recurrentes de `cutmeat_recurrentes`
+(vía `getRecurringPayments`), así que vincular un movimiento a un
+recurrente real fallaba contra el FK viejo hasta ese cambio.
 
-"Informes diarios" ya **no lee ni escribe** estas tablas — la fuente
-única de recurrentes es `cutmeat_recurrentes` (Fase 1, ver
-`docs/CUTMEAT_RECURRENTES.md`). Quedan con **0 filas**, sin UI que las
-use (`RecurringTab` ahora usa `saveRecurrente`/`deleteRecurrente`/
-`markRecurrentePaid` de `actions/cutmeat-recurrentes.ts`); las acciones
-`saveRecurringPayment`/`deleteRecurringPayment` siguen existiendo,
-marcadas `@deprecated`, por si algo externo las llama todavía.
+### `cutmeat_daily_recurring_payments` / `cutmeat_daily_recurring_payment_history` — **retiradas**
 
-**Pendiente (no es parte de esta tarea):** una migración reversible
-aparte que retire estas dos tablas. `cutmeat_daily_bank_movements.linked_recurring_id`
-sigue apuntando a `cutmeat_daily_recurring_payments(id)` — ese FK habría
-que resolverlo (¿apuntar a `cutmeat_recurrentes` en su lugar?) en esa
-misma migración futura; no se tocó acá para no mezclar dos cambios de
-esquema distintos.
+Eran la tabla vieja de recurrentes, duplicada desde que "Informes
+diarios" pasó a leer/escribir recurrentes solo en `cutmeat_recurrentes`
+(Fase 1, ver `docs/CUTMEAT_RECURRENTES.md`). Tenían **0 filas** y
+ninguna UI las usaba (`RecurringTab` ya usaba `saveRecurrente`/
+`deleteRecurrente`/`markRecurrentePaid` de `actions/cutmeat-recurrentes.ts`).
+
+Se retiraron en
+`20261013141000_cutmeat_daily_drop_old_recurring_payments.sql`, después
+de repuntar `cutmeat_daily_bank_movements.linked_recurring_id` (ver
+arriba) y de eliminar las acciones `saveRecurringPayment`/
+`deleteRecurringPayment` (que escribían en estas tablas, marcadas
+`@deprecated`, sin ningún caller en la UI).
 
 ### `cutmeat_daily_income_projection`
 
@@ -221,9 +229,20 @@ due_date: 2026-09-15   amount: 60.00         open_balance: 60.00
 
 ### `cutmeat_daily_vendor_config` / `cutmeat_daily_holidays`
 
-Sin cambios en esta tarea. Proveedores incluidos/excluidos del aging
-(`UNIQUE (company_id, vendor_name)`) y feriados para la fecha sugerida
-del informe (`UNIQUE (company_id, holiday_date)`).
+Proveedores incluidos/excluidos del aging (`UNIQUE (company_id,
+vendor_name)`) y feriados para la fecha sugerida del informe (`UNIQUE
+(company_id, holiday_date)`).
+
+La comparación entre el nombre del aging (PDF de QuickBooks) y el
+nombre configurado se normaliza con `normalizeVendorName()`
+(`lib/cutmeat-daily/calculations.ts`): minúsculas, sin comas ni puntos,
+sin espacios de sobra. Así "Service Zone, Inc." (como viene del PDF) y
+"Service Zone Inc." (como se escribe en Configuración) se consideran el
+mismo proveedor, sin disparar la alerta "proveedor nuevo, sin
+configurar" de `findUnconfiguredVendors`/`checkDailyReportCompleteness`
+por una coma o un punto de diferencia. Se usa en
+`findUnconfiguredVendors` y en `consolidateVendorAging` (el subtotal
+excluido).
 
 ### `cutmeat_daily_settings`
 

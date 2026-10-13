@@ -400,20 +400,32 @@ export type VendorAgingResult = {
   unconfiguredVendors: AgingLine[];
 };
 
+/** Nombre de proveedor normalizado para comparar: sin comas ni puntos, sin
+ * mayúsculas, sin espacios de sobra -- así "Service Zone, Inc." (el PDF de
+ * QuickBooks) coincide con "Service Zone Inc." (lo que se escribe a mano en
+ * Configuración) y no dispara una alerta de "proveedor nuevo" por una coma. */
+export function normalizeVendorName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[,.]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function findUnconfiguredVendors(
   items: AgingLine[],
   config: Pick<VendorAgingConfig, "includedNames" | "excludedNames">,
 ): AgingLine[] {
   const excludedSet = new Set(
-    config.excludedNames.map((name) => name.toLowerCase()),
+    config.excludedNames.map(normalizeVendorName),
   );
   const includedSet = new Set(
-    config.includedNames.map((name) => name.toLowerCase()),
+    config.includedNames.map(normalizeVendorName),
   );
   return items.filter(
     (item) =>
-      !excludedSet.has(item.name.toLowerCase()) &&
-      !includedSet.has(item.name.toLowerCase()),
+      !excludedSet.has(normalizeVendorName(item.name)) &&
+      !includedSet.has(normalizeVendorName(item.name)),
   );
 }
 
@@ -423,11 +435,11 @@ export function consolidateVendorAging(
   config: VendorAgingConfig,
 ): VendorAgingResult {
   const excludedSet = new Set(
-    config.excludedNames.map((name) => name.toLowerCase()),
+    config.excludedNames.map(normalizeVendorName),
   );
   const excludedSubtotal = sum(
     items
-      .filter((item) => excludedSet.has(item.name.toLowerCase()))
+      .filter((item) => excludedSet.has(normalizeVendorName(item.name)))
       .map((item) => item.balance),
   );
   return {
