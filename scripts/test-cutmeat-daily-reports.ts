@@ -446,7 +446,10 @@ function assertNoHorizontalOverlap(
 // se entrega. Hernan entrega Aging Vendors en 1 página y Aging Customers
 // en 2; esto verifica que el PDF generado haga lo mismo con estos datos
 // (no se corte, con el total general visible) en vez de solo revisar el
-// cálculo puro.
+// cálculo puro. El Paquete para el dueño (buildAndStorePackage, vía
+// generateDailyPdf) copia este mismo PDF tal cual al armar el paquete
+// -- no lo reconstruye con otra lógica -- así que este test también
+// cubre lo que termina viendo el dueño.
 // ---------------------------------------------------------------------------
 
 function detailLine(

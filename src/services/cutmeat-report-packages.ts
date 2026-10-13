@@ -14,7 +14,6 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getCutMeatReport,
   getDailyReportWorkspace,
-  getGeneratedPdfHistory,
   resolveCutMeatCompany,
 } from "@/services/cutmeat-daily";
 
@@ -154,10 +153,17 @@ export class PackageNotEligibleError extends Error {
 /**
  * Arma el "Paquete para el dueño": portada (última hoja del Consolidado,
  * con 3 cifras resaltadas) + Reconciliation + Export + Consolidado sin su
- * última hoja + Aging Vendors + Aging Customers, en un solo PDF. Nunca
- * reescribe los 5 PDF individuales -- los reutiliza tal cual están (los
- * genera primero, vía generateDailyPdf, si todavía no existen). Cada
- * llamada crea una versión nueva; nunca sobrescribe una anterior.
+ * última hoja + Aging Vendors + Aging Customers, en un solo PDF.
+ *
+ * SIEMPRE regenera los 5 PDF individuales desde los datos actuales del
+ * día (generateDailyPdf), nunca reutiliza una versión ya guardada: un
+ * paquete armado con un PDF viejo (de antes de corregir un dato, o de
+ * antes de un fix en el generador) queda con cifras y paginación
+ * desactualizadas sin ningún aviso, que es justo lo que pasó la primera
+ * vez que se armó el paquete del 09/10 -- reusó los PDF de las primeras
+ * pruebas en vez de generarlos de nuevo. Cada llamada crea una versión
+ * nueva del paquete Y de cada uno de los 5 PDF; nunca sobrescribe una
+ * anterior (igual que generateDailyPdf ya hace por su cuenta).
  */
 export async function buildAndStorePackage(
   companyId: string,
@@ -176,23 +182,16 @@ export async function buildAndStorePackage(
   }
 
   const admin = createAdminClient();
-  const existingByDocType = new Map(
-    (await getGeneratedPdfHistory(report.id)).map((pdf) => [pdf.docType, pdf] as const),
-  );
 
   const sourceBytes: Record<CutMeatPdfDocType, Uint8Array> = {} as Record<
     CutMeatPdfDocType,
     Uint8Array
   >;
   for (const docType of PACKAGE_DOC_TYPES) {
-    let storagePath = existingByDocType.get(docType)?.storagePath;
-    if (!storagePath) {
-      const generated = await generateDailyPdf({ companyId, reportDate, docType });
-      if ("error" in generated)
-        throw new PackageNotEligibleError([generated.error ?? "No se pudo generar el PDF."]);
-      storagePath = generated.storagePath;
-    }
-    const downloaded = await admin.storage.from("cutmeat-daily").download(storagePath);
+    const generated = await generateDailyPdf({ companyId, reportDate, docType });
+    if ("error" in generated)
+      throw new PackageNotEligibleError([generated.error ?? "No se pudo generar el PDF."]);
+    const downloaded = await admin.storage.from("cutmeat-daily").download(generated.storagePath);
     if (downloaded.error) throw downloaded.error;
     sourceBytes[docType] = new Uint8Array(await downloaded.data.arrayBuffer());
   }
