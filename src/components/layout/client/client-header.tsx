@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { MenuIcon } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { SignOutControl } from "@/components/auth/sign-out-control";
 import { ClientNav } from "@/components/layout/client/client-nav";
@@ -26,12 +25,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  clientNavItems,
-  clientInvoicesNavItem,
-  getPageTitle,
-  tresbePayrollNavItem,
-} from "@/config/navigation";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 import type { ClientReportNotifications } from "@/types/notifications";
@@ -66,18 +59,7 @@ export function ClientHeader({
   invoicesEnabled = false,
   className,
 }: ClientHeaderProps) {
-  const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const title = useMemo(
-    () =>
-      getPageTitle(pathname, [
-        clientNavItems[0],
-        ...(companySlug === "tresbe" ? [tresbePayrollNavItem] : []),
-        ...(invoicesEnabled ? [clientInvoicesNavItem] : []),
-        ...clientNavItems.slice(1),
-      ]),
-    [companySlug, invoicesEnabled, pathname],
-  );
 
   return (
     <header
@@ -113,7 +95,7 @@ export function ClientHeader({
         </Sheet>
 
         <div className="min-w-0 flex-1 md:hidden">
-          <p className="truncate text-sm font-semibold">{title}</p>
+          <p className="truncate text-sm font-semibold">{siteConfig.name}</p>
         </div>
 
         <div className="hidden min-w-0 flex-1 md:block">

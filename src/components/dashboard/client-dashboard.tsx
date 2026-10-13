@@ -68,7 +68,7 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
   if (!profile.company_id) {
     return (
       <div className="space-y-2 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Panel</h1>
         <p className="text-muted-foreground">
           Su cuenta no está vinculada a una empresa. Contacte a Sinexia.
         </p>
@@ -102,7 +102,7 @@ export async function ClientDashboard({ profile }: ClientDashboardProps) {
         <p className="text-muted-foreground text-sm">
           {company?.name ?? "Su empresa"}
         </p>
-        <h1 className="text-foreground text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h1 className="text-foreground text-xl font-semibold tracking-tight">
           Hola, {firstName}
         </h1>
         <p className="text-muted-foreground max-w-2xl text-base leading-relaxed">

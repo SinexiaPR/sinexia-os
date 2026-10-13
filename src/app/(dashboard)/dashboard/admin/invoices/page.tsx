@@ -14,7 +14,6 @@ export default async function AdminInvoicesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Admin workspace"
         title="Facturación"
         description="Crea, emite, descarga y entrega facturas para cualquier compañía desde una secuencia global segura."
         action={

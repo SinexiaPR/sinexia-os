@@ -8,7 +8,6 @@ export async function AdminDashboard() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Admin workspace"
         title="Dashboard"
         description="Estado de cada cliente activo: nómina, facturación y el resto de sus acciones principales."
       />

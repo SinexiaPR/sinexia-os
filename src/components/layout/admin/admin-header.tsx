@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { MenuIcon } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { SignOutControl } from "@/components/auth/sign-out-control";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
@@ -26,7 +25,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { adminNavItems, getPageTitle } from "@/config/navigation";
+import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 import type { NavBadgeCounts } from "@/types/notifications";
 import type { Profile } from "@/types";
@@ -54,12 +53,7 @@ export function AdminHeader({
   notificationUnreadCount,
   className,
 }: AdminHeaderProps) {
-  const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const title = useMemo(
-    () => getPageTitle(pathname, adminNavItems),
-    [pathname],
-  );
 
   return (
     <header
@@ -90,9 +84,10 @@ export function AdminHeader({
         </SheetContent>
       </Sheet>
 
-      <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight">
-        {title}
-      </h1>
+      <p className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight md:hidden">
+        {siteConfig.name}
+      </p>
+      <div aria-hidden className="hidden flex-1 md:block" />
 
       <NotificationBell initialUnreadCount={notificationUnreadCount} />
 

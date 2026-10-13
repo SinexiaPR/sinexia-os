@@ -51,7 +51,6 @@ export default async function CalendarPage({
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Admin workspace"
         title="Calendario"
         description="Organiza tareas, actividades, recordatorios y mensajes internos del equipo Sinexia."
       />

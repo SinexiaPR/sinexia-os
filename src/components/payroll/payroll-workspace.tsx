@@ -131,7 +131,7 @@ export function PayrollWorkspace({
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             {company.name}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1 className="mt-2 text-xl font-semibold tracking-tight">
             Nómina semanal
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">

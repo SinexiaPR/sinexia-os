@@ -38,7 +38,7 @@ export default async function CutMeatDailyHistoryPage({
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             {company.name} · Historial diario
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1 className="mt-2 text-xl font-semibold tracking-tight">
             Conciliación día por día
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">

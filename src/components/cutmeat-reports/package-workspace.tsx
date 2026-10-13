@@ -79,7 +79,7 @@ export function PackageWorkspace({
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {company.name} · Paquete para el dueño
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{reportDate}</h1>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight">{reportDate}</h1>
             {!canWrite ? (
               <p className="text-muted-foreground mt-2 text-sm">Modo de solo lectura.</p>
             ) : null}

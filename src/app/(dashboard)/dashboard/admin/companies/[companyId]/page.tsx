@@ -106,7 +106,7 @@ export default async function AdminCompanyPage({
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               Empresa · Admin workspace
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            <h1 className="mt-2 text-xl font-semibold tracking-tight">
               {company.name}
             </h1>
             <p className="text-muted-foreground mt-2 text-sm">
