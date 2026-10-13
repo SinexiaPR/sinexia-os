@@ -12,7 +12,12 @@ import { formatDayLabel } from "@/lib/cutmeat-daily/dates";
 import { formatMoney } from "@/lib/cutmeat-daily/format";
 import type { DailyReportWorkspace } from "@/services/cutmeat-daily";
 
-type VarianceRow = { id?: string; concept: string; amount: string };
+type VarianceRow = {
+  id?: string;
+  concept: string;
+  amount: string;
+  section: "variance" | "uncollected_deposit";
+};
 
 /**
  * Todo lo que calculations.ts produjo para el día, de solo lectura, salvo
@@ -36,6 +41,7 @@ export function SummaryTab({
       id: line.id,
       concept: line.concept,
       amount: String(line.amount),
+      section: line.section,
     })),
   );
 
@@ -65,6 +71,7 @@ export function SummaryTab({
             reportId,
             concept: row.concept.trim(),
             amount: Number(row.amount) || 0,
+            section: row.section,
           }),
         ),
       );
@@ -182,7 +189,9 @@ export function SummaryTab({
             size="sm"
             variant="outline"
             disabled={readOnly || !reportId}
-            onClick={() => setRows((current) => [...current, { concept: "", amount: "" }])}
+            onClick={() =>
+              setRows((current) => [...current, { concept: "", amount: "", section: "variance" }])
+            }
           >
             <Plus className="size-4" />
             Agregar línea
@@ -217,6 +226,22 @@ export function SummaryTab({
                   setRows(next);
                 }}
               />
+              <select
+                className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+                value={row.section}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = [...rows];
+                  next[index] = {
+                    ...row,
+                    section: event.target.value as VarianceRow["section"],
+                  };
+                  setRows(next);
+                }}
+              >
+                <option value="variance">Variación Diaria</option>
+                <option value="uncollected_deposit">Depósito sin cobrar</option>
+              </select>
               <button
                 type="button"
                 aria-label="Eliminar"

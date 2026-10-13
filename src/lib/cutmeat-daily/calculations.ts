@@ -281,6 +281,14 @@ export function buildFinancialReport({
 // Variación Diaria (líneas libres) y Balance GABRIEL
 // ---------------------------------------------------------------------------
 
+/** "variance": Variación Diaria propiamente dicha (diferencias de pago de
+ * recurrentes, cargos del banco, etc.). "uncollected_deposit": cheques o
+ * depósitos puntuales todavía sin cobrar (Costco Wholesale, The Butcher)
+ * -- se separan en su propio bloque en la pantalla y el PDF en vez de
+ * mezclarse con la Variación Diaria, aunque siguen sumando al mismo
+ * total. */
+export type VarianceLineSection = "variance" | "uncollected_deposit";
+
 /** Línea libre de Variación Diaria (concepto + monto), como la carga
  * Hernan hoy -- sin tipos fijos ni clasificación automática. Conceptos ya
  * vistos: "Diferencia Pago Recurrentes (vendor)", "First Bank - Service
@@ -290,10 +298,24 @@ export type VarianceLine = {
   id?: string;
   concept: string;
   amount: number;
+  section: VarianceLineSection;
 };
 
 export function totalVarianceOf(lines: VarianceLine[]): number {
   return sum(lines.map((line) => line.amount));
+}
+
+/** Separa las líneas de Variación Diaria por sección, en el orden en que
+ * llegaron, para mostrarlas en bloques distintos (pantalla y PDF). El
+ * total general sigue siendo la suma de todas sin importar la sección. */
+export function splitVarianceLinesBySection(lines: VarianceLine[]): {
+  variance: VarianceLine[];
+  uncollectedDeposits: VarianceLine[];
+} {
+  return {
+    variance: lines.filter((line) => line.section === "variance"),
+    uncollectedDeposits: lines.filter((line) => line.section === "uncollected_deposit"),
+  };
 }
 
 /**
