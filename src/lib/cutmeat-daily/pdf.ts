@@ -6,15 +6,17 @@
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
-import type {
-  AgingGroup,
-  AgingLine,
-  BankMovement,
-  FinancialReportResult,
-  RecurringPayment,
-  ReconciliationControlResult,
-  VarianceLine,
-  VendorAgingResult,
+import {
+  splitVarianceLinesBySection,
+  totalVarianceOf,
+  type AgingGroup,
+  type AgingLine,
+  type BankMovement,
+  type FinancialReportResult,
+  type RecurringPayment,
+  type ReconciliationControlResult,
+  type VarianceLine,
+  type VendorAgingResult,
 } from "./calculations";
 import { formatDayLabel, type IsoDate } from "./dates";
 
@@ -129,9 +131,25 @@ function keyValueRow(doc: Doc, label: string, value: string, x: number, y: numbe
   right(doc.page, value, doc.bold, 9, x + 220, y);
 }
 
+const BOTTOM_MARGIN = 40;
+
+/** Agrega una página nueva de las mismas dimensiones y la deja como
+ * página activa de `doc` -- todo lo que se dibuje después (incluyendo en
+ * funciones que ya tenían `doc.page` capturado en una variable local, ya
+ * que `doc` es el mismo objeto) va a parar ahí. */
+function addPage(pdf: PDFDocument, doc: Doc): number {
+  doc.page = pdf.addPage([WIDTH, HEIGHT]);
+  return HEIGHT - BOTTOM_MARGIN;
+}
+
 /** Tabla simple: encabezados + filas de texto, con una fila de total
- * opcional. Devuelve el Y final para seguir dibujando debajo. */
+ * opcional. Pagina sola: si una fila (o el encabezado) no entra antes del
+ * margen inferior, cierra el borde de lo dibujado en la página actual,
+ * agrega una página nueva y repite el encabezado de columnas ahí. Devuelve
+ * el Y final para seguir dibujando debajo (en la página que haya quedado
+ * activa). */
 function drawTable(
+  pdf: PDFDocument,
   doc: Doc,
   x: number,
   y: number,
@@ -140,64 +158,71 @@ function drawTable(
   totalRow?: string[],
 ) {
   const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
-  doc.page.drawRectangle({ x, y: y - 16, width: tableWidth, height: 16, color: NAVY });
-  let cx = x;
-  for (const col of columns) {
-    if (col.align === "right") {
-      right(doc.page, col.label, doc.bold, 7.5, cx + col.width - 4, y - 11, rgb(1, 1, 1));
-    } else {
-      doc.page.drawText(printable(col.label), {
-        x: cx + 4,
-        y: y - 11,
-        size: 7.5,
-        font: doc.bold,
-        color: rgb(1, 1, 1),
-      });
-    }
-    cx += col.width;
-  }
-  y -= 16;
   const rowHeight = 13;
-  rows.forEach((row, index) => {
-    if (index % 2 === 1) {
-      doc.page.drawRectangle({ x, y: y - rowHeight, width: tableWidth, height: rowHeight, color: ALT });
+
+  const drawHeader = (yy: number) => {
+    doc.page.drawRectangle({ x, y: yy - 16, width: tableWidth, height: 16, color: NAVY });
+    let cx = x;
+    for (const col of columns) {
+      if (col.align === "right") {
+        right(doc.page, col.label, doc.bold, 7.5, cx + col.width - 4, yy - 11, rgb(1, 1, 1));
+      } else {
+        doc.page.drawText(printable(col.label), {
+          x: cx + 4,
+          y: yy - 11,
+          size: 7.5,
+          font: doc.bold,
+          color: rgb(1, 1, 1),
+        });
+      }
+      cx += col.width;
+    }
+    return yy - 16;
+  };
+
+  const drawRow = (yy: number, row: string[], index: number, bold: boolean) => {
+    if (bold) {
+      doc.page.drawRectangle({ x, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: rgb(0.9, 0.92, 0.94) });
+    } else if (index % 2 === 1) {
+      doc.page.drawRectangle({ x, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: ALT });
     }
     let colX = x;
     row.forEach((cell, colIndex) => {
       const col = columns[colIndex];
-      const text = fit(cell, doc.regular, 7.5, col.width - 8);
+      const text = bold ? printable(cell) : fit(cell, doc.regular, 7.5, col.width - 8);
+      const font = bold ? doc.bold : doc.regular;
+      const size = bold ? 7.8 : 7.5;
       if (col.align === "right") {
-        right(doc.page, text, doc.regular, 7.5, colX + col.width - 4, y - rowHeight + 4);
+        right(doc.page, text, font, size, colX + col.width - 4, yy - rowHeight + 4);
       } else {
-        doc.page.drawText(text, { x: colX + 4, y: y - rowHeight + 4, size: 7.5, font: doc.regular, color: NAVY });
+        doc.page.drawText(text, { x: colX + 4, y: yy - rowHeight + 4, size, font, color: NAVY });
       }
       colX += col.width;
     });
-    y -= rowHeight;
+    return yy - rowHeight;
+  };
+
+  let pageTop = y;
+  let yy = drawHeader(y);
+
+  const breakPageIfNeeded = () => {
+    if (yy - rowHeight < BOTTOM_MARGIN) {
+      doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+      pageTop = addPage(pdf, doc);
+      yy = drawHeader(pageTop);
+    }
+  };
+
+  rows.forEach((row, index) => {
+    breakPageIfNeeded();
+    yy = drawRow(yy, row, index, false);
   });
   if (totalRow) {
-    doc.page.drawRectangle({ x, y: y - rowHeight, width: tableWidth, height: rowHeight, color: rgb(0.9, 0.92, 0.94) });
-    let colX = x;
-    totalRow.forEach((cell, colIndex) => {
-      const col = columns[colIndex];
-      if (col.align === "right") {
-        right(doc.page, cell, doc.bold, 7.8, colX + col.width - 4, y - rowHeight + 4);
-      } else {
-        doc.page.drawText(printable(cell), { x: colX + 4, y: y - rowHeight + 4, size: 7.8, font: doc.bold, color: NAVY });
-      }
-      colX += col.width;
-    });
-    y -= rowHeight;
+    breakPageIfNeeded();
+    yy = drawRow(yy, totalRow, 0, true);
   }
-  doc.page.drawRectangle({
-    x,
-    y,
-    width: tableWidth,
-    height: 16 + rows.length * rowHeight + (totalRow ? rowHeight : 0),
-    borderColor: BORDER,
-    borderWidth: 0.75,
-  });
-  return y - 10;
+  doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+  return yy - 10;
 }
 
 function drawReconciliationSection(
@@ -251,6 +276,7 @@ export async function buildReconciliationPdf(params: {
   y = drawReconciliationSection(doc, y, params.control);
   y = sectionTitle(doc, "Uncleared Checks and Payments", y);
   y = drawTable(
+    pdf,
     doc,
     MARGIN,
     y,
@@ -264,6 +290,7 @@ export async function buildReconciliationPdf(params: {
   y -= 10;
   y = sectionTitle(doc, "Uncleared Deposits and Credits", y);
   drawTable(
+    pdf,
     doc,
     MARGIN,
     y,
@@ -289,6 +316,7 @@ export async function buildBankExportPdf(params: {
   y -= 24;
   y = sectionTitle(doc, "Movimientos", y);
   drawTable(
+    pdf,
     doc,
     MARGIN,
     y,
@@ -303,6 +331,7 @@ export async function buildBankExportPdf(params: {
 }
 
 function drawAgingTable(
+  pdf: PDFDocument,
   doc: Doc,
   y: number,
   title: string,
@@ -311,6 +340,7 @@ function drawAgingTable(
 ): number {
   y = sectionTitle(doc, title, y);
   return drawTable(
+    pdf,
     doc,
     MARGIN,
     y,
@@ -333,6 +363,7 @@ function drawAgingTable(
  * que antes.
  */
 function drawAgingDetailTable(
+  pdf: PDFDocument,
   doc: Doc,
   y: number,
   title: string,
@@ -348,7 +379,16 @@ function drawAgingDetailTable(
     { label: "Monto", width: 100, align: "right" as const },
     { label: "Saldo abierto", width: 100, align: "right" as const },
   ];
+  // Alto mínimo para arrancar un grupo nuevo en la página actual: nombre
+  // + encabezado de columnas + al menos 1 fila + subtotal. Si no entra,
+  // mejor arrancarlo en una página nueva en vez de partirlo recién
+  // dentro de drawTable.
+  const minGroupHeight = 4 + 14 + 16 + 13 + 13;
   for (const group of groups) {
+    if (y - minGroupHeight < BOTTOM_MARGIN) {
+      y = addPage(pdf, doc);
+      y = sectionTitle(doc, `${title} (cont.)`, y);
+    }
     y -= 4;
     doc.page.drawText(printable(group.name), {
       x: MARGIN,
@@ -359,6 +399,7 @@ function drawAgingDetailTable(
     });
     y -= 14;
     y = drawTable(
+      pdf,
       doc,
       MARGIN,
       y,
@@ -374,6 +415,10 @@ function drawAgingDetailTable(
       [`Total for ${group.name}`, "", "", "", "", money(group.subtotal)],
     );
     y -= 8;
+  }
+  if (y - 16 < BOTTOM_MARGIN) {
+    y = addPage(pdf, doc);
+    y = sectionTitle(doc, `${title} (cont.)`, y);
   }
   doc.page.drawText(printable("Total general"), {
     x: MARGIN,
@@ -395,9 +440,9 @@ export async function buildAgingVendorsPdf(params: {
   const { pdf, doc } = await newDoc("Vendor Balance Detail Report", params.reportDate);
   const hasDetail = params.groups?.some((group) => group.hasDetail);
   if (hasDetail && params.groups) {
-    drawAgingDetailTable(doc, HEIGHT - 90, "Aging Vendors", params.groups, params.rawTotal);
+    drawAgingDetailTable(pdf, doc, HEIGHT - 90, "Aging Vendors", params.groups, params.rawTotal);
   } else {
-    drawAgingTable(doc, HEIGHT - 90, "Aging Vendors", params.items, params.rawTotal);
+    drawAgingTable(pdf, doc, HEIGHT - 90, "Aging Vendors", params.items, params.rawTotal);
   }
   return pdf.save();
 }
@@ -411,9 +456,9 @@ export async function buildAgingCustomersPdf(params: {
   const { pdf, doc } = await newDoc("Customer Balance Detail Report", params.reportDate);
   const hasDetail = params.groups?.some((group) => group.hasDetail);
   if (hasDetail && params.groups) {
-    drawAgingDetailTable(doc, HEIGHT - 90, "Aging Customers", params.groups, params.rawTotal);
+    drawAgingDetailTable(pdf, doc, HEIGHT - 90, "Aging Customers", params.groups, params.rawTotal);
   } else {
-    drawAgingTable(doc, HEIGHT - 90, "Aging Customers", params.items, params.rawTotal);
+    drawAgingTable(pdf, doc, HEIGHT - 90, "Aging Customers", params.items, params.rawTotal);
   }
   return pdf.save();
 }
@@ -467,24 +512,41 @@ export async function buildConsolidatedPdf(params: {
     );
     y -= 20;
   }
-  if (params.varianceLines.length) {
+  const { variance: varianceOnlyLines, uncollectedDeposits } = splitVarianceLinesBySection(
+    params.varianceLines,
+  );
+  const varianceTableColumns = [
+    { label: "Concepto", width: 400 },
+    { label: "Monto", width: 120, align: "right" as const },
+  ];
+  if (varianceOnlyLines.length) {
     y = sectionTitle(doc, "Variación Diaria", y);
     y = drawTable(
+      pdf,
       doc,
       MARGIN,
       y,
-      [
-        { label: "Concepto", width: 400 },
-        { label: "Monto", width: 120, align: "right" },
-      ],
-      params.varianceLines.map((line) => [line.concept, money(line.amount)]),
-      ["Total", money(params.totalVariance)],
+      varianceTableColumns,
+      varianceOnlyLines.map((line) => [line.concept, money(line.amount)]),
+      ["Subtotal", money(totalVarianceOf(varianceOnlyLines))],
     );
     y -= 10;
-  } else {
-    keyValueRow(doc, "Variación Diaria (total)", money(params.totalVariance), MARGIN, y);
-    y -= 14;
   }
+  if (uncollectedDeposits.length) {
+    y = sectionTitle(doc, "Depósitos sin cobrar", y);
+    y = drawTable(
+      pdf,
+      doc,
+      MARGIN,
+      y,
+      varianceTableColumns,
+      uncollectedDeposits.map((line) => [line.concept, money(line.amount)]),
+      ["Subtotal", money(totalVarianceOf(uncollectedDeposits))],
+    );
+    y -= 10;
+  }
+  keyValueRow(doc, "Variación Diaria (total)", money(params.totalVariance), MARGIN, y);
+  y -= 14;
   keyValueRow(doc, "Balance GABRIEL", money(params.balanceGabriel), MARGIN, y);
   keyValueRow(
     doc,
@@ -497,6 +559,7 @@ export async function buildConsolidatedPdf(params: {
 
   y = sectionTitle(doc, "A/P Aging Detail Recurrentes", y);
   y = drawTable(
+    pdf,
     doc,
     MARGIN,
     y,
@@ -527,6 +590,7 @@ export async function buildConsolidatedPdf(params: {
 
   y = sectionTitle(doc, "THIS WEEK", y);
   drawTable(
+    pdf,
     doc,
     MARGIN,
     y,

@@ -750,6 +750,7 @@ const varianceLineSchema = z.object({
   reportId: z.string().uuid(),
   concept: z.string().trim().min(1).max(200),
   amount: money,
+  section: z.enum(["variance", "uncollected_deposit"]).default("variance"),
 });
 
 export async function saveVarianceLine(input: z.infer<typeof varianceLineSchema>) {
@@ -763,7 +764,12 @@ export async function saveVarianceLine(input: z.infer<typeof varianceLineSchema>
     if (data.id) {
       const { error } = await supabase
         .from("cutmeat_daily_variance_lines")
-        .update({ concept: data.concept, amount: data.amount, updated_by: profile.id })
+        .update({
+          concept: data.concept,
+          amount: data.amount,
+          section: data.section,
+          updated_by: profile.id,
+        })
         .eq("id", data.id)
         .eq("report_id", data.reportId);
       if (error) throw error;
@@ -772,6 +778,7 @@ export async function saveVarianceLine(input: z.infer<typeof varianceLineSchema>
         report_id: data.reportId,
         concept: data.concept,
         amount: data.amount,
+        section: data.section,
         created_by: profile.id,
         updated_by: profile.id,
       });
@@ -843,7 +850,15 @@ const programmaticPayloadSchema = z.object({
   agingCustomers: z
     .object({ rawTotal: money, items: z.array(agingItemSchema), sourcePdfPath: z.string().max(500).nullable().optional() })
     .optional(),
-  varianceLines: z.array(z.object({ concept: z.string().trim().min(1).max(200), amount: money })).optional(),
+  varianceLines: z
+    .array(
+      z.object({
+        concept: z.string().trim().min(1).max(200),
+        amount: money,
+        section: z.enum(["variance", "uncollected_deposit"]).default("variance"),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -926,6 +941,7 @@ export async function loadDailyReportData(
             reportId,
             concept: line.concept,
             amount: line.amount,
+            section: line.section,
           }),
         ),
       );

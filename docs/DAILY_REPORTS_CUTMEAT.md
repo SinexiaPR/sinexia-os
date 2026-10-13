@@ -103,9 +103,14 @@ fecha de vencimiento de cada recurrente.
   "First Bank - Service Charges", "Recurrentes de la Semana", "Aging",
   cheques/depósitos sin cobrar puntuales. Ya **no** se calcula
   automáticamente comparando recurrentes pagados contra su monto real.
-  Un movimiento de banco sin recurrente vinculado ni marca de "Not
-  entered Sales" sigue quedando **POR CLASIFICAR** (alerta en pantalla),
-  sin relación con Variación Diaria.
+  Cada línea tiene una `section`: `'variance'` (Variación Diaria
+  propiamente dicha) o `'uncollected_deposit'` (cheques/depósitos
+  puntuales sin cobrar, p. ej. "The Butcher - Costco (depósito sin
+  cobrar)") — el Resumen y el PDF consolidado las muestran en bloques
+  separados con su propio subtotal, pero el total general sigue siendo
+  la suma de las 2 secciones. Un movimiento de banco sin recurrente
+  vinculado ni marca de "Not entered Sales" sigue quedando **POR
+  CLASIFICAR** (alerta en pantalla), sin relación con Variación Diaria.
 - **Balance GABRIEL** = Balance after Weekly Payments (B) del **último
   informe CERRADO anterior** (de `cutmeat_daily_history` o de un día
   cerrado en vivo, lo que sea más reciente) — **no** "B de hoy menos

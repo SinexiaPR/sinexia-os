@@ -334,7 +334,7 @@ export async function getVarianceLines(reportId: string): Promise<VarianceLine[]
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("cutmeat_daily_variance_lines")
-    .select("id,concept,amount")
+    .select("id,concept,amount,section")
     .eq("report_id", reportId)
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -342,6 +342,7 @@ export async function getVarianceLines(reportId: string): Promise<VarianceLine[]
     id: row.id,
     concept: row.concept,
     amount: Number(row.amount),
+    section: row.section as VarianceLine["section"],
   }));
 }
 

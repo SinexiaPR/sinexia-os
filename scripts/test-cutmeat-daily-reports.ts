@@ -29,9 +29,11 @@ import {
   groupAgingItems,
   overdueUnpaidRecurring,
   splitRecurringByWeek,
+  splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingDetailLine,
   type RecurringPayment,
+  type VarianceLine,
 } from "../src/lib/cutmeat-daily/calculations";
 import {
   checkDailyReportCompleteness,
@@ -133,12 +135,24 @@ assert.equal(financial.day21.date, "2026-10-26");
 
 // A4: Variación Diaria es ahora líneas libres (concepto + monto), no
 // recurrentes pagados auto-detectados -- totalVarianceOf solo suma.
-const varianceLines = [
-  { concept: "Diferencia Pago Recurrentes (Liberty Movil)", amount: 27.28 },
-  { concept: "First Bank - Service Charges", amount: -150 },
+const varianceLines: VarianceLine[] = [
+  { concept: "Diferencia Pago Recurrentes (Liberty Movil)", amount: 27.28, section: "variance" },
+  { concept: "First Bank - Service Charges", amount: -150, section: "variance" },
 ];
 assert.equal(totalVarianceOf(varianceLines), -122.72);
 assert.equal(totalVarianceOf([]), 0, "sin líneas, el total es 0");
+
+// A6: section separa Variación Diaria de depósitos sin cobrar puntuales,
+// pero el total sigue sumando ambas secciones por igual.
+const mixedSectionLines: VarianceLine[] = [
+  ...varianceLines,
+  { concept: "The Butcher - Costco (depósito sin cobrar)", amount: 346.28, section: "uncollected_deposit" },
+];
+assert.equal(totalVarianceOf(mixedSectionLines), 223.56, "el total suma las 2 secciones");
+const split = splitVarianceLinesBySection(mixedSectionLines);
+assert.equal(split.variance.length, 2);
+assert.equal(split.uncollectedDeposits.length, 1);
+assert.equal(split.uncollectedDeposits[0].concept, "The Butcher - Costco (depósito sin cobrar)");
 
 // A1: Balance GABRIEL = B del último día CERRADO anterior (no "B -
 // variación"). El 08/10 cerró con B = 35,249.49 (cutmeat_daily_history).
@@ -710,6 +724,20 @@ assert.match(
   contractMigration,
   /CREATE TABLE IF NOT EXISTS public\.cutmeat_daily_variance_lines/,
   "tabla de líneas libres de Variación Diaria",
+);
+
+const varianceSectionMigration = read(
+  "supabase/migrations/20261013133511_cutmeat_daily_variance_lines_section.sql",
+);
+assert.match(
+  varianceSectionMigration,
+  /ADD COLUMN section TEXT NOT NULL DEFAULT 'variance'/,
+  "section separa Variación Diaria de depósitos sin cobrar, default 'variance' para las filas ya cargadas",
+);
+assert.match(
+  varianceSectionMigration,
+  /CHECK \(section IN \('variance', 'uncollected_deposit'\)\)/,
+  "section solo acepta los 2 valores conocidos",
 );
 
 assert.match(

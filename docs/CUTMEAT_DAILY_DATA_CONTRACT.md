@@ -299,8 +299,16 @@ cheques/depósitos sin cobrar puntuales).
 | `report_id` | UUID | sí, FK `cutmeat_daily_reports` CASCADE |
 | `concept` | TEXT | sí, 1-200 caracteres |
 | `amount` | NUMERIC(14,2) | sí |
+| `section` | TEXT | sí, `CHECK IN ('variance','uncollected_deposit')`, default `'variance'` |
 | `created_by` / `updated_by` | UUID | no |
 | `created_at` / `updated_at` | TIMESTAMPTZ | sí |
+
+`section` separa la Variación Diaria propiamente dicha (`'variance'`) de
+los cheques/depósitos puntuales todavía sin cobrar (`'uncollected_deposit'`,
+p. ej. "The Butcher - Costco (depósito sin cobrar)") — la pantalla y el
+PDF consolidado los muestran en bloques distintos, con su propio
+subtotal cada uno, pero el total general (`totalVarianceOf`) sigue
+sumando las 2 secciones por igual.
 
 **RLS:** admin + empresa (vía `report_id`), `FOR ALL` — sin excepción
 para el cliente (igual que el resto de "Informes diarios"). **Trigger:**
