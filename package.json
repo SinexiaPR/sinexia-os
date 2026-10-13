@@ -27,6 +27,7 @@
     "test:invoices": "tsx scripts/test-invoices.ts",
     "test:invoice-visibility": "tsx scripts/test-invoice-client-visibility.ts",
     "test:tresbe-budget": "tsx scripts/test-tresbe-budget.ts",
+    "test:cutmeat-daily": "tsx scripts/test-cutmeat-daily-reports.ts",
     "audit:security": "tsx scripts/audit-security.ts",
     "test:security": "tsx scripts/test-security-hardening.ts",
     "seed:users": "tsx scripts/seed-users.ts"
@@ -48,6 +49,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "csv-parse": "^7.0.1",
+    "jszip": "^3.10.2",
     "lucide-react": "^0.511.0",
     "next": "^15.3.3",
     "openai": "^6.46.0",
