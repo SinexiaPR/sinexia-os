@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 
 const money = new Intl.NumberFormat("es-US", {
   style: "currency",
@@ -27,18 +27,7 @@ export function PayrollStatusHeader({
         <p className="text-muted-foreground text-sm">{statusLabel}</p>
         <p className="text-sm font-semibold">{money.format(total)}</p>
       </div>
-      <div className="bg-muted flex gap-1 rounded-lg p-1">
-        {tabs.map((tab) => (
-          <Button
-            key={tab.label}
-            size="sm"
-            variant={tab.active ? "default" : "ghost"}
-            onClick={tab.onSelect}
-          >
-            {tab.label}
-          </Button>
-        ))}
-      </div>
+      <UnderlineTabs tabs={tabs} className="border-b-0" />
     </div>
   );
 }

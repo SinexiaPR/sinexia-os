@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PayrollStatusHeader } from "@/components/payroll/payroll-status-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { calculatePayrollEntry } from "@/lib/payroll/calculations";
 import {
   type PayrollEmployee,
@@ -159,22 +160,20 @@ export function PayrollWorkspace({
           ]}
         />
       ) : (
-        <div className="bg-muted flex gap-1 rounded-lg p-1 sm:w-fit">
-          <Button
-            size="sm"
-            variant={tab === "weekly" ? "default" : "ghost"}
-            onClick={() => setTab("weekly")}
-          >
-            Nóminas semanales
-          </Button>
-          <Button
-            size="sm"
-            variant={tab === "employees" ? "default" : "ghost"}
-            onClick={() => setTab("employees")}
-          >
-            Empleados y tarifas
-          </Button>
-        </div>
+        <UnderlineTabs
+          tabs={[
+            {
+              label: "Nóminas semanales",
+              active: tab === "weekly",
+              onSelect: () => setTab("weekly"),
+            },
+            {
+              label: "Empleados y tarifas",
+              active: tab === "employees",
+              onSelect: () => setTab("employees"),
+            },
+          ]}
+        />
       )}
       {message ? (
         <p

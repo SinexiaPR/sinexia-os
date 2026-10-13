@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PayrollStatusHeader } from "@/components/payroll/payroll-status-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { TresbeDailyEntriesTab } from "@/components/tresbe-payroll/daily-entries";
 import {
   calculateTresbeEntry,
@@ -342,18 +343,13 @@ export function TresbePayrollAdminWorkspace({
           }))}
         />
       ) : (
-        <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-1 sm:w-fit">
-          {TAB_DEFS.map(([value, label]) => (
-            <Button
-              key={value}
-              size="sm"
-              variant={tab === value ? "default" : "ghost"}
-              onClick={() => setTab(value)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
+        <UnderlineTabs
+          tabs={TAB_DEFS.map(([value, label]) => ({
+            label,
+            active: tab === value,
+            onSelect: () => setTab(value),
+          }))}
+        />
       )}
       {message ? (
         <p
