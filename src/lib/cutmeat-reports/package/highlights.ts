@@ -4,10 +4,12 @@
 // copiado (nunca lo reescribe ni lo borra) -- por eso el texto extraíble
 // de la página no cambia un carácter.
 //
-// Coordenadas fijas a la página 2 de buildConsolidatedPdf
-// (src/lib/cutmeat-daily/pdf.ts): MARGIN=36, value en "key: value" dibujado
-// con right-align a x_end, tamaño 9, bold. Si ese layout cambia, estas
-// constantes se tienen que actualizar junto con él.
+// Coordenadas fijas a la página 3 (la portada -- "CONSOLIDATED REPORT",
+// la última del documento, movida al frente del Paquete para el dueño)
+// de buildConsolidatedPdf (src/lib/cutmeat-daily/pdf.ts): MARGIN=36,
+// value en "key: value" dibujado con right-align a x_end=MARGIN+260,
+// tamaño 9, bold. Si ese layout cambia, estas constantes se tienen que
+// actualizar junto con él.
 
 import type { PDFFont, PDFPage } from "pdf-lib";
 import { rgb } from "pdf-lib";
@@ -29,19 +31,19 @@ export type HighlightTarget = {
  * Total, Aging Customers - Consolidated Total.
  */
 export const DEFAULT_PACKAGE_HIGHLIGHTS: HighlightTarget[] = [
-  { key: "first_bank_accounts", label: "Total First Bank Accounts", xEnd: 256, y: 519, fontSize: 9 },
+  { key: "first_bank_accounts", label: "Total First Bank Accounts", xEnd: 296, y: 452, fontSize: 9 },
   {
     key: "aging_vendors_consolidated",
     label: "Aging Vendors - Consolidated Total",
-    xEnd: 606,
-    y: 501,
+    xEnd: 296,
+    y: 379,
     fontSize: 9,
   },
   {
     key: "aging_customers_consolidated",
     label: "Aging Customers - Consolidated Total",
-    xEnd: 256,
-    y: 467,
+    xEnd: 296,
+    y: 306,
     fontSize: 9,
   },
 ];

@@ -576,7 +576,16 @@ export async function getDailyReportWorkspace(
     previousClosed?.balance ?? null,
     settings.gabrielStartingBalance,
   );
-  const totalVariance = totalVarianceOf(varianceLines);
+  // Solo la sección "variance" (diferencias de pago, cargos del banco):
+  // es la que concilia Balance GABRIEL -> Balance Today. Los depósitos sin
+  // cobrar puntuales ("uncollected_deposit", p.ej. Costco) se muestran en
+  // su propio bloque y entran aparte en "Balance after Weekly Payments +
+  // Not entered Sales" (ver balanceWithNotEntered) -- sumarlos acá
+  // también los contaba dos veces (mostraba 223.56 en vez de -122.72 el
+  // 09/10/2026, con Costco de por medio).
+  const totalVariance = totalVarianceOf(
+    varianceLines.filter((line) => line.section === "variance"),
+  );
   const balanceWithNotEntered = weeklyPayments
     ? buildBalanceWithNotEnteredSales(
         weeklyPayments.balanceAfterWeeklyPayments,
@@ -639,6 +648,7 @@ export async function getDailyReportWorkspace(
           statementEnding: Number(reconciliationRow.statement_ending),
           register: Number(reconciliationRow.register),
           sourcePdfPath: reconciliationRow.source_pdf_path as string | null,
+          loadedAt: reconciliationRow.loaded_at as string | null,
           unclearedChecks: reconciliationItems.filter(
             (item) => item.item_type === "uncleared_check",
           ),
