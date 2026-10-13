@@ -26,17 +26,16 @@ export default async function ProfilePage() {
   const isClient = profile.role === "client";
 
   return (
-    <div className={isClient ? "space-y-10" : "space-y-12"}>
+    <div className={isClient ? "space-y-6" : "space-y-12"}>
       {isClient ? (
         <header className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Perfil</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Perfil</h1>
           <p className="text-base text-muted-foreground">
             Su cuenta, empresa y contacto con Sinexia.
           </p>
         </header>
       ) : (
         <PageHeader
-          eyebrow="Admin workspace"
           title="Profile"
           description="Your account details."
         />

@@ -104,15 +104,12 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
   const weekEnd = addDays(weekStart, 6);
   const lookbackStart = addDays(weekStart, -21);
 
-  await supabase.rpc("refresh_invoice_overdue_statuses");
-
   const [
     companiesRes,
     configRes,
     tresbePayrollsRes,
     weeklyPayrollsRes,
     invoicesRes,
-    overdueInvoicesRes,
     budgetEntriesRes,
     budgetMovementsRes,
     leaveBalancesRes,
@@ -138,7 +135,6 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
       .select("company_id,status,invoice_date")
       .gte("invoice_date", weekStart)
       .lte("invoice_date", weekEnd),
-    supabase.from("invoices").select("company_id").eq("status", "overdue"),
     supabase
       .from("tresbe_budget_entries")
       .select("company_id,updated_at")
@@ -157,7 +153,6 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
   if (tresbePayrollsRes.error) throw tresbePayrollsRes.error;
   if (weeklyPayrollsRes.error) throw weeklyPayrollsRes.error;
   if (invoicesRes.error) throw invoicesRes.error;
-  if (overdueInvoicesRes.error) throw overdueInvoicesRes.error;
   if (budgetEntriesRes.error) throw budgetEntriesRes.error;
   if (budgetMovementsRes.error) throw budgetMovementsRes.error;
   if (leaveBalancesRes.error) throw leaveBalancesRes.error;
@@ -180,10 +175,6 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
     list.push(row);
     invoicesByCompany.set(row.company_id, list);
   }
-  const overdueCompanyIds = new Set(
-    (overdueInvoicesRes.data ?? []).map((r) => r.company_id),
-  );
-
   const budgetUpdatedByCompany = new Map<string, string>();
   for (const row of [
     ...(budgetEntriesRes.data ?? []),
@@ -276,14 +267,10 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
       };
     });
 
-    const hasOverdueInvoice = overdueCompanyIds.has(company.id);
     const hasPending = items.some((i) => i.state === "pending");
     const hasInProgress = items.some((i) => i.state === "in_progress");
-    const semaphore: ClientDashboardCard["semaphore"] = hasOverdueInvoice
-      ? "red"
-      : hasPending || hasInProgress
-        ? "amber"
-        : "green";
+    const semaphore: ClientDashboardCard["semaphore"] =
+      hasPending || hasInProgress ? "amber" : "green";
 
     return { company, semaphore, items };
   });

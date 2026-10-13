@@ -151,7 +151,7 @@ function SectionRow({ label, span }: { label: string; span: number }) {
       <th
         scope="row"
         colSpan={span}
-        className="px-3 py-1 text-left text-[10px] font-semibold tracking-wide uppercase"
+        className="px-3 py-1 text-left text-[11px] font-semibold tracking-wide uppercase"
       >
         {label}
       </th>
@@ -188,7 +188,7 @@ export function WeeklyGrid({
     <tr key={row.category.id} className="hover:bg-muted/30">
       <th
         scope="row"
-        className="bg-card sticky left-0 z-10 px-3 py-1 text-left font-normal"
+        className="bg-card sticky left-0 z-10 px-3 py-1 text-left font-medium"
       >
         {row.category.name}
       </th>
@@ -244,15 +244,15 @@ export function WeeklyGrid({
               Semana
             </th>
           </tr>
-          <tr className="text-muted-foreground border-b text-[10px]">
+          <tr className="text-muted-foreground border-b text-[11px]">
             <th className="bg-card sticky left-0 z-10 px-3 pb-2 text-left" />
             {[...week.dates, "total"].map((key) => (
               <Fragment key={key}>
-                <th className="border-l px-2 pb-2 text-right font-normal">
+                <th className="border-l px-2 pb-2 text-right font-medium">
                   Ppto
                 </th>
-                <th className="px-2 pb-2 text-right font-normal">Real</th>
-                <th className="px-2 pb-2 text-right font-normal">Desv.</th>
+                <th className="px-2 pb-2 text-right font-medium">Real</th>
+                <th className="px-2 pb-2 text-right font-medium">Desv.</th>
               </Fragment>
             ))}
           </tr>
@@ -320,7 +320,7 @@ export function FinancingBlock({ week }: { week: WeekView }) {
   return (
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       {hasIntercompany ? (
-        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+        <div className="rounded-md border border-sky-200 bg-sky-50/60 p-4">
           <p className="text-sm font-medium text-sky-900">
             Intercompany (fuera de los totales operativos)
           </p>
@@ -351,7 +351,7 @@ export function FinancingBlock({ week }: { week: WeekView }) {
         </div>
       ) : null}
       {hasFinancing ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+        <div className="rounded-md border border-amber-200 bg-amber-50/60 p-4">
           <p className="text-sm font-medium text-amber-900">
             Línea de crédito (fuera de los totales operativos)
           </p>
@@ -382,7 +382,7 @@ export function FinancingBlock({ week }: { week: WeekView }) {
         </div>
       ) : null}
       {hasExterno ? (
-        <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+        <div className="rounded-md border border-violet-200 bg-violet-50/60 p-4">
           <p className="text-sm font-medium text-violet-900">
             Financiamiento externo — dueño / terceros
           </p>

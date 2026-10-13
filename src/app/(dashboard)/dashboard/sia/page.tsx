@@ -21,7 +21,7 @@ export default async function SinexIAPage() {
   if (!profile.company_id) {
     return (
       <div className="space-y-2 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight">SinexIA</h1>
+        <h1 className="text-xl font-semibold tracking-tight">SinexIA</h1>
         <p className="text-muted-foreground">
           Su cuenta no está vinculada a una empresa.
         </p>
@@ -32,9 +32,9 @@ export default async function SinexIAPage() {
   const reports = await getReportsForCompany(profile.company_id);
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">SinexIA</h1>
+        <h1 className="text-xl font-semibold tracking-tight">SinexIA</h1>
         <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
           {assistantConfig.tagline}
         </p>

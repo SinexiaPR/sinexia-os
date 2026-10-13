@@ -48,20 +48,19 @@ export default async function InboxPage({
   const companies = profile.role === "admin" ? await getCompanies() : [];
 
   return (
-    <div className={isClient ? "space-y-8 pb-6 sm:space-y-10" : "space-y-12"}>
+    <div className={isClient ? "space-y-5 pb-6 sm:space-y-6" : "space-y-12"}>
       {isClient ? (
         <header className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h1 className="text-xl font-semibold tracking-tight">
             Inbox
           </h1>
-          <p className="text-muted-foreground text-[15px] leading-relaxed sm:text-base">
+          <p className="text-muted-foreground text-sm leading-relaxed">
             Envíe documentos desde su teléfono o computadora. Todo llega aquí
             automáticamente.
           </p>
         </header>
       ) : (
         <PageHeader
-          eyebrow="Admin workspace"
           title="Inbox"
           description="All files uploaded by client companies, in one place."
         />

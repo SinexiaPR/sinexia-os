@@ -25,7 +25,7 @@ export function AdminSidebar({
       )}
     >
       <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-5">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
+        <span className="flex size-9 items-center justify-center rounded-md bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
           S
         </span>
         <div className="min-w-0">

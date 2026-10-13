@@ -293,11 +293,11 @@ export function CashControlCard({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-xs uppercase">
-                <th className="py-1 pr-2 text-left font-normal">Concepto</th>
+                <th className="py-1 pr-2 text-left font-medium">Concepto</th>
                 {week.cash.cashAccount.days.map((day) => (
                   <th
                     key={day.date}
-                    className="px-2 py-1 text-right font-normal whitespace-nowrap"
+                    className="px-2 py-1 text-right font-medium whitespace-nowrap"
                   >
                     {formatDayLabel(day.date)}
                   </th>

@@ -72,13 +72,3 @@ export const adminNavItems: NavItem[] = [
   { title: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { title: "Profile", href: "/dashboard/profile", icon: User },
 ];
-
-export function getPageTitle(pathname: string, items: NavItem[]): string {
-  const match = items.find(
-    (item) =>
-      pathname === item.href ||
-      (item.href !== "/dashboard" && pathname.startsWith(item.href)),
-  );
-
-  return match?.title ?? "Dashboard";
-}

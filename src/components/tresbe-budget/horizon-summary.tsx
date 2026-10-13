@@ -70,7 +70,7 @@ export function HorizonSummary({
                     </span>
                   </Link>
                   {!row.hasBudget && !row.hasReal ? (
-                    <span className="text-muted-foreground ml-2 text-[10px] uppercase">
+                    <span className="text-muted-foreground ml-2 text-[11px] uppercase">
                       sin datos
                     </span>
                   ) : null}

@@ -22,6 +22,7 @@ import {
 } from "@/components/tresbe-budget/weekly-grid";
 import { Button } from "@/components/ui/button";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import type { HorizonRow, WeekView } from "@/lib/tresbe-budget/calculations";
 import {
   addDays,
@@ -34,7 +35,6 @@ import type {
   BudgetCounterparty,
   BudgetMovement,
 } from "@/services/tresbe-budget";
-import { cn } from "@/lib/utils";
 
 type Company = { id: string; name: string; slug: string };
 type Tab = "semana" | "movimientos" | "resumen" | "supuestos";
@@ -100,7 +100,7 @@ export function TresbeBudgetWorkspace({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header className="space-y-5">
         <Button asChild variant="ghost" className="-ml-3">
           <Link href={`/dashboard/admin/companies/${company.id}`}>
@@ -113,7 +113,7 @@ export function TresbeBudgetWorkspace({
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {company.name} · Presupuesto / Forecast
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            <h1 className="mt-2 text-xl font-semibold tracking-tight">
               {weekNumber ? `Semana ${weekNumber}` : "Semana"} ·{" "}
               {formatWeekRange(weekStart)}
             </h1>
@@ -156,26 +156,13 @@ export function TresbeBudgetWorkspace({
         </div>
       </header>
 
-      <nav className="border-b">
-        <ul className="-mb-px flex flex-wrap gap-1">
-          {tabs.map((item) => (
-            <li key={item.key}>
-              <button
-                type="button"
-                onClick={() => setTab(item.key)}
-                className={cn(
-                  "border-b-2 px-4 py-2 text-sm font-medium transition-colors",
-                  tab === item.key
-                    ? "border-foreground text-foreground"
-                    : "text-muted-foreground hover:text-foreground border-transparent",
-                )}
-              >
-                {item.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <UnderlineTabs
+        tabs={tabs.map((item) => ({
+          label: item.label,
+          active: tab === item.key,
+          onSelect: () => setTab(item.key),
+        }))}
+      />
 
       {message ? (
         <p className="text-muted-foreground text-sm">{message}</p>

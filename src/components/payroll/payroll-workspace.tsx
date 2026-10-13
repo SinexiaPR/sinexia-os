@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PayrollStatusHeader } from "@/components/payroll/payroll-status-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { calculatePayrollEntry } from "@/lib/payroll/calculations";
 import {
   type PayrollEmployee,
@@ -117,7 +118,7 @@ export function PayrollWorkspace({
     });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header className="space-y-4">
         {isAdmin ? (
           <Button asChild variant="ghost" className="-ml-3">
@@ -131,7 +132,7 @@ export function PayrollWorkspace({
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             {company.name}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1 className="mt-2 text-xl font-semibold tracking-tight">
             Nómina semanal
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
@@ -159,22 +160,20 @@ export function PayrollWorkspace({
           ]}
         />
       ) : (
-        <div className="bg-muted flex gap-1 rounded-lg p-1 sm:w-fit">
-          <Button
-            size="sm"
-            variant={tab === "weekly" ? "default" : "ghost"}
-            onClick={() => setTab("weekly")}
-          >
-            Nóminas semanales
-          </Button>
-          <Button
-            size="sm"
-            variant={tab === "employees" ? "default" : "ghost"}
-            onClick={() => setTab("employees")}
-          >
-            Empleados y tarifas
-          </Button>
-        </div>
+        <UnderlineTabs
+          tabs={[
+            {
+              label: "Nóminas semanales",
+              active: tab === "weekly",
+              onSelect: () => setTab("weekly"),
+            },
+            {
+              label: "Empleados y tarifas",
+              active: tab === "employees",
+              onSelect: () => setTab("employees"),
+            },
+          ]}
+        />
       )}
       {message ? (
         <p
@@ -247,7 +246,7 @@ export function PayrollWorkspace({
                 </div>
               </SurfaceCard>
               <SurfaceCard padding="sm">
-                <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-3 py-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   <div>Empleado</div>
                   <div className="text-right">Rate</div>
                   <div className="text-right">Horas</div>
@@ -607,7 +606,7 @@ export function PayrollWorkspace({
       ) : null}
       {showReopenDialog && selected ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
-          <SurfaceCard className="w-full max-w-lg rounded-b-none sm:rounded-b-2xl">
+          <SurfaceCard className="w-full max-w-lg rounded-b-none sm:rounded-b-lg">
             <h2 className="text-lg font-semibold">Reabrir nómina</h2>
             <p className="text-muted-foreground mt-2 text-sm">
               La nómina volverá a borrador y conservará todos sus datos. El
@@ -679,7 +678,7 @@ function EmployeeDialog({
   >(employee?.worker_classification ?? "w2");
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 sm:items-center sm:p-6">
-      <SurfaceCard className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-b-none sm:rounded-b-2xl">
+      <SurfaceCard className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-b-none sm:rounded-b-lg">
         <h2 className="text-lg font-semibold">
           {employee ? "Editar empleado y tarifas" : "Agregar empleado"}
         </h2>

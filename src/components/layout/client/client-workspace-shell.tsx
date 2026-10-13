@@ -36,7 +36,7 @@ export function ClientWorkspaceShell({
         invoicesEnabled={invoicesEnabled}
       />
 
-      <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:py-14">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 py-5 sm:px-6 sm:py-6">
         <ClientSidebar
           companyName={companyName}
           companySlug={companySlug}

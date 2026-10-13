@@ -31,10 +31,10 @@ export function TresbeClientPayrolls({
   }, [selected]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header>
         <p className="text-muted-foreground text-sm">Tresbe</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Nóminas</h1>
+        <h1 className="mt-2 text-xl font-semibold tracking-tight">Nóminas</h1>
         <p className="text-muted-foreground mt-2 text-sm">
           Resúmenes semanales enviados por Sinexia.
         </p>

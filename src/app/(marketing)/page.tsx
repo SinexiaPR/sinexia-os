@@ -13,27 +13,27 @@ export default function HomePage() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-20 sm:py-28">
       <div className="w-full max-w-md text-center">
-        <p className="text-[13px] font-semibold tracking-[0.2em] text-primary uppercase">
+        <p className="text-xs font-semibold tracking-[0.2em] text-primary uppercase">
           {siteConfig.name}
         </p>
 
-        <h1 className="mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-[2.75rem] sm:leading-tight">
+        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           {siteConfig.portalTitle}
         </h1>
 
-        <p className="mx-auto mt-5 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
+        <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-muted-foreground">
           {siteConfig.portalSubtitle}
         </p>
 
         <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Button asChild size="lg" className="h-11 px-8 text-[15px]">
+          <Button asChild size="lg" className="h-10 px-8 text-sm">
             <Link href="/login">Iniciar sesión</Link>
           </Button>
           <Button
             asChild
             variant="outline"
             size="lg"
-            className="h-11 border-border/80 px-8 text-[15px] font-medium"
+            className="h-10 border-border/80 px-8 text-sm font-medium"
           >
             <a
               href={siteConfig.companyUrl}

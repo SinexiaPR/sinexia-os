@@ -11,7 +11,7 @@ import {
 import type { AdminDocumentFiltersValue } from "@/services/documents";
 
 const selectClassName =
-  "h-10 rounded-xl border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+  "h-10 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export function AdminDocumentFilters({
   companies,
@@ -23,7 +23,7 @@ export function AdminDocumentFilters({
   return (
     <form
       method="get"
-      className="border-border/70 bg-muted/20 mb-6 grid gap-3 rounded-xl border p-4 sm:grid-cols-2 xl:grid-cols-5"
+      className="border-border/70 bg-muted/20 mb-6 grid gap-3 rounded-md border p-4 sm:grid-cols-2 xl:grid-cols-5"
     >
       <select
         name="company"
@@ -78,7 +78,7 @@ export function AdminDocumentFilters({
         name="uploadDate"
         type="date"
         defaultValue={filters.uploadDate ?? ""}
-        className="h-10 rounded-xl"
+        className="h-10 rounded-md"
         aria-label="Upload date"
       />
       <div className="flex gap-2 sm:col-span-2 xl:col-span-5">

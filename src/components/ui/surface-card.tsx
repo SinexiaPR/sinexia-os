@@ -25,7 +25,7 @@ export function SurfaceCard({
     <div
       id={id}
       className={cn(
-        "border-border/80 bg-card rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        "border-border/80 bg-card rounded-lg border",
         paddingMap[padding],
         className,
       )}
@@ -45,18 +45,18 @@ type MetricCardProps = {
 export function MetricCard({ label, value, hint, className }: MetricCardProps) {
   return (
     <SurfaceCard
-      className={cn("flex flex-col justify-between", className)}
+      className={cn("flex flex-col justify-between p-4", className)}
       padding="lg"
     >
-      <p className="text-muted-foreground text-[13px] font-medium tracking-wide uppercase">
+      <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
         {label}
       </p>
-      <div className="mt-6">
-        <p className="text-foreground text-4xl font-semibold tracking-tight tabular-nums">
+      <div className="mt-3">
+        <p className="text-foreground text-2xl font-semibold tracking-tight tabular-nums">
           {value}
         </p>
         {hint ? (
-          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+          <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
             {hint}
           </p>
         ) : null}

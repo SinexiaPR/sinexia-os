@@ -139,22 +139,22 @@ export function LeaveAccrualEmployeeDetail({
       <SurfaceCard padding="sm">
         <h2 className="font-semibold">Historial mensual de acumulaciones y usos</h2>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[1200px] text-left text-sm">
+          <table className="w-full min-w-[1200px] text-left text-[13px]">
             <thead className="text-muted-foreground border-b text-xs uppercase">
               <tr>
-                <th className="px-3 py-3">Mes</th>
-                <th className="px-3 py-3">Horas computables</th>
-                <th className="px-3 py-3">Elegible (130h)</th>
-                <th className="px-3 py-3">Categoría usada</th>
-                <th className="px-3 py-3">Vacaciones acum.</th>
-                <th className="px-3 py-3">Enfermedad acum.</th>
-                <th className="px-3 py-3">Vacaciones usadas</th>
-                <th className="px-3 py-3">Enfermedad usada</th>
-                <th className="px-3 py-3">Balance vacaciones</th>
-                <th className="px-3 py-3">Balance enfermedad</th>
-                <th className="px-3 py-3">Hiring Day usado</th>
-                <th className="px-3 py-3">Nóminas origen</th>
-                <th className="px-3 py-3">Versión</th>
+                <th className="px-3 py-2">Mes</th>
+                <th className="px-3 py-2">Horas computables</th>
+                <th className="px-3 py-2">Elegible (130h)</th>
+                <th className="px-3 py-2">Categoría usada</th>
+                <th className="px-3 py-2">Vacaciones acum.</th>
+                <th className="px-3 py-2">Enfermedad acum.</th>
+                <th className="px-3 py-2">Vacaciones usadas</th>
+                <th className="px-3 py-2">Enfermedad usada</th>
+                <th className="px-3 py-2">Balance vacaciones</th>
+                <th className="px-3 py-2">Balance enfermedad</th>
+                <th className="px-3 py-2">Hiring Day usado</th>
+                <th className="px-3 py-2">Nóminas origen</th>
+                <th className="px-3 py-2">Versión</th>
               </tr>
             </thead>
             <tbody>
@@ -183,25 +183,25 @@ export function LeaveAccrualEmployeeDetail({
 function HistoryRow({ row }: { row: LeaveAccrualMonthlyHistoryRow }) {
   return (
     <tr className="border-b last:border-0">
-      <td className="px-3 py-3 font-medium">{formatMonth(row.periodYear, row.periodMonth)}</td>
-      <td className="px-3 py-3">{row.qualifyingHours.toFixed(2)} h</td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2 font-medium">{formatMonth(row.periodYear, row.periodMonth)}</td>
+      <td className="px-3 py-2">{row.qualifyingHours.toFixed(2)} h</td>
+      <td className="px-3 py-2">
         {row.qualifies ? (
           <span className="text-xs text-emerald-700">Sí</span>
         ) : (
           <span className="text-muted-foreground text-xs">No</span>
         )}
       </td>
-      <td className="px-3 py-3">{TIER_LABELS[row.tenureTier]}</td>
-      <td className="px-3 py-3">{row.vacationAccruedHours.toFixed(2)} h</td>
-      <td className="px-3 py-3">{row.sickAccruedHours.toFixed(2)} h</td>
-      <td className="px-3 py-3">{row.vacationUsedHours.toFixed(2)} h</td>
-      <td className="px-3 py-3">{row.sickUsedHours.toFixed(2)} h</td>
-      <td className="px-3 py-3">{row.vacationBalanceAfterHours.toFixed(2)} h</td>
-      <td className="px-3 py-3">{row.sickBalanceAfterHours.toFixed(2)} h</td>
-      <td className="px-3 py-3">{formatDate(row.hiringDateUsed)}</td>
-      <td className="px-3 py-3">{row.sourcePayrollIds.length || "—"}</td>
-      <td className="px-3 py-3">v{row.calculationVersion}</td>
+      <td className="px-3 py-2">{TIER_LABELS[row.tenureTier]}</td>
+      <td className="px-3 py-2">{row.vacationAccruedHours.toFixed(2)} h</td>
+      <td className="px-3 py-2">{row.sickAccruedHours.toFixed(2)} h</td>
+      <td className="px-3 py-2">{row.vacationUsedHours.toFixed(2)} h</td>
+      <td className="px-3 py-2">{row.sickUsedHours.toFixed(2)} h</td>
+      <td className="px-3 py-2">{row.vacationBalanceAfterHours.toFixed(2)} h</td>
+      <td className="px-3 py-2">{row.sickBalanceAfterHours.toFixed(2)} h</td>
+      <td className="px-3 py-2">{formatDate(row.hiringDateUsed)}</td>
+      <td className="px-3 py-2">{row.sourcePayrollIds.length || "—"}</td>
+      <td className="px-3 py-2">v{row.calculationVersion}</td>
     </tr>
   );
 }

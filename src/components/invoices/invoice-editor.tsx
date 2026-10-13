@@ -321,7 +321,7 @@ export function InvoiceEditor({
             {items.map((item, index) => (
               <div
                 key={index}
-                className="grid gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_100px_130px_40px]"
+                className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_100px_130px_40px]"
               >
                 <Input
                   list="invoice-service-items"

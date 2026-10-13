@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+    <div className="rounded-lg border border-border bg-card p-6 shadow-sm sm:p-8">
       <LoginForm />
     </div>
   );

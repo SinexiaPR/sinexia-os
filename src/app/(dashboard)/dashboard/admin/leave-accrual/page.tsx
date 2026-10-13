@@ -30,7 +30,6 @@ export default async function LeaveAccrualPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Admin workspace"
         title="Vacaciones y enfermedad"
         description="Balance de acumulación de vacaciones y enfermedad para empleados W2 de nómina, calculado automáticamente desde las nóminas semanales de Sibarita y Tresbe."
       />

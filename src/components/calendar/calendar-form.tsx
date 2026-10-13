@@ -53,7 +53,7 @@ export function CalendarForm({
       role="dialog"
       aria-modal="true"
     >
-      <div className="bg-background max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border p-5 shadow-xl sm:rounded-2xl sm:p-7">
+      <div className="bg-background max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-lg border p-5 shadow-xl sm:rounded-lg sm:p-7">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">

@@ -138,10 +138,10 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
         <p className="text-destructive border-b px-3 py-3 text-sm">{message}</p>
       ) : null}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1100px] text-left text-sm">
+        <table className="w-full min-w-[1100px] text-left text-[13px]">
           <thead className="text-muted-foreground border-b text-xs uppercase">
             <tr>
-              <th className="px-3 py-3">Factura</th>
+              <th className="px-3 py-2">Factura</th>
               <th>Cliente</th>
               <th>Fecha</th>
               <th>Vence</th>
@@ -156,7 +156,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
           <tbody>
             {visible.map((invoice) => (
               <tr key={invoice.id} className="border-b last:border-0">
-                <td className="px-3 py-4 font-medium">
+                <td className="px-3 py-2 font-medium">
                   {invoice.invoice_number
                     ? `#${invoice.invoice_number}`
                     : "Borrador"}

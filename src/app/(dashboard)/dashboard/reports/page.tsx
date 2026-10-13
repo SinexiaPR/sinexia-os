@@ -41,9 +41,8 @@ export default async function ReportsPage({
     ]);
 
     return (
-      <div className="space-y-10">
+      <div className="space-y-6">
         <PageHeader
-          eyebrow="Admin workspace"
           title="Reports"
           description="Publish report files to client companies."
         />
@@ -86,7 +85,7 @@ export default async function ReportsPage({
   if (!profile.company_id) {
     return (
       <div className="space-y-2 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight">Reportes</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Reportes</h1>
         <p className="text-muted-foreground">
           Su cuenta no está vinculada a una empresa.
         </p>
@@ -103,15 +102,15 @@ export default async function ReportsPage({
   const viewedSet = new Set(viewedReportIds);
 
   return (
-    <div className="space-y-8 pb-6 sm:space-y-10">
+    <div className="space-y-5 pb-6 sm:space-y-6">
       <Suspense fallback={null}>
         <ReportsViewHandler profileId={profile.id} />
       </Suspense>
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="text-xl font-semibold tracking-tight">
           Reportes
         </h1>
-        <p className="text-muted-foreground text-[15px] leading-relaxed sm:text-base">
+        <p className="text-muted-foreground text-sm leading-relaxed">
           Reportes publicados por Sinexia para su empresa. Consulte, descargue y
           pregunte a SinexIA cuando el análisis esté listo.
         </p>

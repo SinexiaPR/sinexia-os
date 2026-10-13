@@ -23,6 +23,7 @@ import { SettingsTab } from "@/components/cutmeat-daily/settings-tab";
 import { SummaryTab } from "@/components/cutmeat-daily/summary-tab";
 import { Button } from "@/components/ui/button";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { addDays, type IsoDate } from "@/lib/cutmeat-daily/dates";
 import type {
   CutMeatDailyReport,
@@ -131,7 +132,7 @@ export function CutMeatDailyWorkspace({
   const readOnly = workspace.report?.status === "closed";
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header className="space-y-5">
         <Button asChild variant="ghost" className="-ml-3">
           <Link href={`/dashboard/admin/companies/${company.id}`}>
@@ -144,7 +145,7 @@ export function CutMeatDailyWorkspace({
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {company.name} · Informes diarios
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            <h1 className="mt-2 text-xl font-semibold tracking-tight">
               {new Intl.DateTimeFormat("es", {
                 weekday: "long",
                 day: "numeric",
@@ -231,26 +232,13 @@ export function CutMeatDailyWorkspace({
         </p>
       ) : null}
 
-      <nav className="border-b">
-        <ul className="-mb-px flex flex-wrap gap-1">
-          {tabs.map((item) => (
-            <li key={item.key}>
-              <button
-                type="button"
-                onClick={() => setTab(item.key)}
-                className={cn(
-                  "border-b-2 px-4 py-2 text-sm font-medium transition-colors",
-                  tab === item.key
-                    ? "border-foreground text-foreground"
-                    : "text-muted-foreground hover:text-foreground border-transparent",
-                )}
-              >
-                {item.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <UnderlineTabs
+        tabs={tabs.map((item) => ({
+          label: item.label,
+          active: tab === item.key,
+          onSelect: () => setTab(item.key),
+        }))}
+      />
 
       {tab === "resumen" ? (
         <SummaryTab companyId={company.id} workspace={workspace} readOnly={readOnly} />

@@ -49,9 +49,8 @@ export default async function CalendarPage({
     : null;
   const comments = selected ? await getCalendarComments(selected.id) : [];
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
-        eyebrow="Admin workspace"
         title="Calendario"
         description="Organiza tareas, actividades, recordatorios y mensajes internos del equipo Sinexia."
       />

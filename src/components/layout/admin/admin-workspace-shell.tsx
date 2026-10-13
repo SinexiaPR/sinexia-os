@@ -22,7 +22,7 @@ export function AdminWorkspaceShell({
 }: AdminWorkspaceShellProps) {
   return (
     <div className="flex min-h-svh bg-muted/30">
-      <div className="hidden w-60 shrink-0 border-r border-border/80 md:block">
+      <div className="hidden w-56 shrink-0 border-r border-border/80 md:block">
         <div className="sticky top-0 flex h-svh flex-col">
           <AdminSidebar badgeCounts={badgeCounts} className="flex-1" />
           <div className="border-t border-sidebar-border p-3">
@@ -38,7 +38,7 @@ export function AdminWorkspaceShell({
           notificationUnreadCount={notificationUnreadCount}
         />
         <main className="flex-1">
-          <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
+          <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6">
             {children}
           </div>
         </main>

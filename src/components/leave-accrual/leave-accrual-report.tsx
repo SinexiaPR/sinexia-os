@@ -87,7 +87,7 @@ export function LeaveAccrualReport({
 
   const sortHeader = (key: SortKey, label: string) => (
     <th
-      className="hover:text-foreground cursor-pointer px-3 py-3 select-none"
+      className="hover:text-foreground cursor-pointer px-3 py-2 select-none"
       onClick={() => toggleSort(key)}
     >
       {label}
@@ -131,16 +131,16 @@ export function LeaveAccrualReport({
           </Button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1500px] text-left text-sm">
+          <table className="w-full min-w-[1500px] text-left text-[13px]">
             <thead className="text-muted-foreground border-b text-xs uppercase">
               <tr>
                 {sortHeader("employeeName", "Empleado")}
-                <th className="px-3 py-3">Sistema</th>
+                <th className="px-3 py-2">Sistema</th>
                 {sortHeader("hiringDate", "Fecha de contratación")}
                 {sortHeader("yearsOfService", "Años de servicio")}
-                <th className="px-3 py-3">Categoría actual</th>
-                <th className="px-3 py-3">Tasa mensual vacaciones</th>
-                <th className="px-3 py-3">Próximo cambio de categoría</th>
+                <th className="px-3 py-2">Categoría actual</th>
+                <th className="px-3 py-2">Tasa mensual vacaciones</th>
+                <th className="px-3 py-2">Próximo cambio de categoría</th>
                 {sortHeader("currentMonthHours", "Horas del mes actual")}
                 {sortHeader("vacationBalanceHours", "Balance vacaciones")}
                 {sortHeader("sickBalanceHours", "Balance enfermedad")}
@@ -153,7 +153,7 @@ export function LeaveAccrualReport({
                   key={`${row.sourceSystem}-${row.employeeId}`}
                   className="hover:bg-muted/50 border-b last:border-0"
                 >
-                  <td className="px-3 py-3 font-medium">
+                  <td className="px-3 py-2 font-medium">
                     <Link
                       href={`/dashboard/admin/leave-accrual/${row.sourceSystem}/${row.employeeId}`}
                       className="hover:underline"

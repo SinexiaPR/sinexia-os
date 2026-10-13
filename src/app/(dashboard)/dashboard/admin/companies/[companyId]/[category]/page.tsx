@@ -68,7 +68,7 @@ export default async function AdminCompanyCategoryPage({
   const empty = documents.length === 0 && reports.length === 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <header className="space-y-4">
         <Button asChild variant="ghost" className="-ml-3">
           <Link href={`/dashboard/admin/companies/${detail.company.id}`}>
@@ -81,7 +81,7 @@ export default async function AdminCompanyCategoryPage({
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {detail.company.name}
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            <h1 className="mt-2 text-xl font-semibold tracking-tight">
               {detail.category.label}
             </h1>
             <p className="text-muted-foreground mt-2 text-sm">
