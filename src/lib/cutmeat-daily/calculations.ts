@@ -265,13 +265,9 @@ export function buildRecurringDetailTable(
     nextWeek: [],
     weekAfter: [],
   };
-  // Los recurrentes sin vencimiento (p.ej. un recordatorio todavía sin
-  // facturar, monto $0) no tienen una cubeta propia -- se insertan
-  // aparte, abajo, en el mismo lugar donde Hernan los pone a mano: uno
-  // cerca del principio de "prior" y, si hay un segundo, al principio de
-  // "nextWeek" (justo donde termina "this week"). Un tercero en
-  // adelante (no visto todavía) se agrega al final de "prior" para no
-  // perderlo en silencio.
+  // Los recurrentes sin vencimiento (p.ej. "Carlos Mercado Seguros",
+  // monto $0) no tienen una cubeta propia por fecha -- van siempre al
+  // principio de "this week", igual que en la planilla de Hernan.
   const undated: RecurringDetailRow[] = [];
   for (const item of visible) {
     if (item.dueDate == null) {
@@ -282,6 +278,10 @@ export function buildRecurringDetailTable(
     if (key) grouped[key].push(item);
   }
 
+  // Ordena por (dueDate, entryDate) -- las filas con el mismo due_date Y
+  // el mismo entryDate quedan en el orden en que llegaron (sort
+  // estable), que es el orden explícito de display_order ya aplicado
+  // por el llamador (getRecurringPayments) -- no uno derivado acá.
   const sortRows = (rows: RecurringDetailRow[]) =>
     [...rows].sort((a, b) => {
       const ad = a.dueDate ?? "";
@@ -292,31 +292,14 @@ export function buildRecurringDetailTable(
       return ae < be ? -1 : ae > be ? 1 : 0;
     });
 
-  const priorRows = sortRows(grouped.prior);
-  const nextWeekRows = sortRows(grouped.nextWeek);
-  undated.forEach((item, index) => {
-    if (index % 2 === 0) {
-      // Primero: después de la primera fila de "prior" (o al principio
-      // si "prior" está vacío).
-      priorRows.splice(Math.min(1, priorRows.length), 0, item);
-    } else if (index === 1) {
-      // Segundo: al principio de "nextWeek".
-      nextWeekRows.unshift(item);
-    } else {
-      // Un tercero (o más) en adelante: al final de "prior", para no
-      // perderlo.
-      priorRows.push(item);
-    }
-  });
-
   const makeBucket = (rows: RecurringDetailRow[]): RecurringDetailBucket => ({
     rows,
     total: sum(rows.filter((row) => !row.isPaid).map((row) => row.amount)),
   });
 
-  const prior = makeBucket(priorRows);
-  const thisWeek = makeBucket(sortRows(grouped.thisWeek));
-  const nextWeek = makeBucket(nextWeekRows);
+  const prior = makeBucket(sortRows(grouped.prior));
+  const thisWeek = makeBucket([...undated, ...sortRows(grouped.thisWeek)]);
+  const nextWeek = makeBucket(sortRows(grouped.nextWeek));
   const weekAfter = makeBucket(sortRows(grouped.weekAfter));
   return {
     prior,
@@ -577,6 +560,11 @@ export type BankMovement = {
   linkedRecurringId?: string | null;
   /** Depósito ya identificado como "Not entered Sales". */
   isNotEnteredDeposit?: boolean;
+  /** Post Date y Calculated Balance del Export banco real -- solo para
+   * ese PDF (Deposit Accounts Activity Summary), no para la clasificación
+   * de Variación Diaria. */
+  postDate?: IsoDate | null;
+  calculatedBalance?: number | null;
 };
 
 export type BankMovementClassification = {

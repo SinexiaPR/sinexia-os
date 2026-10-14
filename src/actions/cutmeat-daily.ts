@@ -1014,9 +1014,19 @@ export async function generateDailyPdf(input: {
         if (!workspace.reconciliation || !workspace.reconciliationControl)
           return { error: "Todavía no se cargó la conciliación de este día." };
         const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
-        const asLine = (item: { reference: string; amount: number }) => ({
-          name: item.reference,
-          balance: Number(item.amount),
+        const asDetailLine = (item: {
+          reference: string;
+          amount: number;
+          txn_date: IsoDate | null;
+          txn_type: string | null;
+          ref_no: string | null;
+          payee: string | null;
+        }) => ({
+          txnDate: item.txn_date,
+          txnType: item.txn_type ?? "",
+          refNo: item.ref_no ?? "",
+          payee: item.payee ?? item.reference,
+          amount: Number(item.amount),
         });
         const byTranche = <T extends { tranche: "as_of" | "after" | null }>(items: T[], tranche: "as_of" | "after") =>
           items.filter((item) => (item.tranche ?? "as_of") === tranche);
@@ -1027,14 +1037,14 @@ export async function generateDailyPdf(input: {
           reconciledOn: workspace.reconciliation.loadedAt
             ? (workspace.reconciliation.loadedAt.slice(0, 10) as IsoDate)
             : null,
-          beginningBalance: workspace.reconciliation.beginningBalance,
+          beginningBalance: workspace.reconciliation.beginningBalance ?? 0,
           control: workspace.reconciliationControl,
-          clearedChecks: workspace.reconciliation.clearedChecks.map(asLine),
-          clearedDeposits: workspace.reconciliation.clearedDeposits.map(asLine),
-          asOfChecks: byTranche(workspace.reconciliation.unclearedChecks, "as_of").map(asLine),
-          asOfDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "as_of").map(asLine),
-          afterChecks: byTranche(workspace.reconciliation.unclearedChecks, "after").map(asLine),
-          afterDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "after").map(asLine),
+          clearedChecks: workspace.reconciliation.clearedChecks.map(asDetailLine),
+          clearedDeposits: workspace.reconciliation.clearedDeposits.map(asDetailLine),
+          asOfChecks: byTranche(workspace.reconciliation.unclearedChecks, "as_of").map(asDetailLine),
+          asOfDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "as_of").map(asDetailLine),
+          afterChecks: byTranche(workspace.reconciliation.unclearedChecks, "after").map(asDetailLine),
+          afterDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "after").map(asDetailLine),
         });
         break;
       }
@@ -1043,8 +1053,15 @@ export async function generateDailyPdf(input: {
           return { error: "Todavía no se cargó el export del banco de este día." };
         bytes = await buildBankExportPdf({
           reportDate,
+          dateRange: workspace.bankExport.dateRange ?? reportDate,
+          accountLabel: workspace.bankExport.accountLabel ?? "",
+          availableBalance: workspace.bankExport.availableBalance ?? 0,
           closingBalance: workspace.bankExport.closingBalance,
-          movements: workspace.bankMovements,
+          // Los "not entered deposit" alimentan Depósitos del día (otra
+          // sección del Informe), no el Export banco -- ese replica
+          // solo los movimientos propios del banco (p.ej. el ACH que ya
+          // aparece como "Cleared" en el Reconciliation Report).
+          movements: workspace.bankMovements.filter((m) => !m.isNotEnteredDeposit),
         });
         break;
       }
@@ -1074,7 +1091,6 @@ export async function generateDailyPdf(input: {
         bytes = await buildConsolidatedPdf({
           reportDate,
           control: workspace.reconciliationControl,
-          reconciliationAsOfDate: workspace.reconciliation?.asOfDate ?? null,
           financial: workspace.financial,
           recurring: workspace.recurring.map((item) => ({
             entryDate: item.entryDate,

@@ -14,8 +14,11 @@ import path from "node:path";
 import {
   buildAgingCustomersPdf,
   buildAgingVendorsPdf,
+  buildBankExportPdf,
   buildConsolidatedPdf,
+  buildReconciliationPdf,
   money,
+  type ReconciliationDetailLine,
 } from "../src/lib/cutmeat-daily/pdf";
 import { renderPdfPageToPng } from "../src/lib/cutmeat-reports/package/render";
 import {
@@ -220,6 +223,7 @@ assert.equal(
 // con "prior", descontando NOMINA+IRS+Hacienda dos veces) no puede
 // replicarse porque los 4 rangos de fecha son mutuamente excluyentes.
 const REPORT_DATE_1012 = "2026-10-12";
+const AS_OF_DATE_1012 = "2026-10-09";
 const weekStart1012 = sundayWeekStartOf(REPORT_DATE_1012);
 assert.equal(weekStart1012, "2026-10-11", "domingo de la semana del informe del 10/12");
 
@@ -460,6 +464,60 @@ console.log(
   "Fix: Balance after Weekly Payments + Not entered Sales se calcula desde Gabriel + Variación (ambas secciones) + " +
     "Depósitos del día -- no desde Balance Today (Register) + Depósitos, que duplicaría los depósitos cuando hay " +
     "una línea \"uncollected_deposit\" en la Variación Diaria (p.ej. Costco del 10/12). El 09/10 (sin esa línea) da igual.",
+);
+
+// D18: "Depósitos del día" tiene que ser SOLO los depósitos nuevos de
+// HOY -- nunca el total de depósitos sin cobrar arrastrado de un día
+// anterior. Caso pedido por María: 10/13 sin ningún movimiento nuevo en
+// QuickBooks/banco (el 10/12 fue feriado bancario) -- si el cálculo
+// arrastrara los 4,563.57 del 10/12 en vez de leer los bank_movements
+// de ESTE día (ninguno), el control no cerraría. notEnteredDeposits se
+// lee siempre de cutmeat_daily_bank_movements filtrado por report_id --
+// nunca puede traer del día anterior por construcción, pero este test
+// deja la regla explícita y a prueba de regresión.
+const REPORT_DATE_1013 = "2026-10-13";
+const weekStart1013 = sundayWeekStartOf(REPORT_DATE_1013);
+assert.equal(weekStart1013, weekStart1012, "10/13 cae en la misma semana que el 10/12 -- recurrentes sin cambios");
+const buckets1013 = splitRecurringByWeek(realRecurring1012, REPORT_DATE_1013);
+assert.equal(buckets1013.prior.total, 4009.0);
+assert.equal(buckets1013.thisWeek.total, 580.0);
+const weeklyPayments1013 = buildBalanceAfterWeeklyPayments(36243.46, buckets1013);
+assert.equal(weeklyPayments1013.balanceAfterWeeklyPayments, 31654.46, "Balance Today del 10/13 (sin novedades) = 31,654.46");
+const financial1013 = buildFinancialReport({
+  reportDate: REPORT_DATE_1013,
+  balanceAfterWeeklyPayments: weeklyPayments1013.balanceAfterWeeklyPayments,
+  currentWeekIncome: 7500,
+  nextWeekBuckets: { total: buckets1013.nextWeek.total },
+  weekAfterBuckets: { total: buckets1013.weekAfter.total },
+  flatWeeklyIncome: 9000,
+});
+assert.equal(financial1013.day7.balance, 39154.46);
+assert.equal(financial1013.day14.balance, 45874.46);
+assert.equal(financial1013.day21.balance, 54294.46);
+
+// Sin bank_movements cargados para el 10/13 -> notEnteredDeposits = 0,
+// nunca los 4,563.57 del 10/12 (eso sería arrastrar, no leer el día).
+const noBankMovements1013: VarianceLine[] = [];
+const notEnteredDepositsTotal1013 = 0;
+assert.equal(notEnteredDepositsTotal1013, 0, "Depósitos del día del 10/13 = 0.00 -- no arrastra los 4,563.57 del 10/12");
+
+const gabriel1013 = 31654.46; // final del 10/12 una vez cerrado (todavía en borrador)
+const control1013Variance = checkVarianceReconciliation(gabriel1013, noBankMovements1013, notEnteredDepositsTotal1013, financial1013.balanceToday);
+assert.equal(control1013Variance.expected, 31654.46, "Gabriel + variación (0.00) + depósitos del día (0.00) = 31,654.46");
+assert.equal(control1013Variance.balanced, true, "control de Variación Diaria del 10/13 cuadra a 0.00");
+
+const reconciliation1013 = checkReconciliationControl({
+  statementEnding: 39607.05,
+  unclearedChecks: [{ reference: "checks as of 10/12", amount: -7927.16, tranche: "as_of" }],
+  unclearedDeposits: [{ reference: "deposits as of 10/12", amount: 4563.57, tranche: "as_of" }],
+  register: 36243.46,
+});
+assert.equal(reconciliation1013.balanced, true, "Reconciliation del 10/13 (todo en un solo tramo as-of 10/12, sin after) cuadra a 0.00");
+assert.equal(reconciliation1013.afterChecksTotal, 0, "sin tramo after para el 10/13 (nada nuevo entre el 10/12 y el 10/13)");
+assert.equal(reconciliation1013.afterDepositsTotal, 0);
+console.log(
+  "Preparación del 10/13 (depende de que el 10/12 cierre): Depósitos del día = 0.00 (no arrastra los del 10/12), " +
+    "Balance Today y final = 31,654.46, control de Reconciliation y de Variación Diaria cuadran a 0.00 -- OK.",
 );
 
 const vendorConfig = {
@@ -898,12 +956,11 @@ async function main() {
   assert.equal(realRecurringTable1009.thisWeek.total, 1180, "Total-Week (this week) = 1,180.00, igual que Hernan");
   assert.equal(realRecurringTable1009.nextWeek.total, 580, "Total-Week (next week) = 580.00, igual que Hernan");
   assert.equal(realRecurringTable1009.grandTotal, 4589, "TOTAL RECURRENTES A PAGAR = 4,589.00, igual que Hernan");
-  // Orden de las 2 filas "Carlos Mercado Seguros" (sin vencimiento, $0):
-  // una cerca del principio de "prior" (después de Caparra 9/3, como en
-  // el original de Hernan) y la otra al principio de "nextWeek" (antes
-  // de NOMINA 10/15) -- no las dos juntas en "prior".
-  assert.equal(realRecurringTable1009.prior.rows[1]?.vendor, "Carlos Mercado Seguros", "1er Carlos Mercado Seguros justo después de la primera fila de prior");
-  assert.equal(realRecurringTable1009.nextWeek.rows[0]?.vendor, "Carlos Mercado Seguros", "2do Carlos Mercado Seguros al principio de nextWeek");
+  // Las filas "Carlos Mercado Seguros" (sin vencimiento, $0) van siempre
+  // al principio de "this week", igual que en la planilla de Hernan --
+  // no repartidas entre "prior" y "nextWeek".
+  assert.equal(realRecurringTable1009.thisWeek.rows[0]?.vendor, "Carlos Mercado Seguros", "1er Carlos Mercado Seguros al principio de this week");
+  assert.equal(realRecurringTable1009.thisWeek.rows[1]?.vendor, "Carlos Mercado Seguros", "2do Carlos Mercado Seguros también al principio de this week");
   console.log("A/P Aging Detail Recurrentes del 09/10 (datos reales de cutmeat_recurrentes): Total-Week por semana, total general y orden de filas (Carlos Mercado Seguros) -- OK.");
 
   // Paquete para el dueño del 09/10: Consolidated real de 3 páginas
@@ -1026,6 +1083,119 @@ async function main() {
       "(pdfjs-dist transfiere el ArrayBuffer al worker si no se le pasa una copia)",
   );
   console.log("renderPdfPageToPng no destruye el buffer de entrada (bug del 09/10 en producción) -- OK.");
+
+  // D19: Reconciliation Report del 10/12 -- réplica del de QuickBooks
+  // (Summary combinado as-of/after, Details DATE|TYPE|REF NO.|PAYEE|
+  // AMOUNT, sin "Control" visible).
+  const asLine1012 = (item: ReconciliationLineItem, txnType: string, refNo: string, payee: string): ReconciliationDetailLine => ({
+    txnDate: null,
+    txnType,
+    refNo,
+    payee,
+    amount: item.amount,
+  });
+  const reconciliationPdf1012 = await buildReconciliationPdf({
+    reportDate: REPORT_DATE_1012,
+    periodEnding: AS_OF_DATE_1012,
+    reconciledOn: "2026-10-13",
+    beginningBalance: 40107.05,
+    clearedChecks: [{ txnDate: "2026-10-09", txnType: "Expense", refNo: "ACH", payee: "SR JOSE MANZANARES BL...", amount: -500 }],
+    clearedDeposits: [],
+    control: reconciliation1012,
+    asOfChecks: [
+      asLine1012(asOfChecks1012[0]!, "Bill Payment", "1004", "BR TRANSPORT"),
+      asLine1012(asOfChecks1012[1]!, "Bill Payment", "1054", "COSTCO WHOLESALE"),
+    ],
+    asOfDeposits: [asLine1012(asOfDeposits1012[0]!, "Receive Payment", "53876", "MAI PEN RAI")],
+    afterChecks: afterChecks1012.map((item) => asLine1012(item, "Bill Payment", "ACH", item.reference)),
+    afterDeposits: afterDeposits1012.map((item) => asLine1012(item, "Receive Payment", "", item.reference)),
+  });
+  const reconciliationText1012 = await extractPdfText(reconciliationPdf1012);
+  assert.ok(reconciliationText1012.includes("Statement beginning balance"), "Summary: Statement beginning balance");
+  assert.ok(reconciliationText1012.includes("Checks and payments cleared (1)"), "cantidad entre paréntesis, aunque sea 1");
+  assert.ok(reconciliationText1012.includes("Deposits and other credits cleared (0)"), "cantidad entre paréntesis, aunque sea 0");
+  assert.ok(
+    reconciliationText1012.includes(`Uncleared transactions as of ${formatSlashDate(AS_OF_DATE_1012)} ${money(-172.28)}`),
+    "Uncleared transactions as of 10/09/2026 combinado (checks+deposits) = -172.28",
+  );
+  assert.ok(
+    reconciliationText1012.includes(`Register balance as of ${formatSlashDate(AS_OF_DATE_1012)} ${money(39434.77)}`),
+    "Register balance as of 10/09/2026 = 39,434.77",
+  );
+  assert.ok(
+    reconciliationText1012.includes(`Uncleared transactions after ${formatSlashDate(AS_OF_DATE_1012)} ${money(-3191.31)}`),
+    "Uncleared transactions after 10/09/2026 combinado = -3,191.31",
+  );
+  assert.ok(
+    reconciliationText1012.includes(`Register balance as of ${formatSlashDate(REPORT_DATE_1012)} ${money(36243.46)}`),
+    "Register balance as of 10/12/2026 (hoy) = 36,243.46",
+  );
+  assert.ok(!reconciliationText1012.includes("Control"), "el control es interno -- no se muestra en el PDF");
+  assert.ok(
+    reconciliationText1012.includes("DATE") && reconciliationText1012.includes("TYPE") &&
+      reconciliationText1012.includes("REF NO.") && reconciliationText1012.includes("PAYEE"),
+    "columnas DATE | TYPE | REF NO. | PAYEE del Details",
+  );
+  assert.ok(reconciliationText1012.includes("BR TRANSPORT") && reconciliationText1012.includes("MAI PEN RAI"), "filas reales del detalle");
+  console.log("Reconciliation Report del 10/12 (réplica de QuickBooks: Summary combinado + Details + sin Control) -- OK.");
+
+  // D20: Export banco del 10/12 -- réplica del banco.
+  const bankExportPdf1012 = await buildBankExportPdf({
+    reportDate: REPORT_DATE_1012,
+    dateRange: AS_OF_DATE_1012,
+    accountLabel: "WAGYU FOOD SERVICE LLC - Checking - 221571473 - *5330",
+    availableBalance: 32151.17,
+    closingBalance: 39607.05,
+    movements: [
+      { id: "ach500", description: "ACH SETTLEMENT / ACH OFFSET", amount: 500, direction: "egreso", postDate: AS_OF_DATE_1012, calculatedBalance: 39607.05 },
+    ],
+  });
+  const bankExportText1012 = await extractPdfText(bankExportPdf1012);
+  assert.ok(bankExportText1012.includes("Deposit Accounts Activity Summary"));
+  assert.ok(bankExportText1012.includes("Report Created:"));
+  assert.ok(bankExportText1012.includes(`Date range: ${formatSlashDate(AS_OF_DATE_1012)}`));
+  assert.ok(bankExportText1012.includes("ACH SETTLEMENT / ACH OFFSET"));
+  assert.ok(bankExportText1012.includes(money(500)) && bankExportText1012.includes(money(39607.05)));
+  assert.ok(bankExportText1012.includes("Totals") && bankExportText1012.includes(money(0)));
+  assert.ok(bankExportText1012.includes("Page 1 of 1"), "pie propio del Export -- sin fecha, solo paginación 'Page i of N'");
+  console.log("Export banco del 10/12 (réplica del banco) -- OK.");
+
+  // D21: página 2 del Consolidated del 10/12 -- Costco (uncollected_deposit)
+  // se muestra JUNTO a las demás líneas de Variación Diaria en "Uncleared
+  // checks and payments" (un solo bloque, total -8,382.16), no separado;
+  // "Uncleared deposits and other credits" queda en 0.00 -- sin cambiar
+  // los totales de control.
+  const consolidatedPdf1012 = await buildConsolidatedPdf({
+    reportDate: REPORT_DATE_1012,
+    control: reconciliation1012,
+    financial: financial1012,
+    recurring: detailRecurring1012,
+    varianceLines: variance1012,
+    balanceGabriel: gabriel1012,
+    notEnteredDepositsTotal: 4563.57,
+    vendorAging: null,
+    customerAgingRawTotal: null,
+    customerAgingConsolidated: null,
+    primeMeatsRecurring: 0,
+  });
+  const consolidated1012Page2Text = await extractPdfText(consolidatedPdf1012);
+  assert.ok(consolidated1012Page2Text.includes("Costco Wholesale"), "Costco aparece en Variación Diaria");
+  assert.ok(
+    consolidated1012Page2Text.includes(`Variación Diaria - Uncleared checks and payments`) &&
+      consolidated1012Page2Text.includes(`Total ${money(-8382.16)}`),
+    "Total del bloque \"Uncleared checks and payments\" (con Costco adentro) = -8,382.16, con la etiqueta \"Total\", no \"subtotal\"",
+  );
+  assert.ok(!consolidated1012Page2Text.includes("subtotal"), "sin la palabra \"subtotal\"");
+  assert.ok(
+    consolidated1012Page2Text.includes(`Variación Diaria- Uncleared deposits and other credits`) &&
+      consolidated1012Page2Text.includes(`Total ${money(0)}`),
+    "\"Uncleared deposits and other credits\" queda con total 0.00",
+  );
+  assert.ok(
+    consolidated1012Page2Text.includes(`Balance after Weekly Payments + Not entered Sales ${money(31654.46)}`),
+    "el total de control no cambia por la presentación -- sigue dando 31,654.46",
+  );
+  console.log("Consolidated del 10/12, página 2: Costco junto a las demás líneas (un solo bloque, -8,382.16), sin \"subtotal\" -- OK.");
 
   const withDetailPdf = await buildAgingVendorsPdf({
     reportDate: REPORT_DATE,

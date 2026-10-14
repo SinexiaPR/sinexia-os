@@ -268,6 +268,12 @@ export async function getRecurringPayments(
     .select("*")
     .eq("company_id", companyId)
     .in("period", periods)
+    // display_order fija el orden exacto de la planilla de Hernan
+    // (varias filas comparten due_date en un orden específico que no se
+    // puede derivar de la fecha sola, p.ej. "Juan Diaz" antes de
+    // "Deposito - Jose Manzanares" antes de "Caparra", todas 10/01) --
+    // due_date queda como respaldo para filas sin display_order todavía.
+    .order("display_order", { ascending: true, nullsFirst: false })
     .order("due_date", { ascending: true, nullsFirst: false });
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -517,6 +523,10 @@ export async function getDailyReportWorkspace(
     reference: string;
     amount: number;
     tranche: "as_of" | "after" | null;
+    txn_date: IsoDate | null;
+    txn_type: string | null;
+    ref_no: string | null;
+    payee: string | null;
   }>;
   const bankMovementRows = (bankMovementsRes.data ?? []) as Array<{
     id: string;
@@ -526,12 +536,16 @@ export async function getDailyReportWorkspace(
     linked_recurring_id: string | null;
     is_not_entered_deposit: boolean;
     note: string | null;
+    post_date: IsoDate | null;
+    calculated_balance: number | null;
   }>;
   const bankMovements: BankMovement[] = bankMovementRows.map((row) => ({
     id: row.id,
     description: row.description,
     amount: Number(row.amount),
     direction: row.direction,
+    postDate: row.post_date,
+    calculatedBalance: row.calculated_balance == null ? null : Number(row.calculated_balance),
     linkedRecurringId: row.linked_recurring_id,
     isNotEnteredDeposit: row.is_not_entered_deposit,
   }));
@@ -706,6 +720,12 @@ export async function getDailyReportWorkspace(
             (bankExportRes.data as { closing_balance: number | null }).closing_balance,
           sourcePdfPath: (bankExportRes.data as { source_pdf_path: string | null })
             .source_pdf_path,
+          dateRange: (bankExportRes.data as { date_range: IsoDate | null }).date_range,
+          accountLabel: (bankExportRes.data as { account_label: string | null }).account_label,
+          availableBalance:
+            (bankExportRes.data as { available_balance: number | null }).available_balance == null
+              ? null
+              : Number((bankExportRes.data as { available_balance: number | null }).available_balance),
         }
       : null,
     bankMovements,
