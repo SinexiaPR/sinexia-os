@@ -158,12 +158,14 @@ export type RecurringDetailRow = {
   dueDate: IsoDate | null;
   amount: number;
   isPaid: boolean;
+  /** Fecha real de pago (banco/QuickBooks). Si es null con isPaid=true,
+   * se usa dueDate como mejor estimado -- ver nota de visibilidad abajo. */
+  paidDate?: IsoDate | null;
 };
 
 export type RecurringDetailBucket = {
   rows: RecurringDetailRow[];
-  /** Suma de los no pagados de este bucket -- los pagados se muestran
-   * (en gris) pero no entran en el total, igual que hace Hernan. */
+  /** Suma de los no pagados de este bucket -- los pagados nunca suman. */
   total: number;
 };
 
@@ -171,19 +173,30 @@ export type RecurringDetailTable = {
   prior: RecurringDetailBucket;
   thisWeek: RecurringDetailBucket;
   nextWeek: RecurringDetailBucket;
+  weekAfter: RecurringDetailBucket;
+  /** prior.total + thisWeek.total + nextWeek.total + weekAfter.total,
+   * siempre recalculado desde las filas -- nunca un subtotal guardado. */
   grandTotal: number;
 };
 
 /**
- * Agrupa TODOS los recurrentes del mes (pagados y pendientes) en 3
- * cubetas por vencimiento -- anteriores a esta semana, esta semana, la
- * semana siguiente -- con un subtotal "Total-Week" por cubeta y un total
- * general, igual que la planilla de Hernan (que no muestra una 4ta
- * cubeta de "semana después"). Los pendientes sin vencimiento (p.ej. un
- * recurrente todavía sin facturar, monto $0) van en la cubeta "prior"
- * sin afectar ningún total real. Los recurrentes cuyo vencimiento cae
- * más allá de la semana siguiente no aparecen en esta tabla (quedan
- * fuera del horizonte de 3 semanas que muestra esta sección).
+ * Agrupa TODOS los recurrentes relevantes del mes en 4 cubetas por
+ * vencimiento -- anteriores a esta semana, esta semana, la semana
+ * siguiente (14 días) y la semana después (21 días) -- cada fila en
+ * exactamente UN bloque (por construcción: los rangos de fecha no se
+ * superponen), con un subtotal "Total-Week" por cubeta y un total
+ * general = suma de las 4. Esto es intencionalmente distinto del rango
+ * fijo de celdas que usaba el Sheet de Hernan (K10:K15), que arrancaba
+ * dentro de "prior" y por eso descontaba NOMINA/IRS/Hacienda dos veces.
+ *
+ * Un recurrente pagado (isPaid=true) nunca suma a ningún total. Se
+ * muestra en gris SOLO el día de su pago (paidDate, o dueDate si no hay
+ * paidDate informado) -- al día siguiente desaparece de la tabla, igual
+ * que en los informes de Hernan.
+ *
+ * Los pendientes sin vencimiento (p.ej. un recurrente todavía sin
+ * facturar, monto $0 -- "Carlos Mercado Seguros") van en la cubeta
+ * "prior" sin afectar ningún total real.
  */
 export function buildRecurringDetailTable(
   recurring: RecurringDetailRow[],
@@ -191,21 +204,34 @@ export function buildRecurringDetailTable(
 ): RecurringDetailTable {
   const weekStart = sundayWeekStartOf(reportDate);
   const thisWeekEnd = addDays(weekStart, 6);
+  const nextWeekStart = addDays(weekStart, 7);
   const nextWeekEnd = addDays(weekStart, 13);
+  const weekAfterStart = addDays(weekStart, 14);
+  const weekAfterEnd = addDays(weekStart, 20);
 
-  type BucketKey = "prior" | "thisWeek" | "nextWeek";
+  type BucketKey = "prior" | "thisWeek" | "nextWeek" | "weekAfter";
   const classify = (dueDate: IsoDate | null): BucketKey | null => {
     if (dueDate == null) return null;
     if (dueDate < weekStart) return "prior";
     if (dueDate <= thisWeekEnd) return "thisWeek";
-    if (dueDate <= nextWeekEnd) return "nextWeek";
+    if (dueDate >= nextWeekStart && dueDate <= nextWeekEnd) return "nextWeek";
+    if (dueDate >= weekAfterStart && dueDate <= weekAfterEnd) return "weekAfter";
     return null;
   };
+
+  // Un recurrente pagado solo se muestra el día exacto de su pago; antes
+  // o después de ese día, desaparece de la tabla (no solo del total).
+  const visible = recurring.filter((item) => {
+    if (!item.isPaid) return true;
+    const effectivePaidDate = item.paidDate ?? item.dueDate;
+    return effectivePaidDate === reportDate;
+  });
 
   const grouped: Record<BucketKey, RecurringDetailRow[]> = {
     prior: [],
     thisWeek: [],
     nextWeek: [],
+    weekAfter: [],
   };
   // Los recurrentes sin vencimiento (p.ej. un recordatorio todavía sin
   // facturar, monto $0) no tienen una cubeta propia -- se insertan
@@ -215,7 +241,7 @@ export function buildRecurringDetailTable(
   // adelante (no visto todavía) se agrega al final de "prior" para no
   // perderlo en silencio.
   const undated: RecurringDetailRow[] = [];
-  for (const item of recurring) {
+  for (const item of visible) {
     if (item.dueDate == null) {
       undated.push(item);
       continue;
@@ -259,11 +285,13 @@ export function buildRecurringDetailTable(
   const prior = makeBucket(priorRows);
   const thisWeek = makeBucket(sortRows(grouped.thisWeek));
   const nextWeek = makeBucket(nextWeekRows);
+  const weekAfter = makeBucket(sortRows(grouped.weekAfter));
   return {
     prior,
     thisWeek,
     nextWeek,
-    grandTotal: sum([prior.total, thisWeek.total, nextWeek.total]),
+    weekAfter,
+    grandTotal: sum([prior.total, thisWeek.total, nextWeek.total, weekAfter.total]),
   };
 }
 

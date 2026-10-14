@@ -470,8 +470,9 @@ function drawAgingTable(
  * Agrupado por nombre, una fila por factura (Date/Transaction type/Num/
  * Due date/Amount/Open balance/Balance), con "Total for <nombre>" como
  * subtotal, cierre "TOTAL" al final, y una columna de Balance corrido
- * (acumulado línea a línea, sin reiniciar por nombre) como en el
- * Vendor/Customer Balance Detail Report original de QuickBooks.
+ * que se REINICIA EN 0 al empezar cada vendor/customer (no se acumula
+ * entre grupos distintos), igual que el Vendor/Customer Balance Detail
+ * Report original de QuickBooks.
  */
 function drawAgingDetailTable(
   pdf: PDFDocument,
@@ -490,9 +491,11 @@ function drawAgingDetailTable(
     { label: "Balance", width: 95, align: "right" as const },
   ];
   const rows: TableRow[] = [];
-  let running = 0;
   for (const group of groups) {
     rows.push({ spanner: group.name });
+    // El Balance corrido se reinicia en 0 al empezar cada vendor/
+    // customer -- no se acumula entre grupos distintos.
+    let running = 0;
     for (const line of group.lines) {
       running += line.openBalance ?? line.balance;
       rows.push([
@@ -769,6 +772,7 @@ export async function buildConsolidatedPdf(params: {
     [recurring.prior, "Total-Week"],
     [recurring.thisWeek, "Total-Week"],
     [recurring.nextWeek, "Total-Week"],
+    [recurring.weekAfter, "Total-Week"],
   ] as const) {
     for (const row of bucket.rows) {
       recurringRows.push({ cells: recurringRowCells(row), kind: row.isPaid ? "paid" : "data" });

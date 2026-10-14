@@ -1077,6 +1077,7 @@ export async function generateDailyPdf(input: {
             dueDate: item.dueDate,
             amount: item.amount,
             isPaid: item.isPaid,
+            paidDate: item.paidDate,
           })),
           varianceLines: workspace.varianceLines,
           balanceGabriel: workspace.balanceGabriel,

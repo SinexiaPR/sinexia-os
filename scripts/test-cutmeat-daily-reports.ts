@@ -33,6 +33,7 @@ import {
   normalizeVendorName,
   groupAgingItems,
   overdueUnpaidRecurring,
+  round,
   splitRecurringByWeek,
   splitVarianceLinesBySection,
   totalVarianceOf,
@@ -207,6 +208,192 @@ assert.equal(
   outOfBalance1012.balanced,
   false,
   "si Balance Today no coincide con lo reconstruido, el control detecta el movimiento sin clasificar (bloquea, no inventa un número)",
+);
+
+// D14: recurrentes del 10/12/2026 -- datos REALES de cutmeat_recurrentes
+// (consultados en Supabase, proyecto lrlzqgkfalbuunkixdbd, período
+// 2026-10-01, el 14/10/2026) en 4 cubetas sin superposición (prior/this
+// week/next week/following week), igual al pedido de María: "Cada
+// recurrente pendiente se descuenta exactamente una vez" -- el bug de
+// Hernan (rango K10:K15 que arrancaba en NOMINA 10/08 y se superponía
+// con "prior", descontando NOMINA+IRS+Hacienda dos veces) no puede
+// replicarse porque los 4 rangos de fecha son mutuamente excluyentes.
+const REPORT_DATE_1012 = "2026-10-12";
+const weekStart1012 = sundayWeekStartOf(REPORT_DATE_1012);
+assert.equal(weekStart1012, "2026-10-11", "domingo de la semana del informe del 10/12");
+
+const realRecurring1012: RecurringPayment[] = [
+  { id: "c1", concept: "Caparra Country - Gabriel Manzanares", dueDate: "2026-09-03", amount: 692, isPaid: false },
+  { id: "c2", concept: "Caparra Country - Gabriel Manzanares", dueDate: "2026-10-01", amount: 692, isPaid: false },
+  { id: "c3", concept: "PenFed - Jose Manzanares", dueDate: "2026-10-01", amount: 800, isPaid: true },
+  { id: "c4", concept: "Deposito - Jose Manzanares", dueDate: "2026-10-01", amount: 1200, isPaid: false },
+  { id: "c5", concept: "Juan Diaz", dueDate: "2026-10-01", amount: 150, isPaid: false },
+  { id: "c6", concept: "Deposito Oriental Bank - Seg de vida - J Manzanares", dueDate: "2026-10-01", amount: 350, isPaid: true },
+  { id: "c7", concept: "CCC Logistic - Storage", dueDate: "2026-10-02", amount: 95, isPaid: false },
+  { id: "c8", concept: "NOMINA", dueDate: "2026-10-08", amount: 400, isPaid: false },
+  { id: "c9", concept: "Internal Revenue Service", dueDate: "2026-10-09", amount: 600, isPaid: false },
+  { id: "c10", concept: "Departamento de Hacienda", dueDate: "2026-10-09", amount: 180, isPaid: false },
+  { id: "c11", concept: "SINERGIA LLC", dueDate: "2026-10-09", amount: 180, isPaid: true },
+  { id: "c12", concept: "NOMINA", dueDate: "2026-10-15", amount: 400, isPaid: false },
+  { id: "c13", concept: "SINERGIA LLC", dueDate: "2026-10-16", amount: 180, isPaid: false },
+  { id: "c14", concept: "Gabriel Manzanares - Auto", dueDate: "2026-10-21", amount: 1700, isPaid: false },
+  { id: "c15", concept: "NOMINA", dueDate: "2026-10-22", amount: 400, isPaid: false },
+  { id: "c16", concept: "SINERGIA LLC", dueDate: "2026-10-23", amount: 180, isPaid: false },
+  { id: "c17", concept: "NOMINA", dueDate: "2026-10-29", amount: 400, isPaid: false },
+  { id: "c18", concept: "SINERGIA LLC", dueDate: "2026-10-30", amount: 180, isPaid: false },
+];
+const buckets1012 = splitRecurringByWeek(realRecurring1012, REPORT_DATE_1012);
+assert.equal(buckets1012.prior.total, 4009.0, "Prior to this week del 10/12 = 4,009.00 (igual a lo confirmado por María)");
+assert.equal(buckets1012.thisWeek.total, 580.0, "This week del 10/12 = 580.00");
+assert.equal(buckets1012.nextWeek.total, 2280.0, "Next week (14 días) del 10/12 = 2,280.00");
+assert.equal(buckets1012.weekAfter.total, 580.0, "Following week (21 días) del 10/12 = 580.00");
+
+// Ninguna fila pendiente cae en dos cubetas a la vez, y la suma de las
+// 4 cubetas es exactamente el total de todas las filas pendientes --
+// la aserción explícita que pidió María en el punto 2 de su tarea.
+const pendingIds1012 = realRecurring1012.filter((item) => !item.isPaid).map((item) => item.id);
+const bucketedIds1012 = [
+  ...buckets1012.prior.items,
+  ...buckets1012.thisWeek.items,
+  ...buckets1012.nextWeek.items,
+  ...buckets1012.weekAfter.items,
+].map((item) => item.id);
+assert.equal(new Set(bucketedIds1012).size, bucketedIds1012.length, "ninguna fila pendiente aparece en dos cubetas a la vez");
+assert.deepEqual(
+  [...bucketedIds1012].sort(),
+  [...pendingIds1012].sort(),
+  "cada fila pendiente cae en exactamente una cubeta (no se pierde ninguna, no se repite ninguna)",
+);
+const totalRecurrentes1012 = round(
+  buckets1012.prior.total + buckets1012.thisWeek.total + buckets1012.nextWeek.total + buckets1012.weekAfter.total,
+);
+assert.equal(totalRecurrentes1012, 7449.0, "Total Recurrentes a Pagar = prior + this week + next week + following week = 7,449.00");
+
+// B = Register - prior - this week; con el Register del 10/12
+// (36,243.46), B = Balance Today = 31,654.46.
+const weeklyPayments1012 = buildBalanceAfterWeeklyPayments(36243.46, buckets1012);
+assert.equal(weeklyPayments1012.balanceAfterWeeklyPayments, 31654.46, "B del 10/12 = Register - prior - this week = 31,654.46");
+
+// Proyecciones 7/14/21 días del 10/12: 7 días = B + 7,500; 14 días = 7
+// días + 9,000 - next; 21 días = 14 días + 9,000 - following.
+const financial1012 = buildFinancialReport({
+  reportDate: REPORT_DATE_1012,
+  balanceAfterWeeklyPayments: weeklyPayments1012.balanceAfterWeeklyPayments,
+  currentWeekIncome: 7500,
+  nextWeekBuckets: buckets1012.nextWeek,
+  weekAfterBuckets: buckets1012.weekAfter,
+  flatWeeklyIncome: 9000,
+});
+assert.equal(financial1012.day7.balance, 39154.46, "7 días (10/19) del 10/12 = 39,154.46");
+assert.equal(financial1012.day7.date, "2026-10-19");
+assert.equal(financial1012.day14.recurrentes, 2280, "recurrentes restados en 14 días = next week = 2,280");
+assert.equal(financial1012.day14.balance, 45874.46, "14 días (10/26) del 10/12 = 45,874.46");
+assert.equal(financial1012.day14.date, "2026-10-26");
+assert.equal(financial1012.day21.recurrentes, 580, "recurrentes restados en 21 días = following week = 580");
+assert.equal(financial1012.day21.balance, 54294.46, "21 días (11/02) del 10/12 = 54,294.46");
+assert.equal(financial1012.day21.date, "2026-11-02");
+
+// La misma tabla de detalle (buildRecurringDetailTable, la que alimenta
+// el PDF) tiene que dar el mismo Total Recurrentes a Pagar con las
+// mismas 4 cubetas -- y las 4 filas pagadas (todas con fecha de pago
+// anterior al 10/12: PenFed 10/05, Deposito Oriental Bank 10/09,
+// SINERGIA LLC sin paidDate informado -> cae a su dueDate 10/09) deben
+// haber desaparecido de la tabla, no solo del total.
+const detailRecurring1012: RecurringDetailRow[] = realRecurring1012.map((item) => ({
+  entryDate: item.dueDate,
+  itemType: "Bill",
+  referenceNumber: null,
+  vendor: item.concept,
+  dueDate: item.dueDate,
+  amount: item.amount,
+  isPaid: item.isPaid,
+  paidDate:
+    item.id === "c3" ? "2026-10-05" : item.id === "c6" ? "2026-10-09" : item.id === "c11" ? null : undefined,
+}));
+const detailTable1012 = buildRecurringDetailTable(detailRecurring1012, REPORT_DATE_1012);
+assert.equal(detailTable1012.prior.total, 4009.0);
+assert.equal(detailTable1012.thisWeek.total, 580.0);
+assert.equal(detailTable1012.nextWeek.total, 2280.0);
+assert.equal(detailTable1012.weekAfter.total, 580.0);
+assert.equal(detailTable1012.grandTotal, 7449.0, "TOTAL RECURRENTES A PAGAR de la tabla del PDF = 7,449.00 (prior+this+next+following)");
+const allDetailRows1012 = [
+  ...detailTable1012.prior.rows,
+  ...detailTable1012.thisWeek.rows,
+  ...detailTable1012.nextWeek.rows,
+  ...detailTable1012.weekAfter.rows,
+];
+assert.ok(
+  !allDetailRows1012.some((row) => row.isPaid),
+  "ninguna fila pagada del 10/12 se muestra en la tabla -- todas se pagaron antes del 10/12, así que ya desaparecieron (no solo se excluyen del total)",
+);
+console.log(
+  "Recurrentes del 10/12 (datos reales): 4 cubetas sin superposición, total 7,449.00, B=31,654.46, " +
+    "proyecciones 39,154.46/45,874.46/54,294.46, filas pagadas anteriores al 10/12 ya no se muestran -- OK.",
+);
+
+// D15: regla de visibilidad de filas pagadas (genérica, no atada a
+// datos reales) -- gris SOLO el día exacto del pago, desaparece al día
+// siguiente. Si no hay paidDate informado, se usa dueDate como mejor
+// estimado (caso real: SINERGIA LLC del 09/10, pagado sin paidDate).
+const paidRuleFixture: RecurringDetailRow[] = [
+  { entryDate: "2026-10-05", itemType: "Bill", referenceNumber: null, vendor: "Pagado hoy (con paidDate)", dueDate: "2026-10-05", amount: 100, isPaid: true, paidDate: "2026-10-05" },
+  { entryDate: "2026-10-04", itemType: "Bill", referenceNumber: null, vendor: "Pagado ayer (con paidDate)", dueDate: "2026-10-04", amount: 100, isPaid: true, paidDate: "2026-10-04" },
+  { entryDate: "2026-10-06", itemType: "Bill", referenceNumber: null, vendor: "Pagado mañana (con paidDate)", dueDate: "2026-10-06", amount: 100, isPaid: true, paidDate: "2026-10-06" },
+  { entryDate: "2026-10-05", itemType: "Bill", referenceNumber: null, vendor: "Pagado hoy (sin paidDate, cae a dueDate)", dueDate: "2026-10-05", amount: 100, isPaid: true },
+  { entryDate: "2026-09-20", itemType: "Bill", referenceNumber: null, vendor: "Pagado hace rato (sin paidDate, cae a dueDate)", dueDate: "2026-09-20", amount: 100, isPaid: true },
+  { entryDate: "2026-10-05", itemType: "Bill", referenceNumber: null, vendor: "Pendiente de verdad", dueDate: "2026-10-05", amount: 50, isPaid: false },
+];
+const paidRuleTable = buildRecurringDetailTable(paidRuleFixture, "2026-10-05");
+const paidRuleVendors = [
+  ...paidRuleTable.prior.rows,
+  ...paidRuleTable.thisWeek.rows,
+  ...paidRuleTable.nextWeek.rows,
+  ...paidRuleTable.weekAfter.rows,
+].map((row) => row.vendor);
+assert.deepEqual(
+  [...paidRuleVendors].sort(),
+  ["Pagado hoy (con paidDate)", "Pagado hoy (sin paidDate, cae a dueDate)", "Pendiente de verdad"].sort(),
+  "solo se muestran las filas pagadas cuyo día de pago (paidDate o, en su falta, dueDate) ES el día del informe -- las de ayer/mañana/hace rato ya no aparecen",
+);
+assert.equal(
+  paidRuleTable.prior.total + paidRuleTable.thisWeek.total + paidRuleTable.nextWeek.total + paidRuleTable.weekAfter.total,
+  50,
+  "las filas pagadas (aunque se muestren en gris el día de su pago) nunca suman al total",
+);
+console.log("Regla de visibilidad de filas pagadas (gris solo el día exacto del pago, luego desaparece) -- OK.");
+
+// D16: HALLAZGO -- con las cifras que María confirmó para el 10/12
+// (Statement 39,607.05; uncleared checks -7,455.88; uncleared deposits
+// 4,264.57; Register 36,243.46), la ecuación de control de
+// Reconciliation NO cuadra: statementEnding + unclearedChecks +
+// unclearedDeposits - register = 172.28, no 0.00. Para cuadrar a 0.00
+// con los otros 3 valores, "uncleared deposits" tendría que ser
+// 4,092.29, no 4,264.57. Este test documenta el hallazgo (no lo
+// "arregla" inventando un número) -- "Si no cierra, detente y
+// repórtalo" es la regla que pidió María para el control de Variación
+// Diaria, y se aplica igual acá.
+const reconciliation1012AsStated = checkReconciliationControl({
+  statementEnding: 39607.05,
+  unclearedChecks: [{ reference: "checks", amount: -7455.88 }],
+  unclearedDeposits: [{ reference: "deposits", amount: 4264.57 }],
+  register: 36243.46,
+});
+assert.equal(
+  reconciliation1012AsStated.balanced,
+  false,
+  "HALLAZGO: con uncleared deposits = 4,264.57 (como lo confirmó María), el control de Reconciliation del 10/12 NO cuadra",
+);
+assert.equal(reconciliation1012AsStated.control, 172.28, "descuadre de 172.28 -- hay que revisar la cifra de uncleared deposits contra el Reconciliation Report real de QuickBooks");
+const reconciliation1012Fixed = checkReconciliationControl({
+  statementEnding: 39607.05,
+  unclearedChecks: [{ reference: "checks", amount: -7455.88 }],
+  unclearedDeposits: [{ reference: "deposits", amount: 4092.29 }],
+  register: 36243.46,
+});
+assert.equal(reconciliation1012Fixed.balanced, true, "con uncleared deposits = 4,092.29 (en vez de 4,264.57) el control SÍ cuadra a 0.00");
+console.log(
+  "HALLAZGO reportado: Reconciliation del 10/12 no cuadra con uncleared deposits=4,264.57 (descuadre 172.28); " +
+    "cuadraría con 4,092.29 -- revisar contra el Reconciliation Report real antes de cargarlo.",
 );
 
 const vendorConfig = {

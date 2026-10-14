@@ -239,6 +239,9 @@ export type CutMeatRecurringPayment = RecurringPayment & {
   referenceNumber: string | null;
   vendor: string;
   note: string | null;
+  /** Fecha real de pago (banco/QuickBooks) -- controla cuándo una fila
+   * pagada deja de mostrarse en la tabla de recurrentes del PDF. */
+  paidDate: IsoDate | null;
 };
 
 function monthStartOf(date: IsoDate): IsoDate {
@@ -279,6 +282,7 @@ export async function getRecurringPayments(
     referenceNumber: row.num,
     vendor: row.vendor,
     note: row.notes,
+    paidDate: row.paid_date,
   }));
 }
 
