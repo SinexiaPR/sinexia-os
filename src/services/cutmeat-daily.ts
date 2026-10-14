@@ -283,11 +283,15 @@ export async function getRecurringPayments(
 }
 
 /**
- * B (Balance after Weekly Payments) del último informe CERRADO antes de
- * `reportDate`: se lee de cutmeat_daily_history (backfill ya aprobado)
- * o del informe cerrado más reciente en vivo (balance_after_weekly
- * congelado al cerrar) -- lo que sea más reciente de los dos. null si
- * no hay ningún día cerrado anterior (primer día del módulo).
+ * Base de Balance GABRIEL del día siguiente: el balance FINAL del último
+ * informe CERRADO antes de `reportDate` -- "Balance after Weekly
+ * Payments + Not entered Sales" (balance_with_not_entered), no solo
+ * "Balance after Weekly Payments" -- se lee de cutmeat_daily_history
+ * (backfill ya aprobado, con su propio balance_after_weekly -- ese
+ * backfill es anterior a esta distinción y no se toca) o del informe
+ * cerrado más reciente en vivo (balance_with_not_entered congelado al
+ * cerrar) -- lo que sea más reciente de los dos. null si no hay ningún
+ * día cerrado anterior (primer día del módulo).
  */
 export async function getPreviousClosedBalance(
   companyId: string,
@@ -305,10 +309,10 @@ export async function getPreviousClosedBalance(
       .maybeSingle(),
     supabase
       .from("cutmeat_daily_reports")
-      .select("report_date,balance_after_weekly")
+      .select("report_date,balance_with_not_entered")
       .eq("company_id", companyId)
       .eq("status", "closed")
-      .not("balance_after_weekly", "is", null)
+      .not("balance_with_not_entered", "is", null)
       .lt("report_date", reportDate)
       .order("report_date", { ascending: false })
       .limit(1)
@@ -321,7 +325,7 @@ export async function getPreviousClosedBalance(
       ? { date: historyRes.data.report_date as IsoDate, balance: Number(historyRes.data.balance_after_weekly) }
       : null,
     reportRes.data
-      ? { date: reportRes.data.report_date as IsoDate, balance: Number(reportRes.data.balance_after_weekly) }
+      ? { date: reportRes.data.report_date as IsoDate, balance: Number(reportRes.data.balance_with_not_entered) }
       : null,
   ].filter((candidate): candidate is { date: IsoDate; balance: number } => candidate !== null);
   if (!candidates.length) return null;
@@ -634,6 +638,15 @@ export async function getDailyReportWorkspace(
       hasVendorAging: Boolean(agingVendorsRes.data),
       hasCustomerAging: Boolean(agingCustomersRes.data),
     },
+    varianceReconciliation:
+      financial && balanceGabriel != null
+        ? {
+            balanceGabriel,
+            varianceLines,
+            notEnteredDepositsTotal: notEnteredDeposits.reduce((sum, item) => sum + item.amount, 0),
+            balanceToday: financial.balanceToday,
+          }
+        : null,
   });
 
   return {

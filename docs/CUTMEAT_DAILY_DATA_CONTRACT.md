@@ -71,11 +71,25 @@ cambia `status` a `'reopened'`).
 ## Balance after Weekly Payments y Balance GABRIEL congelados
 
 Al cerrar un día (`closeDailyReport`), se calculan y se guardan
-`cutmeat_daily_reports.balance_after_weekly` y `.balance_gabriel` — el
-día siguiente los lee como "el último día cerrado anterior"
-(`buildBalanceGabriel` en `lib/cutmeat-daily/calculations.ts`) en vez de
-recalcularlos sobre datos que puedan cambiar después. Al reabrir
-(`reopenDailyReport`), ambos vuelven a `NULL` hasta el próximo cierre.
+`cutmeat_daily_reports.balance_after_weekly`, `.balance_gabriel` y
+`.balance_with_not_entered` — el día siguiente lee
+`balance_with_not_entered` del último día cerrado anterior
+(`getPreviousClosedBalance` en `services/cutmeat-daily.ts` →
+`buildBalanceGabriel` en `lib/cutmeat-daily/calculations.ts`) como base
+de su propio Balance GABRIEL, en vez de recalcularlo sobre datos que
+puedan cambiar después. **Balance GABRIEL = el balance FINAL del día
+cerrado anterior ("Balance after Weekly Payments + Not entered Sales"),
+no solo "Balance after Weekly Payments"** — ese último no incluye los
+depósitos del día todavía no ingresados en QuickBooks (p.ej. Costco), y
+usarlo como base subestimaba el Balance GABRIEL del día siguiente. Al
+reabrir (`reopenDailyReport`), los 3 vuelven a `NULL` hasta el próximo
+cierre.
+
+`cutmeat_daily_history` (el backfill de Fase 1, 10/01–10/08) es anterior
+a esta distinción y solo tiene `balance_after_weekly` — queda sin
+cambios; `getPreviousClosedBalance` lo sigue usando tal cual para esos
+días, y solo usa `balance_with_not_entered` para un informe cerrado en
+vivo (`cutmeat_daily_reports`).
 
 ## Tablas
 
@@ -93,6 +107,7 @@ El día del informe: borrador / cerrado / reabierto.
 | `reopened_at` / `reopened_by` | TIMESTAMPTZ / UUID | no | |
 | `balance_after_weekly` | NUMERIC(14,2) | no | Congelado al cerrar (ver arriba) |
 | `balance_gabriel` | NUMERIC(14,2) | no | Congelado al cerrar |
+| `balance_with_not_entered` | NUMERIC(14,2) | no | Congelado al cerrar — "Balance after Weekly Payments + Not entered Sales"; base del Balance GABRIEL del día siguiente |
 | `created_by` / `updated_by` | UUID | no | |
 | `created_at` / `updated_at` | TIMESTAMPTZ | sí | |
 
@@ -106,7 +121,8 @@ Ejemplo (09/10/2026, cerrado):
 report_date: 2026-10-09
 status: closed
 balance_after_weekly: 35126.77
-balance_gabriel: 35249.49   -- = balance_after_weekly del 10/08
+balance_gabriel: 35249.49         -- = balance_with_not_entered del 10/08
+balance_with_not_entered: 35473.05  -- balance_after_weekly + Costco (346.28) -- Gabriel del 10/12
 ```
 
 ### `cutmeat_daily_report_events`

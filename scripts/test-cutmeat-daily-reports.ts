@@ -25,6 +25,7 @@ import {
   buildFinancialReport,
   buildRecurringDetailTable,
   checkReconciliationControl,
+  checkVarianceReconciliation,
   classifyBankMovements,
   consolidateCustomerAging,
   consolidateVendorAging,
@@ -172,6 +173,42 @@ const withNotEntered = buildBalanceWithNotEnteredSales(
 );
 assert.equal(withNotEntered, 35473.05);
 
+// D12: caso real del 10/12/2026 -- Gabriel ahora parte del balance FINAL
+// del último día cerrado ("Balance after Weekly Payments + Not entered
+// Sales"), no solo "Balance after Weekly Payments". El 09/10 cerró con
+// withNotEntered = 35,473.05 (arriba) -- ese es el Gabriel del 10/12,
+// no 35,126.77 (balance_after_weekly del 09/10 sin el depósito de
+// Costco). Datos de la Variación Diaria del 10/12 ya confirmados por
+// María: Recurrentes de la Semana -580.00, Aging -6,413.48, Samuel Sosa
+// -1,042.40 (sección "variance" -- checks/pagos), Costco Wholesale
+// -346.28 (sección "uncollected_deposit" -- reversa del Not entered
+// Sales del 09/10, ya en el register). Depósitos del día 4,563.57.
+const gabriel1012 = buildBalanceGabriel(withNotEntered, 0);
+assert.equal(
+  gabriel1012,
+  35473.05,
+  "Gabriel del 10/12 = Balance after Weekly Payments + Not entered Sales del 09/10 (no solo Balance after Weekly Payments)",
+);
+const variance1012: VarianceLine[] = [
+  { concept: "Recurrentes de la Semana", amount: -580, section: "variance" },
+  { concept: "Aging", amount: -6413.48, section: "variance" },
+  { concept: "Samuel Sosa", amount: -1042.4, section: "variance" },
+  { concept: "Costco Wholesale", amount: -346.28, section: "uncollected_deposit" },
+];
+const control1012 = checkVarianceReconciliation(gabriel1012, variance1012, 4563.57, 31654.46);
+assert.equal(
+  control1012.expected,
+  31654.46,
+  "Balance Today reconstruido del 10/12 = Gabriel + variación + Depósitos del día = 31,654.46",
+);
+assert.equal(control1012.balanced, true, "la ecuación de control cuadra con los datos reales del 10/12");
+const outOfBalance1012 = checkVarianceReconciliation(gabriel1012, variance1012, 4563.57, 32000);
+assert.equal(
+  outOfBalance1012.balanced,
+  false,
+  "si Balance Today no coincide con lo reconstruido, el control detecta el movimiento sin clasificar (bloquea, no inventa un número)",
+);
+
 const vendorConfig = {
   includedNames: [
     "Mays Chemical Comp. PR Inc.",
@@ -313,6 +350,7 @@ const completenessWarnings = checkDailyReportCompleteness({
   vendorAgingItems: vendorItemsWithUnknown,
   vendorAgingConfig: vendorConfig,
   sources: { hasReconciliation: true, hasBankExport: true, hasVendorAging: true, hasCustomerAging: true },
+  varianceReconciliation: null,
 });
 assert.ok(
   completenessWarnings.some((w) => w.severity === "blocking" && w.message.includes("sin clasificar")),
@@ -618,17 +656,21 @@ async function main() {
   // Paquete para el dueño del 09/10: Consolidated real de 3 páginas
   // (RECONCILIATION INFORMATION + FINANCIAL REPORT / A/P Aging Detail
   // Recurrentes -- Balance GABRIEL + Variación Diaria -- portada
-  // CONSOLIDATED REPORT), con los datos reales de esta sesión. El bug de
-  // Costco (ver services/cutmeat-daily.ts) hacía que "Variación Diaria
-  // (total)" mostrara 223.56 en vez de -122.72 por sumar el depósito sin
-  // cobrar (uncollected_deposit) junto con la variación propiamente
-  // dicha (variance) -- acá se verifica la cadena completa: Balance
-  // GABRIEL (35,249.49) + variación (-122.72) + depósito sin cobrar
-  // (346.28) = 35,473.05 ("Balance after Weekly Payments" de la página 2).
+  // CONSOLIDATED REPORT), con los datos reales de esta sesión (la línea
+  // de Costco en variance_lines se borró en una tarea anterior -- el
+  // 09/10 real no tiene ninguna línea "uncollected_deposit"; Costco solo
+  // es un bank movement is_not_entered_deposit). El bug de Costco (ver
+  // services/cutmeat-daily.ts) hacía que "Variación Diaria (total)"
+  // mostrara 223.56 en vez de -122.72 por sumar lo que hubiera en
+  // uncollected_deposit junto con la variación propiamente dicha
+  // (variance) -- acá se verifica la cadena completa: Balance GABRIEL
+  // (35,249.49) + variación (-122.72) = 35,126.77 ("Balance after Weekly
+  // Payments" de la página 2, que tiene que coincidir con el Balance
+  // Today calculado del Register -- esa coincidencia ES el control) +
+  // Depósitos del día (346.28, el bank movement de Costco) = 35,473.05.
   const realVarianceLines1009: VarianceLine[] = [
     { concept: "Jose Manzanares - Diferencia Recurrentes", amount: -150, section: "variance" },
     { concept: "Diferencia Pago Recurrentes (Liberty)", amount: 27.28, section: "variance" },
-    { concept: "The Butcher - Costco", amount: 346.28, section: "uncollected_deposit" },
   ];
   const consolidatedPdf = await buildConsolidatedPdf({
     reportDate: REPORT_DATE,
@@ -675,8 +717,18 @@ async function main() {
 
   const page2Text = await extractPdfText(consolidatedPdf);
   assert.ok(page2Text.includes("Variación Diaria"), "título corregido (Variacion -> Variación)");
-  assert.ok(page2Text.includes(`Balance after Weekly Payments ${money(35473.05)}`), "Balance after Weekly Payments (pág. 2) = Gabriel + variación + depósito sin cobrar = 35,473.05 (bug de Costco corregido, no 35,596.05 ni 223.56 de variación)");
-  assert.ok(page2Text.includes(`Depósitos ${formatSlashDate(REPORT_DATE)} ${money(0)}`), "título corregido (Depositos -> Depósitos); Depósitos del día = notEntered - uncollected = 0.00 (Costco ya contado arriba, sin duplicar)");
+  assert.ok(
+    page2Text.includes(`Balance after Weekly Payments ${money(35126.77)}`),
+    "Balance after Weekly Payments (pág. 2) = Gabriel + variación = 35,126.77 (bug de Costco corregido, no 223.56 de variación) -- coincide con el Balance Today del Register, que ES el control",
+  );
+  assert.ok(
+    page2Text.includes(`Depósitos ${formatSlashDate(REPORT_DATE)} ${money(346.28)}`),
+    "título corregido (Depositos -> Depósitos); Depósitos del día = notEnteredDepositsTotal = 346.28 (el bank movement de Costco, sin netear contra nada)",
+  );
+  assert.ok(
+    page2Text.includes(`Balance after Weekly Payments + Not entered Sales ${money(35473.05)}`),
+    "Balance after Weekly Payments + Not entered Sales = 35,126.77 + 346.28 = 35,473.05",
+  );
 
   const page3Items = await extractPdfTextPositions(consolidatedPdf, 3);
   const page3Text = page3Items.map((item) => item.str).join(" ");
@@ -1133,6 +1185,38 @@ for (const target of new Set(onConflictTargets)) {
 }
 
 console.log("D9: cada upsert con onConflict apunta a una clave única ya declarada -- OK.");
+
+// ---------------------------------------------------------------------------
+// D13: Balance GABRIEL parte de "Balance after Weekly Payments + Not
+// entered Sales" (balance_with_not_entered), congelado al cerrar y
+// limpiado al reabrir -- no solo balance_after_weekly.
+// ---------------------------------------------------------------------------
+
+assert.match(
+  read("supabase/migrations/20261014090000_cutmeat_daily_balance_with_not_entered.sql"),
+  /add column if not exists balance_with_not_entered numeric\(14, 2\)/i,
+  "migración: cutmeat_daily_reports.balance_with_not_entered existe",
+);
+assert.match(
+  read("src/actions/cutmeat-daily.ts"),
+  /closeDailyReport[\s\S]*?balance_with_not_entered: workspace\.balanceWithNotEntered/,
+  "closeDailyReport congela balance_with_not_entered al cerrar",
+);
+assert.match(
+  read("src/actions/cutmeat-daily.ts"),
+  /reopenDailyReport[\s\S]*?balance_with_not_entered: null/,
+  "reopenDailyReport limpia balance_with_not_entered",
+);
+assert.match(
+  read("src/services/cutmeat-daily.ts"),
+  /getPreviousClosedBalance[\s\S]{0,900}balance_with_not_entered/,
+  "getPreviousClosedBalance lee balance_with_not_entered (no balance_after_weekly) del informe cerrado en vivo",
+);
+
+console.log(
+  "D13: Balance GABRIEL parte de Balance after Weekly Payments + Not entered Sales " +
+    "(balance_with_not_entered), congelado al cerrar y limpiado al reabrir -- OK.",
+);
 
 main().catch((error) => {
   console.error(error);
