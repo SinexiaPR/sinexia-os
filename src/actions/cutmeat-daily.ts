@@ -151,6 +151,7 @@ export async function closeDailyReport(input: { companyId: string; reportId: str
         updated_by: profile.id,
         balance_after_weekly: workspace.weeklyPayments?.balanceAfterWeeklyPayments ?? null,
         balance_gabriel: workspace.balanceGabriel ?? null,
+        balance_with_not_entered: workspace.balanceWithNotEntered ?? null,
       })
       .eq("id", parsed.data.reportId)
       .eq("company_id", parsed.data.companyId);
@@ -187,6 +188,7 @@ export async function reopenDailyReport(input: { companyId: string; reportId: st
         updated_by: profile.id,
         balance_after_weekly: null,
         balance_gabriel: null,
+        balance_with_not_entered: null,
       })
       .eq("id", parsed.data.reportId)
       .eq("company_id", parsed.data.companyId);

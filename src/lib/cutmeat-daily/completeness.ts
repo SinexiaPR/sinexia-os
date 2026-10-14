@@ -7,8 +7,10 @@ import type {
   BankMovement,
   ReconciliationControlResult,
   RecurringPayment,
+  VarianceLine,
 } from "./calculations";
 import {
+  checkVarianceReconciliation,
   classifyBankMovements,
   findUnconfiguredVendors,
   overdueUnpaidRecurring,
@@ -43,6 +45,7 @@ export function checkDailyReportCompleteness({
   vendorAgingItems,
   vendorAgingConfig,
   sources,
+  varianceReconciliation,
 }: {
   reportDate: IsoDate;
   reconciliationControl: ReconciliationControlResult | null;
@@ -51,6 +54,17 @@ export function checkDailyReportCompleteness({
   vendorAgingItems: AgingLine[];
   vendorAgingConfig: VendorAgingConfig;
   sources: DailyReportSources;
+  /** Datos para la ecuación de control de la Variación Diaria (Balance
+   * Today = Gabriel + variación de cheques/pagos + variación de
+   * depósitos + Depósitos del día) -- null mientras falte alguno (p.ej.
+   * todavía no hay conciliación cargada, o no hay un día cerrado
+   * anterior), caso en el que este control simplemente no corre. */
+  varianceReconciliation: {
+    balanceGabriel: number;
+    varianceLines: VarianceLine[];
+    notEnteredDepositsTotal: number;
+    balanceToday: number;
+  } | null;
 }): DailyReportWarning[] {
   const warnings: DailyReportWarning[] = [];
   const blocking = (message: string) => warnings.push({ severity: "blocking", message });
@@ -62,6 +76,23 @@ export function checkDailyReportCompleteness({
     blocking(
       `El control de conciliación no da $0.00 (diferencia: ${reconciliationControl.control.toFixed(2)}).`,
     );
+  }
+
+  if (varianceReconciliation) {
+    const { balanceGabriel, varianceLines, notEnteredDepositsTotal, balanceToday } = varianceReconciliation;
+    const result = checkVarianceReconciliation(
+      balanceGabriel,
+      varianceLines,
+      notEnteredDepositsTotal,
+      balanceToday,
+    );
+    if (!result.balanced) {
+      blocking(
+        `Hay un movimiento sin clasificar: Balance GABRIEL + Variación Diaria + Depósitos del día da ` +
+          `${result.expected.toFixed(2)}, pero el Balance Today (Register) da ${balanceToday.toFixed(2)} ` +
+          `(diferencia: ${result.difference.toFixed(2)}).`,
+      );
+    }
   }
   if (!sources.hasBankExport) {
     blocking("Falta cargar el export del banco (PDF).");

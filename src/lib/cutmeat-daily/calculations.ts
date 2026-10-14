@@ -443,16 +443,19 @@ export function splitVarianceLinesBySection(lines: VarianceLine[]): {
 }
 
 /**
- * Balance GABRIEL = Balance after Weekly Payments del último informe
- * CERRADO anterior (de cutmeat_daily_history o del día anterior cerrado
- * en vivo) -- NO "B - variación". Para el primer día sin anterior, usa el
- * valor de arranque configurable (cutmeat_daily_settings.gabriel_starting_balance).
+ * Balance GABRIEL = balance FINAL del último informe CERRADO anterior --
+ * "Balance after Weekly Payments + Not entered Sales" (de
+ * cutmeat_daily_history o del día anterior cerrado en vivo), no solo
+ * "Balance after Weekly Payments" sin los depósitos del día todavía no
+ * ingresados en QuickBooks -- NI "B - variación". Para el primer día sin
+ * anterior, usa el valor de arranque configurable
+ * (cutmeat_daily_settings.gabriel_starting_balance).
  */
 export function buildBalanceGabriel(
-  previousClosedBalanceAfterWeeklyPayments: number | null,
+  previousClosedBalanceWithNotEntered: number | null,
   startingBalance: number,
 ): number {
-  return round(previousClosedBalanceAfterWeeklyPayments ?? startingBalance);
+  return round(previousClosedBalanceWithNotEntered ?? startingBalance);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,6 +474,34 @@ export function buildBalanceWithNotEnteredSales(
     balanceAfterWeeklyPayments +
       sum(notEnteredDeposits.map((item) => item.amount)),
   );
+}
+
+/**
+ * Ecuación de control de la Variación Diaria: Balance Today (calculado
+ * desde el Register de QuickBooks, independiente) debe poder
+ * reconstruirse como Balance GABRIEL + variación de cheques/pagos +
+ * variación de depósitos + Depósitos del día -- 4 términos que se suman,
+ * ninguno neteado contra otro: "variación de depósitos" (sección
+ * "uncollected_deposit" de Variación Diaria -- p.ej. la reversa de un
+ * "Not entered Sales" de un día anterior que ya entró al register) y
+ * "Depósitos del día" (notEnteredDepositsTotal -- los depósitos de HOY
+ * todavía no ingresados en QuickBooks) son cosas distintas, de días
+ * distintos; no hay que restar una de la otra. Si no cuadra (más allá de
+ * un centavo de redondeo), hay un movimiento sin clasificar -- el
+ * llamador debe bloquear, no mostrar un número que no cierra.
+ */
+export function checkVarianceReconciliation(
+  balanceGabriel: number,
+  varianceLines: VarianceLine[],
+  notEnteredDepositsTotal: number,
+  balanceToday: number,
+): { balanced: boolean; expected: number; difference: number } {
+  const { variance, uncollectedDeposits } = splitVarianceLinesBySection(varianceLines);
+  const expected = round(
+    balanceGabriel + totalVarianceOf(variance) + totalVarianceOf(uncollectedDeposits) + notEnteredDepositsTotal,
+  );
+  const difference = round(balanceToday - expected);
+  return { balanced: Math.abs(difference) < 0.005, expected, difference };
 }
 
 // ---------------------------------------------------------------------------

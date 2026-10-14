@@ -825,11 +825,12 @@ export async function buildConsolidatedPdf(params: {
     params.balanceGabriel == null ? null : params.balanceGabriel + varianceTotal + uncollectedTotal;
   keyValueRow(doc2, "Balance after Weekly Payments", money(balanceAfterVariance), MARGIN, y2, 300);
   y2 -= 14;
-  // "Depositos del día" sin contar los que ya están en el bloque de
-  // arriba (p.ej. Costco, que es un uncollected_deposit Y un bank
-  // movement is_not_entered_deposit a la vez) -- se le resta lo ya
-  // contado para no duplicarlo.
-  const depositsOfTheDay = params.notEnteredDepositsTotal - uncollectedTotal;
+  // "Depósitos del día" (lo nuevo de HOY todavía no ingresado en
+  // QuickBooks) es un término propio de la ecuación de control -- no se
+  // le resta nada de la sección "uncollected_deposit" de arriba (esa
+  // puede ser, p.ej., la reversa de un Not entered Sales de un día
+  // anterior: otro día, otro depósito, no se netean entre sí).
+  const depositsOfTheDay = params.notEnteredDepositsTotal;
   keyValueRow(doc2, `Depósitos ${formatSlashDate(params.reportDate)}`, money(depositsOfTheDay), MARGIN, y2, 300);
   y2 -= 14;
   const balanceWithNotEntered = balanceAfterVariance == null ? null : balanceAfterVariance + depositsOfTheDay;
