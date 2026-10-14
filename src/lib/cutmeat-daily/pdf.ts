@@ -468,7 +468,10 @@ export async function buildReconciliationPdf(params: {
     y -= 14;
     keyValueRow(doc, `Uncleared transactions after ${formatSlashDate(params.periodEnding)}`, money(uncleardAfterTotal), MARGIN, y);
     y -= 14;
-    keyValueRow(doc, `Register balance as of ${formatSlashDate(params.reportDate)}`, money(params.control.register), MARGIN, y);
+    // "Register balance as of" (la última fila del Summary) lleva la
+    // fecha de "Reconciled on" -- cuándo se hizo ESTA conciliación --
+    // no reportDate.
+    keyValueRow(doc, `Register balance as of ${formatSlashDate(params.reconciledOn ?? params.reportDate)}`, money(params.control.register), MARGIN, y);
     y -= 18;
   }
   y -= 8;
@@ -480,6 +483,9 @@ export async function buildReconciliationPdf(params: {
     y -= 10;
   };
 
+  y = ensureRoomFor(pdf, doc, y, 16);
+  doc.page.drawText("Details", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
+  y -= 18;
   drawDetailTable(`Checks and payments cleared (${params.clearedChecks.length})`, params.clearedChecks, clearedChecksTotal);
   if (params.clearedDeposits.length > 0) {
     drawDetailTable(`Deposits and other credits cleared (${params.clearedDeposits.length})`, params.clearedDeposits, clearedDepositsTotal);
@@ -581,7 +587,7 @@ export async function buildBankExportPdf(params: {
       { label: "Calculated Balance", width: 110, align: "right" },
     ],
     rows,
-    ["", "", "", "Totals", money(debitTotal), money(creditTotal), ""],
+    [formatSlashDate(params.dateRange), "", "", "Totals", money(debitTotal), money(creditTotal), ""],
   );
   stampFooters(pdf, doc.regular, { dateStamp: null, pageLabel: (i, n) => `Page ${i} of ${n}` });
   return pdf.save();
@@ -748,6 +754,10 @@ function financialHorizonRow(
   rangeStart: IsoDate,
   rangeEnd: IsoDate,
   recurrentesLabel: string | null,
+  /** Fila "Total" propia del documento original de Hernan, SOLO en el
+   * primer bloque (7-day) -- un valor dado, no derivado de nuestro
+   * motor de cálculo corregido (replica un número de su planilla). */
+  legacyTotal?: number | null,
 ) {
   const range = `${formatSpanishLongDate(rangeStart)} al ${formatSpanishLongDate(rangeEnd)}`;
   y = labelValueRow(doc, `Weekly income projection - Proyección del ${range}`, money(step.income), MARGIN, y) - 2;
@@ -758,6 +768,9 @@ function financialHorizonRow(
     y = labelValueRow(doc, `${recurrentesLabel} - Recurrentes del ${range}`, money(-step.recurrentes), MARGIN, y) - 2;
   }
   y = labelValueRow(doc, `${agingLabel} - Aging del ${range}`, money(step.agingAdjustment), MARGIN, y) - 2;
+  if (legacyTotal != null) {
+    y = labelValueRow(doc, "Total", money(legacyTotal), MARGIN, y) - 2;
+  }
   y = labelValueRow(doc, `${step.label} balance ${formatSlashDate(step.date)}`, money(step.balance), MARGIN, y) - 2;
   return y - 14;
 }
@@ -893,6 +906,11 @@ export async function buildConsolidatedPdf(params: {
   customerAgingRawTotal: number | null;
   customerAgingConsolidated: number | null;
   primeMeatsRecurring: number;
+  /** Fila "Total" propia del documento original de Hernan en el primer
+   * bloque (7-day) del FINANCIAL REPORT, antes de "7-day balance" -- un
+   * valor dado (no derivado de nuestro motor corregido), null/omitido
+   * si no corresponde mostrarla. */
+  financialReportLegacyTotal?: number | null;
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
 
@@ -937,7 +955,7 @@ export async function buildConsolidatedPdf(params: {
     y = labelValueRow(doc, "Balance - Today", money(params.financial.balanceToday), MARGIN, y) - 2;
     y -= 4;
     const weekStart = sundayWeekStartOf(params.reportDate);
-    y = financialHorizonRow(doc, y, params.financial.day7, addDays(weekStart, 0), addDays(weekStart, 6), null);
+    y = financialHorizonRow(doc, y, params.financial.day7, addDays(weekStart, 0), addDays(weekStart, 6), null, params.financialReportLegacyTotal);
     y = financialHorizonRow(doc, y, params.financial.day14, addDays(weekStart, 7), addDays(weekStart, 13), "Recurrentes for next 14 days");
     y = financialHorizonRow(doc, y, params.financial.day21, addDays(weekStart, 14), addDays(weekStart, 20), "Recurrentes for next 21 days");
   }
@@ -1001,11 +1019,11 @@ export async function buildConsolidatedPdf(params: {
     y2,
     varianceColumns,
     params.varianceLines.map((line) => [line.concept, money(line.amount)]),
-    ["Total", money(allVarianceTotal)],
+    ["", money(allVarianceTotal)],
   );
   y2 -= 14;
   y2 = sectionTitle(doc2, "Variación Diaria- Uncleared deposits and other credits", y2, 10);
-  y2 = drawTable(pdf, doc2, MARGIN, y2, varianceColumns, [], ["Total", money(0)]);
+  y2 = drawTable(pdf, doc2, MARGIN, y2, varianceColumns, [], ["", money(0)]);
   y2 -= 20;
 
   const balanceAfterVariance =

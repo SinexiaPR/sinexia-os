@@ -1062,6 +1062,10 @@ export async function generateDailyPdf(input: {
           // solo los movimientos propios del banco (p.ej. el ACH que ya
           // aparece como "Cleared" en el Reconciliation Report).
           movements: workspace.bankMovements.filter((m) => !m.isNotEnteredDeposit),
+          // "Report Created" replica la fecha/hora real en que el banco
+          // generó ESTE export (extracted_at) -- no la hora en que se
+          // regenera el PDF acá.
+          generatedAt: workspace.bankExport.extractedAt ? new Date(workspace.bankExport.extractedAt) : undefined,
         });
         break;
       }
@@ -1112,6 +1116,7 @@ export async function generateDailyPdf(input: {
           customerAgingRawTotal: workspace.customerAging?.rawTotal ?? null,
           customerAgingConsolidated: workspace.customerAging?.consolidated ?? null,
           primeMeatsRecurring: workspace.settings.primeMeatsRecurring,
+          financialReportLegacyTotal: report.financialReportLegacyTotal,
         });
         break;
       }

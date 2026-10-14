@@ -41,6 +41,11 @@ export type CutMeatDailyReport = {
   reopenedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Fila "Total" propia del documento original de Hernan en el primer
+   * bloque (7-day) del FINANCIAL REPORT -- un valor histórico de su
+   * planilla, no derivado de nuestro motor corregido. null salvo en
+   * informes donde ese valor de referencia se cargó explícitamente. */
+  financialReportLegacyTotal: number | null;
 };
 
 export type CutMeatVendorConfig = {
@@ -174,6 +179,10 @@ export async function getCutMeatReport(
     reopenedBy: data.reopened_by,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+    financialReportLegacyTotal:
+      (data as { financial_report_legacy_total: number | null }).financial_report_legacy_total == null
+        ? null
+        : Number((data as { financial_report_legacy_total: number | null }).financial_report_legacy_total),
   };
 }
 
@@ -200,6 +209,10 @@ export async function getRecentReports(
     reopenedBy: row.reopened_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    financialReportLegacyTotal:
+      (row as { financial_report_legacy_total: number | null }).financial_report_legacy_total == null
+        ? null
+        : Number((row as { financial_report_legacy_total: number | null }).financial_report_legacy_total),
   }));
 }
 
@@ -726,6 +739,7 @@ export async function getDailyReportWorkspace(
             (bankExportRes.data as { available_balance: number | null }).available_balance == null
               ? null
               : Number((bankExportRes.data as { available_balance: number | null }).available_balance),
+          extractedAt: (bankExportRes.data as { extracted_at: string | null }).extracted_at,
         }
       : null,
     bankMovements,

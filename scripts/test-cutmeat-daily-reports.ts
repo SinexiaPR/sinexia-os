@@ -1127,10 +1127,13 @@ async function main() {
     "Uncleared transactions after 10/09/2026 combinado = -3,191.31",
   );
   assert.ok(
-    reconciliationText1012.includes(`Register balance as of ${formatSlashDate(REPORT_DATE_1012)} ${money(36243.46)}`),
-    "Register balance as of 10/12/2026 (hoy) = 36,243.46",
+    // La última "Register balance as of" del Summary lleva la fecha de
+    // "Reconciled on" (10/13), no reportDate (10/12).
+    reconciliationText1012.includes(`Register balance as of ${formatSlashDate("2026-10-13")} ${money(36243.46)}`),
+    "Register balance as of 10/13/2026 (fecha de Reconciled on) = 36,243.46",
   );
   assert.ok(!reconciliationText1012.includes("Control"), "el control es interno -- no se muestra en el PDF");
+  assert.ok(reconciliationText1012.includes("Details"), "título \"Details\" antes de Checks and payments cleared");
   assert.ok(
     reconciliationText1012.includes("DATE") && reconciliationText1012.includes("TYPE") &&
       reconciliationText1012.includes("REF NO.") && reconciliationText1012.includes("PAYEE"),
@@ -1156,7 +1159,10 @@ async function main() {
   assert.ok(bankExportText1012.includes(`Date range: ${formatSlashDate(AS_OF_DATE_1012)}`));
   assert.ok(bankExportText1012.includes("ACH SETTLEMENT / ACH OFFSET"));
   assert.ok(bankExportText1012.includes(money(500)) && bankExportText1012.includes(money(39607.05)));
-  assert.ok(bankExportText1012.includes("Totals") && bankExportText1012.includes(money(0)));
+  assert.ok(
+    bankExportText1012.includes(`${formatSlashDate(AS_OF_DATE_1012)} Totals ${money(500)} ${money(0)}`),
+    "fila de totales: fecha | Totals | debit | credit",
+  );
   assert.ok(bankExportText1012.includes("Page 1 of 1"), "pie propio del Export -- sin fecha, solo paginación 'Page i of N'");
   console.log("Export banco del 10/12 (réplica del banco) -- OK.");
 
@@ -1177,19 +1183,27 @@ async function main() {
     customerAgingRawTotal: null,
     customerAgingConsolidated: null,
     primeMeatsRecurring: 0,
+    financialReportLegacyTotal: 37974.46,
   });
   const consolidated1012Page2Text = await extractPdfText(consolidatedPdf1012);
   assert.ok(consolidated1012Page2Text.includes("Costco Wholesale"), "Costco aparece en Variación Diaria");
   assert.ok(
     consolidated1012Page2Text.includes(`Variación Diaria - Uncleared checks and payments`) &&
-      consolidated1012Page2Text.includes(`Total ${money(-8382.16)}`),
-    "Total del bloque \"Uncleared checks and payments\" (con Costco adentro) = -8,382.16, con la etiqueta \"Total\", no \"subtotal\"",
+      consolidated1012Page2Text.includes(money(-8382.16)),
+    "\"Uncleared checks and payments\" (con Costco adentro) = -8,382.16",
   );
   assert.ok(!consolidated1012Page2Text.includes("subtotal"), "sin la palabra \"subtotal\"");
   assert.ok(
     consolidated1012Page2Text.includes(`Variación Diaria- Uncleared deposits and other credits`) &&
-      consolidated1012Page2Text.includes(`Total ${money(0)}`),
-    "\"Uncleared deposits and other credits\" queda con total 0.00",
+      consolidated1012Page2Text.includes(money(0)),
+    "\"Uncleared deposits and other credits\" queda en 0.00, sin etiqueta",
+  );
+  // D22: fila "Total" (valor histórico de la planilla de Hernan) en el
+  // primer bloque (7-day) del FINANCIAL REPORT, antes de "7-day balance".
+  const page1Text1012 = await extractPdfText(consolidatedPdf1012);
+  assert.ok(
+    page1Text1012.includes(`Total ${money(37974.46)}`),
+    "fila \"Total\" = 37,974.46 en el primer bloque del FINANCIAL REPORT",
   );
   assert.ok(
     consolidated1012Page2Text.includes(`Balance after Weekly Payments + Not entered Sales ${money(31654.46)}`),
