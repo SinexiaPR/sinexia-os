@@ -1183,7 +1183,6 @@ async function main() {
     customerAgingRawTotal: null,
     customerAgingConsolidated: null,
     primeMeatsRecurring: 0,
-    financialReportLegacyTotal: 37974.46,
   });
   const consolidated1012Page2Text = await extractPdfText(consolidatedPdf1012);
   assert.ok(consolidated1012Page2Text.includes("Costco Wholesale"), "Costco aparece en Variación Diaria");
@@ -1198,13 +1197,17 @@ async function main() {
       consolidated1012Page2Text.includes(money(0)),
     "\"Uncleared deposits and other credits\" queda en 0.00, sin etiqueta",
   );
-  // D22: fila "Total" (valor histórico de la planilla de Hernan) en el
-  // primer bloque (7-day) del FINANCIAL REPORT, antes de "7-day balance".
+  // D22: fila "Total" del primer bloque (7-day) del FINANCIAL REPORT,
+  // antes de "7-day balance" -- SIEMPRE calculada (Balance Today +
+  // Weekly income projection + Aging del mismo bloque), nunca un valor
+  // fijo -- por construcción coincide siempre con "7-day balance"
+  // (39,154.46 para el 10/12, el mismo financial1012.day7.balance).
   const page1Text1012 = await extractPdfText(consolidatedPdf1012);
   assert.ok(
-    page1Text1012.includes(`Total ${money(37974.46)}`),
-    "fila \"Total\" = 37,974.46 en el primer bloque del FINANCIAL REPORT",
+    page1Text1012.includes(`Total ${money(financial1012.day7.balance)}`),
+    "fila \"Total\" = 7-day balance (39,154.46), siempre calculada, nunca un valor fijo",
   );
+  assert.equal(financial1012.day7.balance, 39154.46, "7-day balance del 10/12 = 39,154.46");
   assert.ok(
     consolidated1012Page2Text.includes(`Balance after Weekly Payments + Not entered Sales ${money(31654.46)}`),
     "el total de control no cambia por la presentación -- sigue dando 31,654.46",

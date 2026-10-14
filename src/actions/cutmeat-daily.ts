@@ -1116,7 +1116,6 @@ export async function generateDailyPdf(input: {
           customerAgingRawTotal: workspace.customerAging?.rawTotal ?? null,
           customerAgingConsolidated: workspace.customerAging?.consolidated ?? null,
           primeMeatsRecurring: workspace.settings.primeMeatsRecurring,
-          financialReportLegacyTotal: report.financialReportLegacyTotal,
         });
         break;
       }
