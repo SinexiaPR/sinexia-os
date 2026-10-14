@@ -38,6 +38,7 @@ import {
   splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingDetailLine,
+  type ReconciliationLineItem,
   type RecurringDetailRow,
   type RecurringPayment,
   type VarianceLine,
@@ -362,38 +363,103 @@ assert.equal(
 );
 console.log("Regla de visibilidad de filas pagadas (gris solo el día exacto del pago, luego desaparece) -- OK.");
 
-// D16: HALLAZGO -- con las cifras que María confirmó para el 10/12
-// (Statement 39,607.05; uncleared checks -7,455.88; uncleared deposits
-// 4,264.57; Register 36,243.46), la ecuación de control de
-// Reconciliation NO cuadra: statementEnding + unclearedChecks +
-// unclearedDeposits - register = 172.28, no 0.00. Para cuadrar a 0.00
-// con los otros 3 valores, "uncleared deposits" tendría que ser
-// 4,092.29, no 4,264.57. Este test documenta el hallazgo (no lo
-// "arregla" inventando un número) -- "Si no cierra, detente y
-// repórtalo" es la regla que pidió María para el control de Variación
-// Diaria, y se aplica igual acá.
-const reconciliation1012AsStated = checkReconciliationControl({
+// D16: Reconciliation del 10/12 -- corrección de María: el 10/12 no
+// reconcilia contra un statement propio, sigue reconciliando contra el
+// de FIRST BANK "Period Ending 10/09/2026" (el mismo que el 09/10). Hay
+// 2 tramos: "as of 10/09" (lo que ya estaba pendiente al cerrar el
+// 09/10: checks -471.28, deposits +299.00) y "after 10/09" (lo nuevo
+// hasta el 10/12: checks -7,455.88, deposits +4,264.57). El control usa
+// LA SUMA de ambos tramos -- mi hallazgo anterior (que daba 172.28 de
+// descuadre) solo tomaba el tramo "after" y por eso no cuadraba: el
+// error era mío (dato incompleto), no de los datos de María.
+const asOfChecks1012: ReconciliationLineItem[] = [
+  { reference: "1004 BR TRANSPORT (12/11/2025)", amount: -125.0, tranche: "as_of" },
+  { reference: "1054 COSTCO WHOLESALE", amount: -346.28, tranche: "as_of" },
+];
+const afterChecks1012: ReconciliationLineItem[] = [
+  { reference: "ACH NORTHWESTERN SELECTA (10/12)", amount: -1637.22, tranche: "after" },
+  { reference: "PUENTE SELECTIONS (10/12)", amount: -151.25, tranche: "after" },
+  { reference: "QUIRCH FOODS CO. (10/12)", amount: -3287.43, tranche: "after" },
+  { reference: "JOSE SANTIAGO INC. (10/12)", amount: -914.21, tranche: "after" },
+  { reference: "MAYS CHEMICAL COMP. PR INC. (10/12)", amount: -171.16, tranche: "after" },
+  { reference: "Service Zone, Inc. (10/12)", amount: -252.21, tranche: "after" },
+  { reference: "1058 Samuel Sosa (10/12)", amount: -1042.4, tranche: "after" },
+];
+const asOfDeposits1012: ReconciliationLineItem[] = [
+  { reference: "53876 MAI PEN RAI (10/05)", amount: 299.0, tranche: "as_of" },
+];
+const afterDeposits1012: ReconciliationLineItem[] = [
+  { reference: "559 RARE 125 REST (10/12)", amount: 819.77, tranche: "after" },
+  { reference: "41517 EL CHOTIS (10/12)", amount: 763.17, tranche: "after" },
+  { reference: "8046 LA PENULTIMA (10/12)", amount: 1247.34, tranche: "after" },
+  { reference: "6213 SUR BARRA NIKKEI REST. (10/12)", amount: 548.44, tranche: "after" },
+  { reference: "1490 SABORES GOURMET (10/12)", amount: 885.85, tranche: "after" },
+];
+const sumAmounts = (items: ReconciliationLineItem[]) => round(items.reduce((total, item) => total + item.amount, 0));
+assert.equal(sumAmounts(afterChecks1012), -7455.88, "uncleared checks after 10/09 = -7,455.88");
+assert.equal(sumAmounts(afterDeposits1012), 4264.57, "uncleared deposits after 10/09 = 4,264.57");
+assert.equal(sumAmounts(asOfChecks1012), -471.28, "uncleared checks as of 10/09 = -471.28 (igual al 09/10)");
+assert.equal(sumAmounts(asOfDeposits1012), 299.0, "uncleared deposits as of 10/09 = 299.00");
+
+const reconciliation1012 = checkReconciliationControl({
   statementEnding: 39607.05,
-  unclearedChecks: [{ reference: "checks", amount: -7455.88 }],
-  unclearedDeposits: [{ reference: "deposits", amount: 4264.57 }],
+  unclearedChecks: [...asOfChecks1012, ...afterChecks1012],
+  unclearedDeposits: [...asOfDeposits1012, ...afterDeposits1012],
   register: 36243.46,
 });
-assert.equal(
-  reconciliation1012AsStated.balanced,
-  false,
-  "HALLAZGO: con uncleared deposits = 4,264.57 (como lo confirmó María), el control de Reconciliation del 10/12 NO cuadra",
-);
-assert.equal(reconciliation1012AsStated.control, 172.28, "descuadre de 172.28 -- hay que revisar la cifra de uncleared deposits contra el Reconciliation Report real de QuickBooks");
-const reconciliation1012Fixed = checkReconciliationControl({
-  statementEnding: 39607.05,
-  unclearedChecks: [{ reference: "checks", amount: -7455.88 }],
-  unclearedDeposits: [{ reference: "deposits", amount: 4092.29 }],
-  register: 36243.46,
-});
-assert.equal(reconciliation1012Fixed.balanced, true, "con uncleared deposits = 4,092.29 (en vez de 4,264.57) el control SÍ cuadra a 0.00");
+assert.equal(reconciliation1012.balanced, true, "Reconciliation del 10/12 cuadra a 0.00 incluyendo los 2 tramos (as of + after)");
+assert.equal(reconciliation1012.control, 0, "diferencia 0.00");
+assert.equal(reconciliation1012.registerAsOf, 39434.77, "Register balance as of 10/09/2026 = 39,434.77 (Statement + as-of checks + as-of deposits)");
+assert.equal(reconciliation1012.register, 36243.46, "Register balance as of 10/12 (hoy) = 36,243.46");
 console.log(
-  "HALLAZGO reportado: Reconciliation del 10/12 no cuadra con uncleared deposits=4,264.57 (descuadre 172.28); " +
-    "cuadraría con 4,092.29 -- revisar contra el Reconciliation Report real antes de cargarlo.",
+  "Reconciliation del 10/12 (2 tramos as-of/after, réplica de QuickBooks): cuadra a 0.00 -- " +
+    "mi hallazgo anterior (172.28) era un dato incompleto de mi parte, no un error de los datos.",
+);
+
+// Documentación del 10/09 (NO se escribe en la base -- el informe ya
+// está cerrado y no se toca): con la ecuación completa, Beginning
+// 40,107.05 - Cleared 500.00 = Statement ending 39,607.05; + as-of
+// checks/deposits = Register as of 10/09 = 39,434.77.
+const reconciliation1009True = checkReconciliationControl({
+  statementEnding: round(40107.05 - 500.0),
+  unclearedChecks: asOfChecks1012,
+  unclearedDeposits: asOfDeposits1012,
+  register: 39434.77,
+});
+assert.equal(reconciliation1009True.statementEnding, 39607.05, "Statement ending balance real del 09/10 = Beginning (40,107.05) - Cleared (500.00) = 39,607.05");
+assert.equal(reconciliation1009True.balanced, true, "con la ecuación completa, el 09/10 también cuadra a 0.00 (documentación -- el 09/10 cerrado no se modifica en la base)");
+console.log(
+  "Documentado (sin tocar la base): el Statement ending balance real del 09/10 es 39,607.05 (no 40,107.05, " +
+    "que era el Beginning balance) -- el 09/10 cerrado no se recalcula ni se modifica.",
+);
+
+// D17: "Balance after Weekly Payments + Not entered Sales" (congelado al
+// cerrar -> Gabriel del día siguiente) TIENE que salir de la cadena
+// Gabriel + Variación (ambas secciones) + Depósitos del día -- igual
+// que la página 2 del Consolidated -- no de Balance Today (Register) +
+// Depósitos del día otra vez. Con el 10/12 (que sí tiene una línea
+// "uncollected_deposit", Costco) las 2 fórmulas YA NO COINCIDEN: la de
+// Register duplicaría los depósitos (Balance Today ya los refleja via
+// Uncleared deposits de la conciliación) y daría 36,218.03 en vez de
+// 31,654.46. Mismo bug, inverso al de "Depósitos del día" de PR #107.
+const { uncollectedDeposits: uncollected1012 } = splitVarianceLinesBySection(variance1012);
+const variance1012OnlySection = variance1012.filter((l) => l.section === "variance");
+const balanceAfterVariance1012 = round(
+  gabriel1012 + totalVarianceOf(variance1012OnlySection) + totalVarianceOf(uncollected1012),
+);
+assert.equal(balanceAfterVariance1012, 27090.89, "Balance after Weekly Payments (sección Variación) del 10/12 = 27,090.89");
+const correctBalanceWithNotEntered1012 = buildBalanceWithNotEnteredSales(balanceAfterVariance1012, [
+  { description: "Depósitos del día", amount: 4563.57 },
+]);
+assert.equal(correctBalanceWithNotEntered1012, 31654.46, "Balance after Weekly Payments + Not entered Sales del 10/12 (fórmula correcta, cadena Gabriel) = 31,654.46 -- el Final que dio María");
+const wrongBalanceWithNotEntered1012 = buildBalanceWithNotEnteredSales(weeklyPayments1012.balanceAfterWeeklyPayments, [
+  { description: "Depósitos del día", amount: 4563.57 },
+]);
+assert.notEqual(wrongBalanceWithNotEntered1012, 31654.46, "si se usara Balance Today (Register) + Depósitos otra vez, duplicaría los depósitos (36,218.03, NO 31,654.46) -- por eso services/cutmeat-daily.ts calcula balanceWithNotEntered desde la cadena Gabriel, no desde weeklyPayments.balanceAfterWeeklyPayments");
+console.log(
+  "Fix: Balance after Weekly Payments + Not entered Sales se calcula desde Gabriel + Variación (ambas secciones) + " +
+    "Depósitos del día -- no desde Balance Today (Register) + Depósitos, que duplicaría los depósitos cuando hay " +
+    "una línea \"uncollected_deposit\" en la Variación Diaria (p.ej. Costco del 10/12). El 09/10 (sin esa línea) da igual.",
 );
 
 const vendorConfig = {

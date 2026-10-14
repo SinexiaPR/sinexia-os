@@ -12,6 +12,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 
 import {
   buildRecurringDetailTable,
+  round,
   splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingGroup,
@@ -327,11 +328,23 @@ function drawTable(
 
 export async function buildReconciliationPdf(params: {
   reportDate: IsoDate;
+  /** Fecha de la última conciliación bancaria real (FIRST BANK) -- el
+   * "Period Ending" del QB original. Puede ser anterior a reportDate
+   * (p.ej. el 10/12 reconciliando todavía contra el statement del
+   * 10/09) -- en ese caso, "as of"/"after" se cuentan desde acá. */
   periodEnding: IsoDate;
   reconciledOn: IsoDate | null;
+  beginningBalance: number | null;
+  clearedChecks: AgingLine[];
+  clearedDeposits: AgingLine[];
   control: ReconciliationControlResult;
-  checks: AgingLine[];
-  deposits: AgingLine[];
+  /** Pendientes "as of" periodEnding (la última conciliación real). */
+  asOfChecks: AgingLine[];
+  asOfDeposits: AgingLine[];
+  /** Pendientes nuevos "after" periodEnding, hasta reportDate -- vacíos
+   * cuando reportDate == periodEnding (ningún tramo nuevo todavía). */
+  afterChecks: AgingLine[];
+  afterDeposits: AgingLine[];
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
   let y = HEIGHT - 50;
@@ -359,12 +372,38 @@ export async function buildReconciliationPdf(params: {
   );
   y -= 24;
 
+  // Summary: Beginning balance -> Cleared -> Statement ending balance ->
+  // Uncleared as of -> Register as of periodEnding -> Uncleared after ->
+  // Register as of reportDate (hoy) -- igual que el Summary del
+  // Reconciliation Report real de QuickBooks.
+  if (params.beginningBalance != null) {
+    keyValueRow(doc, "Beginning balance", money(params.beginningBalance), MARGIN, y);
+    y -= 14;
+  }
+  const clearedChecksTotal = round(params.clearedChecks.reduce((total, item) => total + item.balance, 0));
+  const clearedDepositsTotal = round(params.clearedDeposits.reduce((total, item) => total + item.balance, 0));
+  keyValueRow(doc, "Cleared checks and payments", money(clearedChecksTotal), MARGIN, y);
+  keyValueRow(doc, "Cleared deposits and other credits", money(clearedDepositsTotal), MARGIN + 260, y);
+  y -= 14;
   keyValueRow(doc, "Statement ending balance", money(params.control.statementEnding), MARGIN, y);
-  keyValueRow(doc, "Register balance", money(params.control.register), MARGIN + 260, y);
+  y -= 18;
+
+  keyValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(params.periodEnding)}`, money(params.control.asOfChecksTotal), MARGIN, y);
   y -= 14;
-  keyValueRow(doc, "Total uncleared checks", money(params.control.unclearedChecksTotal), MARGIN, y);
-  keyValueRow(doc, "Total uncleared deposits", money(params.control.unclearedDepositsTotal), MARGIN + 260, y);
+  keyValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(params.periodEnding)}`, money(params.control.asOfDepositsTotal), MARGIN, y);
   y -= 14;
+  keyValueRow(doc, `Register balance as of ${formatSlashDate(params.periodEnding)}`, money(params.control.registerAsOf), MARGIN, y);
+  y -= 18;
+
+  if (params.reportDate !== params.periodEnding) {
+    keyValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(params.periodEnding)}`, money(params.control.afterChecksTotal), MARGIN, y);
+    y -= 14;
+    keyValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(params.periodEnding)}`, money(params.control.afterDepositsTotal), MARGIN, y);
+    y -= 14;
+    keyValueRow(doc, `Register balance as of ${formatSlashDate(params.reportDate)}`, money(params.control.register), MARGIN, y);
+    y -= 18;
+  }
+
   keyValueRow(
     doc,
     params.control.balanced ? "Control (debe ser $0.00)" : "Control -- NO CUADRA",
@@ -374,33 +413,65 @@ export async function buildReconciliationPdf(params: {
   );
   y -= 26;
 
-  y = sectionTitle(doc, "Uncleared Checks and Payments", y);
+  const twoCol = [
+    { label: "Reference", width: 400 },
+    { label: "Amount", width: 120, align: "right" as const },
+  ];
+  if (params.clearedChecks.length > 0) {
+    y = sectionTitle(doc, "Cleared Checks and Payments", y);
+    y = drawTable(pdf, doc, MARGIN, y, twoCol, params.clearedChecks.map((item) => [item.name, money(item.balance)]), ["Total", money(clearedChecksTotal)]);
+    y -= 10;
+  }
+  if (params.clearedDeposits.length > 0) {
+    y = sectionTitle(doc, "Cleared Deposits and Other Credits", y);
+    y = drawTable(pdf, doc, MARGIN, y, twoCol, params.clearedDeposits.map((item) => [item.name, money(item.balance)]), ["Total", money(clearedDepositsTotal)]);
+    y -= 10;
+  }
+  y = sectionTitle(doc, `Uncleared Checks and Payments as of ${formatSlashDate(params.periodEnding)}`, y);
   y = drawTable(
     pdf,
     doc,
     MARGIN,
     y,
-    [
-      { label: "Reference", width: 400 },
-      { label: "Amount", width: 120, align: "right" },
-    ],
-    params.checks.map((item) => [item.name, money(item.balance)]),
-    ["Total", money(params.control.unclearedChecksTotal)],
+    twoCol,
+    params.asOfChecks.map((item) => [item.name, money(item.balance)]),
+    ["Total", money(params.control.asOfChecksTotal)],
   );
   y -= 10;
-  y = sectionTitle(doc, "Uncleared Deposits and Credits", y);
-  drawTable(
+  y = sectionTitle(doc, `Uncleared Deposits and Credits as of ${formatSlashDate(params.periodEnding)}`, y);
+  y = drawTable(
     pdf,
     doc,
     MARGIN,
     y,
-    [
-      { label: "Reference", width: 400 },
-      { label: "Amount", width: 120, align: "right" },
-    ],
-    params.deposits.map((item) => [item.name, money(item.balance)]),
-    ["Total", money(params.control.unclearedDepositsTotal)],
+    twoCol,
+    params.asOfDeposits.map((item) => [item.name, money(item.balance)]),
+    ["Total", money(params.control.asOfDepositsTotal)],
   );
+  if (params.afterChecks.length > 0 || params.afterDeposits.length > 0) {
+    y -= 10;
+    y = sectionTitle(doc, `Uncleared Checks and Payments after ${formatSlashDate(params.periodEnding)}`, y);
+    y = drawTable(
+      pdf,
+      doc,
+      MARGIN,
+      y,
+      twoCol,
+      params.afterChecks.map((item) => [item.name, money(item.balance)]),
+      ["Total", money(params.control.afterChecksTotal)],
+    );
+    y -= 10;
+    y = sectionTitle(doc, `Uncleared Deposits and Credits after ${formatSlashDate(params.periodEnding)}`, y);
+    drawTable(
+      pdf,
+      doc,
+      MARGIN,
+      y,
+      twoCol,
+      params.afterDeposits.map((item) => [item.name, money(item.balance)]),
+      ["Total", money(params.control.afterDepositsTotal)],
+    );
+  }
   return pdf.save();
 }
 
@@ -709,6 +780,10 @@ function drawRecurringDetailTable(
 export async function buildConsolidatedPdf(params: {
   reportDate: IsoDate;
   control: ReconciliationControlResult | null;
+  /** Fecha de la última conciliación bancaria real (FIRST BANK) -- null
+   * cuando no hay conciliación cargada todavía, o cuando coincide con
+   * reportDate (se usa reportDate como fallback). */
+  reconciliationAsOfDate?: IsoDate | null;
   financial: FinancialReportResult | null;
   recurring: RecurringDetailRow[];
   varianceLines: VarianceLine[];
@@ -733,11 +808,16 @@ export async function buildConsolidatedPdf(params: {
   right(doc.page, formatSlashDate(params.reportDate), doc.bold, 9, MARGIN + 380, y);
   y -= 18;
   if (params.control) {
+    // asOfDate es la fecha de la última conciliación bancaria real (FIRST
+    // BANK), que puede ser anterior a reportDate (p.ej. el 10/12
+    // reconciliando todavía contra el statement del 10/09) -- "as of"/
+    // "after" se cuentan desde ESA fecha, no desde reportDate.
+    const asOfDate = params.reconciliationAsOfDate ?? params.reportDate;
     y = labelValueRow(doc, "Statement ending balance S/RECONCILIATION REPORT", money(params.control.statementEnding), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedChecksTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedDepositsTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(asOfDate)}`, money(params.control.asOfChecksTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(asOfDate)}`, money(params.control.afterChecksTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(asOfDate)}`, money(params.control.asOfDepositsTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(asOfDate)}`, money(params.control.afterDepositsTotal), MARGIN, y) - 2;
     y = labelValueRow(doc, "Register balance", money(params.control.register), MARGIN, y) - 2;
   }
   const recurring = buildRecurringDetailTable(params.recurring, params.reportDate);

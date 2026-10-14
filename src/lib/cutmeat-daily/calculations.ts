@@ -20,6 +20,18 @@ export type ReconciliationLineItem = {
   reference: string;
   /** Con signo: los pendientes/outstanding se cargan en negativo. */
   amount: number;
+  /**
+   * El Reconciliation Report real de QuickBooks no es un solo corte: a
+   * veces el informe diario (reportDate) es POSTERIOR a la última
+   * conciliación bancaria real (p.ej. el 10/12 reconciliando contra el
+   * statement de FIRST BANK fechado 10/09) -- entonces hay partidas
+   * pendientes "as of" esa fecha de conciliación Y partidas nuevas
+   * "after" esa fecha, hasta hoy. Ambas suman al mismo control (ninguna
+   * se neteá contra la otra) -- tranche es solo para el desglose visual
+   * del PDF. Sin tranche (filas ya cargadas antes de esta distinción,
+   * p.ej. el 09/10 cerrado) se trata como "as_of" por compatibilidad.
+   */
+  tranche?: "as_of" | "after";
 };
 
 export type ReconciliationControlInput = {
@@ -38,17 +50,32 @@ export type ReconciliationControlResult = {
   control: number;
   /** true si el control cuadra (dentro de un centavo de redondeo). */
   balanced: boolean;
+  /** Desglose por tramo, para la réplica del Reconciliation Report real. */
+  asOfChecksTotal: number;
+  afterChecksTotal: number;
+  asOfDepositsTotal: number;
+  afterDepositsTotal: number;
+  /** Statement ending + tramo "as of" únicamente -- el Register balance
+   * de la fecha de la última conciliación bancaria real, antes de sumar
+   * lo nuevo "after" hasta el día del informe. */
+  registerAsOf: number;
 };
 
 export function checkReconciliationControl(
   input: ReconciliationControlInput,
 ): ReconciliationControlResult {
+  const byTranche = (items: ReconciliationLineItem[], tranche: "as_of" | "after") =>
+    sum(items.filter((item) => (item.tranche ?? "as_of") === tranche).map((item) => item.amount));
   const unclearedChecksTotal = sum(
     input.unclearedChecks.map((item) => item.amount),
   );
   const unclearedDepositsTotal = sum(
     input.unclearedDeposits.map((item) => item.amount),
   );
+  const asOfChecksTotal = byTranche(input.unclearedChecks, "as_of");
+  const afterChecksTotal = byTranche(input.unclearedChecks, "after");
+  const asOfDepositsTotal = byTranche(input.unclearedDeposits, "as_of");
+  const afterDepositsTotal = byTranche(input.unclearedDeposits, "after");
   const control = round(
     input.statementEnding +
       unclearedChecksTotal +
@@ -62,6 +89,11 @@ export function checkReconciliationControl(
     register: input.register,
     control,
     balanced: Math.abs(control) < 0.005,
+    asOfChecksTotal,
+    afterChecksTotal,
+    asOfDepositsTotal,
+    afterDepositsTotal,
+    registerAsOf: round(input.statementEnding + asOfChecksTotal + asOfDepositsTotal),
   };
 }
 

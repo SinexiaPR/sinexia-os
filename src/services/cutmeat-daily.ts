@@ -13,6 +13,7 @@ import {
   consolidateVendorAging,
   groupAgingItems,
   splitRecurringByWeek,
+  splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingDetailLine,
   type BankMovement,
@@ -512,9 +513,10 @@ export async function getDailyReportWorkspace(
 
   const reconciliationRow = reconciliationRes.data;
   const reconciliationItems = (reconciliationItemsRes.data ?? []) as Array<{
-    item_type: "uncleared_check" | "uncleared_deposit";
+    item_type: "uncleared_check" | "uncleared_deposit" | "cleared_check" | "cleared_deposit";
     reference: string;
     amount: number;
+    tranche: "as_of" | "after" | null;
   }>;
   const bankMovementRows = (bankMovementsRes.data ?? []) as Array<{
     id: string;
@@ -540,10 +542,10 @@ export async function getDailyReportWorkspace(
         register: Number(reconciliationRow.register),
         unclearedChecks: reconciliationItems
           .filter((item) => item.item_type === "uncleared_check")
-          .map((item) => ({ reference: item.reference, amount: Number(item.amount) })),
+          .map((item) => ({ reference: item.reference, amount: Number(item.amount), tranche: item.tranche ?? undefined })),
         unclearedDeposits: reconciliationItems
           .filter((item) => item.item_type === "uncleared_deposit")
-          .map((item) => ({ reference: item.reference, amount: Number(item.amount) })),
+          .map((item) => ({ reference: item.reference, amount: Number(item.amount), tranche: item.tranche ?? undefined })),
       })
     : null;
 
@@ -594,12 +596,28 @@ export async function getDailyReportWorkspace(
   const totalVariance = totalVarianceOf(
     varianceLines.filter((line) => line.section === "variance"),
   );
-  const balanceWithNotEntered = weeklyPayments
-    ? buildBalanceWithNotEnteredSales(
-        weeklyPayments.balanceAfterWeeklyPayments,
+  // balanceWithNotEntered (congelado al cerrar -> Gabriel del día
+  // siguiente) parte de la MISMA cadena Gabriel + Variación que usa la
+  // página 2 del Consolidated (balanceAfterVariance), no del Balance
+  // Today basado en Register (weeklyPayments.balanceAfterWeeklyPayments)
+  // -- si se usa ese último y encima se le suman los depósitos del día,
+  // cuando hay una línea "uncollected_deposit" en la Variación Diaria
+  // (p.ej. Costco del 10/12) los depósitos se cuentan dos veces: una ya
+  // implícita en el Register (vía Uncleared deposits de la
+  // conciliación) y otra explícita acá. Con Gabriel + variación (ambas
+  // secciones) + depósitos del día, nunca se duplican -- y para el
+  // 09/10 (sin línea "uncollected_deposit") da el mismo resultado de
+  // siempre (uncollectedTotal = 0).
+  const { uncollectedDeposits: uncollectedDepositLines } = splitVarianceLinesBySection(varianceLines);
+  const uncollectedTotal = totalVarianceOf(uncollectedDepositLines);
+  const balanceAfterVariance =
+    balanceGabriel == null ? null : balanceGabriel + totalVariance + uncollectedTotal;
+  const balanceWithNotEntered = balanceAfterVariance == null
+    ? null
+    : buildBalanceWithNotEnteredSales(
+        balanceAfterVariance,
         notEnteredDeposits.map((m) => ({ description: m.description, amount: m.amount })),
-      )
-    : null;
+      );
 
   const vendorAgingConfig = {
     includedNames: vendorConfig
@@ -664,6 +682,11 @@ export async function getDailyReportWorkspace(
       ? {
           statementEnding: Number(reconciliationRow.statement_ending),
           register: Number(reconciliationRow.register),
+          asOfDate: (reconciliationRow as { as_of_date: string | null }).as_of_date as IsoDate | null,
+          beginningBalance:
+            (reconciliationRow as { beginning_balance: number | null }).beginning_balance == null
+              ? null
+              : Number((reconciliationRow as { beginning_balance: number | null }).beginning_balance),
           sourcePdfPath: reconciliationRow.source_pdf_path as string | null,
           loadedAt: reconciliationRow.loaded_at as string | null,
           unclearedChecks: reconciliationItems.filter(
@@ -672,6 +695,8 @@ export async function getDailyReportWorkspace(
           unclearedDeposits: reconciliationItems.filter(
             (item) => item.item_type === "uncleared_deposit",
           ),
+          clearedChecks: reconciliationItems.filter((item) => item.item_type === "cleared_check"),
+          clearedDeposits: reconciliationItems.filter((item) => item.item_type === "cleared_deposit"),
         }
       : null,
     reconciliationControl,

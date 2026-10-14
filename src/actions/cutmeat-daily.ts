@@ -1014,21 +1014,27 @@ export async function generateDailyPdf(input: {
         if (!workspace.reconciliation || !workspace.reconciliationControl)
           return { error: "Todavía no se cargó la conciliación de este día." };
         const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
+        const asLine = (item: { reference: string; amount: number }) => ({
+          name: item.reference,
+          balance: Number(item.amount),
+        });
+        const byTranche = <T extends { tranche: "as_of" | "after" | null }>(items: T[], tranche: "as_of" | "after") =>
+          items.filter((item) => (item.tranche ?? "as_of") === tranche);
         bytes = await buildReconciliationPdf({
           reportDate,
-          periodEnding: lastBusinessDayBefore(reportDate, holidaySet),
+          periodEnding:
+            workspace.reconciliation.asOfDate ?? lastBusinessDayBefore(reportDate, holidaySet),
           reconciledOn: workspace.reconciliation.loadedAt
             ? (workspace.reconciliation.loadedAt.slice(0, 10) as IsoDate)
             : null,
+          beginningBalance: workspace.reconciliation.beginningBalance,
           control: workspace.reconciliationControl,
-          checks: workspace.reconciliation.unclearedChecks.map((item) => ({
-            name: item.reference,
-            balance: Number(item.amount),
-          })),
-          deposits: workspace.reconciliation.unclearedDeposits.map((item) => ({
-            name: item.reference,
-            balance: Number(item.amount),
-          })),
+          clearedChecks: workspace.reconciliation.clearedChecks.map(asLine),
+          clearedDeposits: workspace.reconciliation.clearedDeposits.map(asLine),
+          asOfChecks: byTranche(workspace.reconciliation.unclearedChecks, "as_of").map(asLine),
+          asOfDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "as_of").map(asLine),
+          afterChecks: byTranche(workspace.reconciliation.unclearedChecks, "after").map(asLine),
+          afterDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "after").map(asLine),
         });
         break;
       }
@@ -1068,6 +1074,7 @@ export async function generateDailyPdf(input: {
         bytes = await buildConsolidatedPdf({
           reportDate,
           control: workspace.reconciliationControl,
+          reconciliationAsOfDate: workspace.reconciliation?.asOfDate ?? null,
           financial: workspace.financial,
           recurring: workspace.recurring.map((item) => ({
             entryDate: item.entryDate,
