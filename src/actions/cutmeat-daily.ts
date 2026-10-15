@@ -295,6 +295,10 @@ export async function saveReconciliation(input: {
   register: number;
   items: Array<z.infer<typeof reconciliationItemSchema>>;
   sourcePdfPath?: string | null;
+  /** Fecha en que se hizo la conciliación en QuickBooks ("Reconciled
+   * on"/"Register balance as of" del Reconciliation Report) -- dato de
+   * entrada del día, nunca la fecha en que se cargó/regeneró el dato acá. */
+  reconciledOn?: string | null;
   /** Origen del dato: a mano en la pantalla, o importado por una skill
    * de Claude vía loadDailyReportData. Ver docs/CUTMEAT_DAILY_DATA_CONTRACT.md. */
   source?: "manual" | "claude-controlado";
@@ -307,6 +311,7 @@ export async function saveReconciliation(input: {
       register: money,
       items: z.array(reconciliationItemSchema).max(200),
       sourcePdfPath: z.string().max(500).nullable().optional(),
+      reconciledOn: isoDate.nullable().optional(),
       source: z.enum(["manual", "claude-controlado"]).optional().default("manual"),
     })
     .safeParse(input);
@@ -322,6 +327,7 @@ export async function saveReconciliation(input: {
         statement_ending: data.statementEnding,
         register: data.register,
         source_pdf_path: data.sourcePdfPath ?? null,
+        reconciled_on: data.reconciledOn ?? null,
         extracted_at: new Date().toISOString(),
         updated_by: profile.id,
         source: data.source,
@@ -1036,9 +1042,7 @@ export async function generateDailyPdf(input: {
           reportDate,
           periodEnding:
             workspace.reconciliation.asOfDate ?? lastBusinessDayBefore(reportDate, holidaySet),
-          reconciledOn: workspace.reconciliation.loadedAt
-            ? (workspace.reconciliation.loadedAt.slice(0, 10) as IsoDate)
-            : null,
+          reconciledOn: workspace.reconciliation.reconciledOn,
           beginningBalance: workspace.reconciliation.beginningBalance ?? 0,
           control: workspace.reconciliationControl,
           clearedChecks: workspace.reconciliation.clearedChecks.map(asDetailLine),

@@ -712,6 +712,7 @@ export async function getDailyReportWorkspace(
               : Number((reconciliationRow as { beginning_balance: number | null }).beginning_balance),
           sourcePdfPath: reconciliationRow.source_pdf_path as string | null,
           loadedAt: reconciliationRow.loaded_at as string | null,
+          reconciledOn: (reconciliationRow as { reconciled_on: string | null }).reconciled_on as IsoDate | null,
           unclearedChecks: reconciliationItems.filter(
             (item) => item.item_type === "uncleared_check",
           ),
