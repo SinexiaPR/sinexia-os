@@ -1261,6 +1261,46 @@ async function main() {
   );
   console.log("Reconciliation Report sin tramo \"after\" (10/14 de ejemplo): sin líneas \"after\" aunque reportDate != periodEnding -- OK.");
 
+  // D19c: si el tramo "after" SÍ tiene contenido pero netea a 0.00 (caso
+  // raro -- un check y un depósito iguales, por ejemplo), el Summary
+  // muestra "Cleared/Uncleared transactions after" (porque hay
+  // movimientos reales) pero NO repite "Register balance as of
+  // [Reconciled on]" -- sería el mismo número que "as of [periodEnding]".
+  const reconciliationNetZeroControl = checkReconciliationControl({
+    statementEnding: 1000,
+    unclearedChecks: [
+      { reference: "A", amount: -50, tranche: "as_of" },
+      { reference: "B", amount: -20, tranche: "after" },
+    ],
+    unclearedDeposits: [{ reference: "C", amount: 20, tranche: "after" }],
+    register: 950,
+  });
+  const reconciliationPdfNetZero = await buildReconciliationPdf({
+    reportDate: "2026-10-16",
+    periodEnding: "2026-10-15",
+    reconciledOn: "2026-10-16",
+    beginningBalance: 1000,
+    clearedChecks: [],
+    clearedDeposits: [],
+    control: reconciliationNetZeroControl,
+    asOfChecks: [{ txnDate: "2026-10-10", txnType: "Bill Payment", refNo: "A", payee: "A", amount: -50 }],
+    asOfDeposits: [],
+    afterChecks: [{ txnDate: "2026-10-15", txnType: "Bill Payment", refNo: "B", payee: "B", amount: -20 }],
+    afterDeposits: [{ txnDate: "2026-10-15", txnType: "Receive Payment", refNo: "C", payee: "C", amount: 20 }],
+  });
+  const reconciliationTextNetZero = await extractPdfText(reconciliationPdfNetZero);
+  assert.ok(
+    reconciliationTextNetZero.includes("Cleared transactions after") &&
+      reconciliationTextNetZero.includes("Uncleared transactions after"),
+    "con movimientos reales en \"after\" (aunque neteen a 0.00), sí se muestran esas líneas",
+  );
+  assert.equal(
+    (reconciliationTextNetZero.match(/Register balance as of/g) ?? []).length,
+    1,
+    "si el tramo \"after\" netea a 0.00, el Register no cambia -- no se repite una segunda \"Register balance as of\" con la misma cifra",
+  );
+  console.log("Reconciliation Report con tramo \"after\" que netea a 0.00: sin \"Register balance as of\" repetida -- OK.");
+
   // D20: Export banco del 10/12 -- réplica del banco.
   const bankExportPdf1012 = await buildBankExportPdf({
     reportDate: REPORT_DATE_1012,

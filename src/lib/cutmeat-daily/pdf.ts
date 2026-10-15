@@ -454,6 +454,12 @@ export async function buildReconciliationPdf(params: {
   // en el Summary ni las tablas "after" en Details, aunque las fechas
   // difieran -- eso solo corresponde cuando SÍ hay algo en ese tramo.
   const hasAfterTranche = params.afterChecks.length > 0 || params.afterDeposits.length > 0;
+  // La última fila "Register balance as of [Reconciled on]" repite el
+  // mismo Register que la fila "as of [periodEnding]" cuando el tramo
+  // "after" neteó a cero (caso raro, pero posible) -- se muestra solo
+  // si de verdad es un número distinto, no solo porque hasAfterTranche
+  // sea true.
+  const showFinalRegisterLine = round(params.control.register) !== round(params.control.registerAsOf);
 
   doc.page.drawText("Summary (USD)", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
   y -= 18;
@@ -474,6 +480,8 @@ export async function buildReconciliationPdf(params: {
     y -= 14;
     keyValueRow(doc, `Uncleared transactions after ${formatSlashDate(params.periodEnding)}`, money(uncleardAfterTotal), MARGIN, y);
     y -= 14;
+  }
+  if (showFinalRegisterLine) {
     // "Register balance as of" (la última fila del Summary) lleva la
     // fecha de "Reconciled on" -- cuándo se hizo ESTA conciliación --
     // no reportDate.
