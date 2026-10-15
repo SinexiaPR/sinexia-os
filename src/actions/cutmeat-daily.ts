@@ -368,6 +368,7 @@ const bankMovementSchema = z.object({
   direction: z.enum(["ingreso", "egreso"]),
   linkedRecurringId: z.string().uuid().nullable().optional(),
   isNotEnteredDeposit: z.boolean().optional(),
+  isReconciledCleared: z.boolean().optional(),
   note: z.string().trim().max(500).nullable().optional(),
 });
 
@@ -423,6 +424,7 @@ export async function saveBankExport(input: {
           direction: movement.direction,
           linked_recurring_id: movement.linkedRecurringId ?? null,
           is_not_entered_deposit: movement.isNotEnteredDeposit ?? false,
+          is_reconciled_cleared: movement.isReconciledCleared ?? false,
           note: movement.note ?? null,
           updated_by: profile.id,
         })),
@@ -1014,21 +1016,37 @@ export async function generateDailyPdf(input: {
         if (!workspace.reconciliation || !workspace.reconciliationControl)
           return { error: "Todavía no se cargó la conciliación de este día." };
         const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
+        const asDetailLine = (item: {
+          reference: string;
+          amount: number;
+          txn_date: IsoDate | null;
+          txn_type: string | null;
+          ref_no: string | null;
+          payee: string | null;
+        }) => ({
+          txnDate: item.txn_date,
+          txnType: item.txn_type ?? "",
+          refNo: item.ref_no ?? "",
+          payee: item.payee ?? item.reference,
+          amount: Number(item.amount),
+        });
+        const byTranche = <T extends { tranche: "as_of" | "after" | null }>(items: T[], tranche: "as_of" | "after") =>
+          items.filter((item) => (item.tranche ?? "as_of") === tranche);
         bytes = await buildReconciliationPdf({
           reportDate,
-          periodEnding: lastBusinessDayBefore(reportDate, holidaySet),
+          periodEnding:
+            workspace.reconciliation.asOfDate ?? lastBusinessDayBefore(reportDate, holidaySet),
           reconciledOn: workspace.reconciliation.loadedAt
             ? (workspace.reconciliation.loadedAt.slice(0, 10) as IsoDate)
             : null,
+          beginningBalance: workspace.reconciliation.beginningBalance ?? 0,
           control: workspace.reconciliationControl,
-          checks: workspace.reconciliation.unclearedChecks.map((item) => ({
-            name: item.reference,
-            balance: Number(item.amount),
-          })),
-          deposits: workspace.reconciliation.unclearedDeposits.map((item) => ({
-            name: item.reference,
-            balance: Number(item.amount),
-          })),
+          clearedChecks: workspace.reconciliation.clearedChecks.map(asDetailLine),
+          clearedDeposits: workspace.reconciliation.clearedDeposits.map(asDetailLine),
+          asOfChecks: byTranche(workspace.reconciliation.unclearedChecks, "as_of").map(asDetailLine),
+          asOfDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "as_of").map(asDetailLine),
+          afterChecks: byTranche(workspace.reconciliation.unclearedChecks, "after").map(asDetailLine),
+          afterDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "after").map(asDetailLine),
         });
         break;
       }
@@ -1037,8 +1055,19 @@ export async function generateDailyPdf(input: {
           return { error: "Todavía no se cargó el export del banco de este día." };
         bytes = await buildBankExportPdf({
           reportDate,
+          dateRange: workspace.bankExport.dateRange ?? reportDate,
+          accountLabel: workspace.bankExport.accountLabel ?? "",
+          availableBalance: workspace.bankExport.availableBalance ?? 0,
           closingBalance: workspace.bankExport.closingBalance,
-          movements: workspace.bankMovements,
+          // Los "not entered deposit" alimentan Depósitos del día (otra
+          // sección del Informe), no el Export banco -- ese replica
+          // solo los movimientos propios del banco (p.ej. el ACH que ya
+          // aparece como "Cleared" en el Reconciliation Report).
+          movements: workspace.bankMovements.filter((m) => !m.isNotEnteredDeposit),
+          // "Report Created" replica la fecha/hora real en que el banco
+          // generó ESTE export (extracted_at) -- no la hora en que se
+          // regenera el PDF acá.
+          generatedAt: workspace.bankExport.extractedAt ? new Date(workspace.bankExport.extractedAt) : undefined,
         });
         break;
       }
@@ -1077,6 +1106,7 @@ export async function generateDailyPdf(input: {
             dueDate: item.dueDate,
             amount: item.amount,
             isPaid: item.isPaid,
+            paidDate: item.paidDate,
           })),
           varianceLines: workspace.varianceLines,
           balanceGabriel: workspace.balanceGabriel,

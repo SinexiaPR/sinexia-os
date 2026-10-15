@@ -12,7 +12,9 @@ import {
   consolidateCustomerAging,
   consolidateVendorAging,
   groupAgingItems,
+  pickMostRecentClosedBalance,
   splitRecurringByWeek,
+  splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingDetailLine,
   type BankMovement,
@@ -239,6 +241,9 @@ export type CutMeatRecurringPayment = RecurringPayment & {
   referenceNumber: string | null;
   vendor: string;
   note: string | null;
+  /** Fecha real de pago (banco/QuickBooks) -- controla cuándo una fila
+   * pagada deja de mostrarse en la tabla de recurrentes del PDF. */
+  paidDate: IsoDate | null;
 };
 
 function monthStartOf(date: IsoDate): IsoDate {
@@ -264,6 +269,12 @@ export async function getRecurringPayments(
     .select("*")
     .eq("company_id", companyId)
     .in("period", periods)
+    // display_order fija el orden exacto de la planilla de Hernan
+    // (varias filas comparten due_date en un orden específico que no se
+    // puede derivar de la fecha sola, p.ej. "Juan Diaz" antes de
+    // "Deposito - Jose Manzanares" antes de "Caparra", todas 10/01) --
+    // due_date queda como respaldo para filas sin display_order todavía.
+    .order("display_order", { ascending: true, nullsFirst: false })
     .order("due_date", { ascending: true, nullsFirst: false });
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -279,6 +290,7 @@ export async function getRecurringPayments(
     referenceNumber: row.num,
     vendor: row.vendor,
     note: row.notes,
+    paidDate: row.paid_date,
   }));
 }
 
@@ -320,16 +332,22 @@ export async function getPreviousClosedBalance(
   ]);
   if (historyRes.error) throw historyRes.error;
   if (reportRes.error) throw reportRes.error;
-  const candidates = [
+  return pickMostRecentClosedBalance([
     historyRes.data
-      ? { date: historyRes.data.report_date as IsoDate, balance: Number(historyRes.data.balance_after_weekly) }
+      ? {
+          date: historyRes.data.report_date as IsoDate,
+          balance: Number(historyRes.data.balance_after_weekly),
+          source: "history",
+        }
       : null,
     reportRes.data
-      ? { date: reportRes.data.report_date as IsoDate, balance: Number(reportRes.data.balance_with_not_entered) }
+      ? {
+          date: reportRes.data.report_date as IsoDate,
+          balance: Number(reportRes.data.balance_with_not_entered),
+          source: "report",
+        }
       : null,
-  ].filter((candidate): candidate is { date: IsoDate; balance: number } => candidate !== null);
-  if (!candidates.length) return null;
-  return candidates.reduce((latest, candidate) => (candidate.date > latest.date ? candidate : latest));
+  ]);
 }
 
 /** Líneas libres de Variación Diaria de este informe (concepto + monto,
@@ -508,9 +526,14 @@ export async function getDailyReportWorkspace(
 
   const reconciliationRow = reconciliationRes.data;
   const reconciliationItems = (reconciliationItemsRes.data ?? []) as Array<{
-    item_type: "uncleared_check" | "uncleared_deposit";
+    item_type: "uncleared_check" | "uncleared_deposit" | "cleared_check" | "cleared_deposit";
     reference: string;
     amount: number;
+    tranche: "as_of" | "after" | null;
+    txn_date: IsoDate | null;
+    txn_type: string | null;
+    ref_no: string | null;
+    payee: string | null;
   }>;
   const bankMovementRows = (bankMovementsRes.data ?? []) as Array<{
     id: string;
@@ -519,15 +542,21 @@ export async function getDailyReportWorkspace(
     direction: "ingreso" | "egreso";
     linked_recurring_id: string | null;
     is_not_entered_deposit: boolean;
+    is_reconciled_cleared: boolean;
     note: string | null;
+    post_date: IsoDate | null;
+    calculated_balance: number | null;
   }>;
   const bankMovements: BankMovement[] = bankMovementRows.map((row) => ({
     id: row.id,
     description: row.description,
     amount: Number(row.amount),
     direction: row.direction,
+    postDate: row.post_date,
+    calculatedBalance: row.calculated_balance == null ? null : Number(row.calculated_balance),
     linkedRecurringId: row.linked_recurring_id,
     isNotEnteredDeposit: row.is_not_entered_deposit,
+    isReconciledCleared: row.is_reconciled_cleared,
   }));
 
   const reconciliationControl = reconciliationRow
@@ -536,10 +565,10 @@ export async function getDailyReportWorkspace(
         register: Number(reconciliationRow.register),
         unclearedChecks: reconciliationItems
           .filter((item) => item.item_type === "uncleared_check")
-          .map((item) => ({ reference: item.reference, amount: Number(item.amount) })),
+          .map((item) => ({ reference: item.reference, amount: Number(item.amount), tranche: item.tranche ?? undefined })),
         unclearedDeposits: reconciliationItems
           .filter((item) => item.item_type === "uncleared_deposit")
-          .map((item) => ({ reference: item.reference, amount: Number(item.amount) })),
+          .map((item) => ({ reference: item.reference, amount: Number(item.amount), tranche: item.tranche ?? undefined })),
       })
     : null;
 
@@ -590,12 +619,28 @@ export async function getDailyReportWorkspace(
   const totalVariance = totalVarianceOf(
     varianceLines.filter((line) => line.section === "variance"),
   );
-  const balanceWithNotEntered = weeklyPayments
-    ? buildBalanceWithNotEnteredSales(
-        weeklyPayments.balanceAfterWeeklyPayments,
+  // balanceWithNotEntered (congelado al cerrar -> Gabriel del día
+  // siguiente) parte de la MISMA cadena Gabriel + Variación que usa la
+  // página 2 del Consolidated (balanceAfterVariance), no del Balance
+  // Today basado en Register (weeklyPayments.balanceAfterWeeklyPayments)
+  // -- si se usa ese último y encima se le suman los depósitos del día,
+  // cuando hay una línea "uncollected_deposit" en la Variación Diaria
+  // (p.ej. Costco del 10/12) los depósitos se cuentan dos veces: una ya
+  // implícita en el Register (vía Uncleared deposits de la
+  // conciliación) y otra explícita acá. Con Gabriel + variación (ambas
+  // secciones) + depósitos del día, nunca se duplican -- y para el
+  // 09/10 (sin línea "uncollected_deposit") da el mismo resultado de
+  // siempre (uncollectedTotal = 0).
+  const { uncollectedDeposits: uncollectedDepositLines } = splitVarianceLinesBySection(varianceLines);
+  const uncollectedTotal = totalVarianceOf(uncollectedDepositLines);
+  const balanceAfterVariance =
+    balanceGabriel == null ? null : balanceGabriel + totalVariance + uncollectedTotal;
+  const balanceWithNotEntered = balanceAfterVariance == null
+    ? null
+    : buildBalanceWithNotEnteredSales(
+        balanceAfterVariance,
         notEnteredDeposits.map((m) => ({ description: m.description, amount: m.amount })),
-      )
-    : null;
+      );
 
   const vendorAgingConfig = {
     includedNames: vendorConfig
@@ -660,6 +705,11 @@ export async function getDailyReportWorkspace(
       ? {
           statementEnding: Number(reconciliationRow.statement_ending),
           register: Number(reconciliationRow.register),
+          asOfDate: (reconciliationRow as { as_of_date: string | null }).as_of_date as IsoDate | null,
+          beginningBalance:
+            (reconciliationRow as { beginning_balance: number | null }).beginning_balance == null
+              ? null
+              : Number((reconciliationRow as { beginning_balance: number | null }).beginning_balance),
           sourcePdfPath: reconciliationRow.source_pdf_path as string | null,
           loadedAt: reconciliationRow.loaded_at as string | null,
           unclearedChecks: reconciliationItems.filter(
@@ -668,6 +718,8 @@ export async function getDailyReportWorkspace(
           unclearedDeposits: reconciliationItems.filter(
             (item) => item.item_type === "uncleared_deposit",
           ),
+          clearedChecks: reconciliationItems.filter((item) => item.item_type === "cleared_check"),
+          clearedDeposits: reconciliationItems.filter((item) => item.item_type === "cleared_deposit"),
         }
       : null,
     reconciliationControl,
@@ -677,6 +729,13 @@ export async function getDailyReportWorkspace(
             (bankExportRes.data as { closing_balance: number | null }).closing_balance,
           sourcePdfPath: (bankExportRes.data as { source_pdf_path: string | null })
             .source_pdf_path,
+          dateRange: (bankExportRes.data as { date_range: IsoDate | null }).date_range,
+          accountLabel: (bankExportRes.data as { account_label: string | null }).account_label,
+          availableBalance:
+            (bankExportRes.data as { available_balance: number | null }).available_balance == null
+              ? null
+              : Number((bankExportRes.data as { available_balance: number | null }).available_balance),
+          extractedAt: (bankExportRes.data as { extracted_at: string | null }).extracted_at,
         }
       : null,
     bankMovements,

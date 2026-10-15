@@ -20,6 +20,18 @@ export type ReconciliationLineItem = {
   reference: string;
   /** Con signo: los pendientes/outstanding se cargan en negativo. */
   amount: number;
+  /**
+   * El Reconciliation Report real de QuickBooks no es un solo corte: a
+   * veces el informe diario (reportDate) es POSTERIOR a la última
+   * conciliación bancaria real (p.ej. el 10/12 reconciliando contra el
+   * statement de FIRST BANK fechado 10/09) -- entonces hay partidas
+   * pendientes "as of" esa fecha de conciliación Y partidas nuevas
+   * "after" esa fecha, hasta hoy. Ambas suman al mismo control (ninguna
+   * se neteá contra la otra) -- tranche es solo para el desglose visual
+   * del PDF. Sin tranche (filas ya cargadas antes de esta distinción,
+   * p.ej. el 09/10 cerrado) se trata como "as_of" por compatibilidad.
+   */
+  tranche?: "as_of" | "after";
 };
 
 export type ReconciliationControlInput = {
@@ -38,17 +50,32 @@ export type ReconciliationControlResult = {
   control: number;
   /** true si el control cuadra (dentro de un centavo de redondeo). */
   balanced: boolean;
+  /** Desglose por tramo, para la réplica del Reconciliation Report real. */
+  asOfChecksTotal: number;
+  afterChecksTotal: number;
+  asOfDepositsTotal: number;
+  afterDepositsTotal: number;
+  /** Statement ending + tramo "as of" únicamente -- el Register balance
+   * de la fecha de la última conciliación bancaria real, antes de sumar
+   * lo nuevo "after" hasta el día del informe. */
+  registerAsOf: number;
 };
 
 export function checkReconciliationControl(
   input: ReconciliationControlInput,
 ): ReconciliationControlResult {
+  const byTranche = (items: ReconciliationLineItem[], tranche: "as_of" | "after") =>
+    sum(items.filter((item) => (item.tranche ?? "as_of") === tranche).map((item) => item.amount));
   const unclearedChecksTotal = sum(
     input.unclearedChecks.map((item) => item.amount),
   );
   const unclearedDepositsTotal = sum(
     input.unclearedDeposits.map((item) => item.amount),
   );
+  const asOfChecksTotal = byTranche(input.unclearedChecks, "as_of");
+  const afterChecksTotal = byTranche(input.unclearedChecks, "after");
+  const asOfDepositsTotal = byTranche(input.unclearedDeposits, "as_of");
+  const afterDepositsTotal = byTranche(input.unclearedDeposits, "after");
   const control = round(
     input.statementEnding +
       unclearedChecksTotal +
@@ -62,6 +89,11 @@ export function checkReconciliationControl(
     register: input.register,
     control,
     balanced: Math.abs(control) < 0.005,
+    asOfChecksTotal,
+    afterChecksTotal,
+    asOfDepositsTotal,
+    afterDepositsTotal,
+    registerAsOf: round(input.statementEnding + asOfChecksTotal + asOfDepositsTotal),
   };
 }
 
@@ -158,12 +190,14 @@ export type RecurringDetailRow = {
   dueDate: IsoDate | null;
   amount: number;
   isPaid: boolean;
+  /** Fecha real de pago (banco/QuickBooks). Si es null con isPaid=true,
+   * se usa dueDate como mejor estimado -- ver nota de visibilidad abajo. */
+  paidDate?: IsoDate | null;
 };
 
 export type RecurringDetailBucket = {
   rows: RecurringDetailRow[];
-  /** Suma de los no pagados de este bucket -- los pagados se muestran
-   * (en gris) pero no entran en el total, igual que hace Hernan. */
+  /** Suma de los no pagados de este bucket -- los pagados nunca suman. */
   total: number;
 };
 
@@ -171,19 +205,30 @@ export type RecurringDetailTable = {
   prior: RecurringDetailBucket;
   thisWeek: RecurringDetailBucket;
   nextWeek: RecurringDetailBucket;
+  weekAfter: RecurringDetailBucket;
+  /** prior.total + thisWeek.total + nextWeek.total + weekAfter.total,
+   * siempre recalculado desde las filas -- nunca un subtotal guardado. */
   grandTotal: number;
 };
 
 /**
- * Agrupa TODOS los recurrentes del mes (pagados y pendientes) en 3
- * cubetas por vencimiento -- anteriores a esta semana, esta semana, la
- * semana siguiente -- con un subtotal "Total-Week" por cubeta y un total
- * general, igual que la planilla de Hernan (que no muestra una 4ta
- * cubeta de "semana después"). Los pendientes sin vencimiento (p.ej. un
- * recurrente todavía sin facturar, monto $0) van en la cubeta "prior"
- * sin afectar ningún total real. Los recurrentes cuyo vencimiento cae
- * más allá de la semana siguiente no aparecen en esta tabla (quedan
- * fuera del horizonte de 3 semanas que muestra esta sección).
+ * Agrupa TODOS los recurrentes relevantes del mes en 4 cubetas por
+ * vencimiento -- anteriores a esta semana, esta semana, la semana
+ * siguiente (14 días) y la semana después (21 días) -- cada fila en
+ * exactamente UN bloque (por construcción: los rangos de fecha no se
+ * superponen), con un subtotal "Total-Week" por cubeta y un total
+ * general = suma de las 4. Esto es intencionalmente distinto del rango
+ * fijo de celdas que usaba el Sheet de Hernan (K10:K15), que arrancaba
+ * dentro de "prior" y por eso descontaba NOMINA/IRS/Hacienda dos veces.
+ *
+ * Un recurrente pagado (isPaid=true) nunca suma a ningún total. Se
+ * muestra en gris SOLO el día de su pago (paidDate, o dueDate si no hay
+ * paidDate informado) -- al día siguiente desaparece de la tabla, igual
+ * que en los informes de Hernan.
+ *
+ * Los pendientes sin vencimiento (p.ej. un recurrente todavía sin
+ * facturar, monto $0 -- "Carlos Mercado Seguros") van en la cubeta
+ * "prior" sin afectar ningún total real.
  */
 export function buildRecurringDetailTable(
   recurring: RecurringDetailRow[],
@@ -191,31 +236,40 @@ export function buildRecurringDetailTable(
 ): RecurringDetailTable {
   const weekStart = sundayWeekStartOf(reportDate);
   const thisWeekEnd = addDays(weekStart, 6);
+  const nextWeekStart = addDays(weekStart, 7);
   const nextWeekEnd = addDays(weekStart, 13);
+  const weekAfterStart = addDays(weekStart, 14);
+  const weekAfterEnd = addDays(weekStart, 20);
 
-  type BucketKey = "prior" | "thisWeek" | "nextWeek";
+  type BucketKey = "prior" | "thisWeek" | "nextWeek" | "weekAfter";
   const classify = (dueDate: IsoDate | null): BucketKey | null => {
     if (dueDate == null) return null;
     if (dueDate < weekStart) return "prior";
     if (dueDate <= thisWeekEnd) return "thisWeek";
-    if (dueDate <= nextWeekEnd) return "nextWeek";
+    if (dueDate >= nextWeekStart && dueDate <= nextWeekEnd) return "nextWeek";
+    if (dueDate >= weekAfterStart && dueDate <= weekAfterEnd) return "weekAfter";
     return null;
   };
+
+  // Un recurrente pagado solo se muestra el día exacto de su pago; antes
+  // o después de ese día, desaparece de la tabla (no solo del total).
+  const visible = recurring.filter((item) => {
+    if (!item.isPaid) return true;
+    const effectivePaidDate = item.paidDate ?? item.dueDate;
+    return effectivePaidDate === reportDate;
+  });
 
   const grouped: Record<BucketKey, RecurringDetailRow[]> = {
     prior: [],
     thisWeek: [],
     nextWeek: [],
+    weekAfter: [],
   };
-  // Los recurrentes sin vencimiento (p.ej. un recordatorio todavía sin
-  // facturar, monto $0) no tienen una cubeta propia -- se insertan
-  // aparte, abajo, en el mismo lugar donde Hernan los pone a mano: uno
-  // cerca del principio de "prior" y, si hay un segundo, al principio de
-  // "nextWeek" (justo donde termina "this week"). Un tercero en
-  // adelante (no visto todavía) se agrega al final de "prior" para no
-  // perderlo en silencio.
+  // Los recurrentes sin vencimiento (p.ej. "Carlos Mercado Seguros",
+  // monto $0) no tienen una cubeta propia por fecha -- van siempre al
+  // principio de "this week", igual que en la planilla de Hernan.
   const undated: RecurringDetailRow[] = [];
-  for (const item of recurring) {
+  for (const item of visible) {
     if (item.dueDate == null) {
       undated.push(item);
       continue;
@@ -224,6 +278,10 @@ export function buildRecurringDetailTable(
     if (key) grouped[key].push(item);
   }
 
+  // Ordena por (dueDate, entryDate) -- las filas con el mismo due_date Y
+  // el mismo entryDate quedan en el orden en que llegaron (sort
+  // estable), que es el orden explícito de display_order ya aplicado
+  // por el llamador (getRecurringPayments) -- no uno derivado acá.
   const sortRows = (rows: RecurringDetailRow[]) =>
     [...rows].sort((a, b) => {
       const ad = a.dueDate ?? "";
@@ -234,36 +292,21 @@ export function buildRecurringDetailTable(
       return ae < be ? -1 : ae > be ? 1 : 0;
     });
 
-  const priorRows = sortRows(grouped.prior);
-  const nextWeekRows = sortRows(grouped.nextWeek);
-  undated.forEach((item, index) => {
-    if (index % 2 === 0) {
-      // Primero: después de la primera fila de "prior" (o al principio
-      // si "prior" está vacío).
-      priorRows.splice(Math.min(1, priorRows.length), 0, item);
-    } else if (index === 1) {
-      // Segundo: al principio de "nextWeek".
-      nextWeekRows.unshift(item);
-    } else {
-      // Un tercero (o más) en adelante: al final de "prior", para no
-      // perderlo.
-      priorRows.push(item);
-    }
-  });
-
   const makeBucket = (rows: RecurringDetailRow[]): RecurringDetailBucket => ({
     rows,
     total: sum(rows.filter((row) => !row.isPaid).map((row) => row.amount)),
   });
 
-  const prior = makeBucket(priorRows);
-  const thisWeek = makeBucket(sortRows(grouped.thisWeek));
-  const nextWeek = makeBucket(nextWeekRows);
+  const prior = makeBucket(sortRows(grouped.prior));
+  const thisWeek = makeBucket([...undated, ...sortRows(grouped.thisWeek)]);
+  const nextWeek = makeBucket(sortRows(grouped.nextWeek));
+  const weekAfter = makeBucket(sortRows(grouped.weekAfter));
   return {
     prior,
     thisWeek,
     nextWeek,
-    grandTotal: sum([prior.total, thisWeek.total, nextWeek.total]),
+    weekAfter,
+    grandTotal: sum([prior.total, thisWeek.total, nextWeek.total, weekAfter.total]),
   };
 }
 
@@ -458,6 +501,39 @@ export function buildBalanceGabriel(
   return round(previousClosedBalanceWithNotEntered ?? startingBalance);
 }
 
+export type PreviousClosedBalanceCandidate = {
+  date: IsoDate;
+  balance: number;
+  /** "history" = backfill de cutmeat_daily_history (balance_after_weekly,
+   * anterior a la distinción con "Not entered Sales"). "report" =
+   * informe cerrado en vivo (balance_with_not_entered, más completo). */
+  source: "history" | "report";
+};
+
+/**
+ * Elige, entre el backfill de cutmeat_daily_history y el informe cerrado
+ * en vivo más reciente, cuál balance usar como base de Balance GABRIEL --
+ * el de fecha más reciente; si ambas tablas tienen fila para la MISMA
+ * fecha (p.ej. un día que primero se backfilleó y después también se
+ * cerró en vivo), gana el informe en vivo (balance_with_not_entered), no
+ * el backfill (balance_after_weekly), porque es el valor más completo.
+ */
+export function pickMostRecentClosedBalance(
+  candidates: Array<PreviousClosedBalanceCandidate | null>,
+): { date: IsoDate; balance: number } | null {
+  const valid = candidates.filter(
+    (candidate): candidate is PreviousClosedBalanceCandidate => candidate !== null,
+  );
+  if (!valid.length) return null;
+  return valid.reduce((latest, candidate) => {
+    if (candidate.date > latest.date) return candidate;
+    if (candidate.date === latest.date && candidate.source === "report" && latest.source === "history") {
+      return candidate;
+    }
+    return latest;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Not entered Sales
 // ---------------------------------------------------------------------------
@@ -517,13 +593,24 @@ export type BankMovement = {
   linkedRecurringId?: string | null;
   /** Depósito ya identificado como "Not entered Sales". */
   isNotEnteredDeposit?: boolean;
+  /** Egreso que ya aparece conciliado como "cleared check" en el
+   * Reconciliation Report (misma transacción real, mostrada acá solo
+   * para el Export banco/post_date/calculated_balance) -- no es un
+   * recurrente ni un depósito, no necesita más clasificación. */
+  isReconciledCleared?: boolean;
+  /** Post Date y Calculated Balance del Export banco real -- solo para
+   * ese PDF (Deposit Accounts Activity Summary), no para la clasificación
+   * de Variación Diaria. */
+  postDate?: IsoDate | null;
+  calculatedBalance?: number | null;
 };
 
 export type BankMovementClassification = {
   classified: BankMovement[];
   notEnteredDeposits: BankMovement[];
-  /** Sin recurrente vinculado ni marca de depósito: no entra en ningún
-   * balance hasta que se clasifique. */
+  /** Sin recurrente vinculado, sin marca de depósito, y sin marca de
+   * cleared check ya conciliado: no entra en ningún balance hasta que se
+   * clasifique. */
   unclassified: BankMovement[];
 };
 
@@ -534,7 +621,7 @@ export function classifyBankMovements(
   const notEnteredDeposits: BankMovement[] = [];
   const unclassified: BankMovement[] = [];
   for (const movement of movements) {
-    if (movement.linkedRecurringId) classified.push(movement);
+    if (movement.linkedRecurringId || movement.isReconciledCleared) classified.push(movement);
     else if (movement.isNotEnteredDeposit) notEnteredDeposits.push(movement);
     else unclassified.push(movement);
   }

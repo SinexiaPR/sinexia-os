@@ -12,7 +12,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 
 import {
   buildRecurringDetailTable,
-  splitVarianceLinesBySection,
+  round,
   totalVarianceOf,
   type AgingGroup,
   type AgingLine,
@@ -58,6 +58,16 @@ export const money = (value: number | null | undefined) =>
         // (p.ej. recurrentes de la semana después, hoy siempre 0) se
         // niega para mostrarse (-step.recurrentes): -0 === 0 es true,
         // pero Intl.NumberFormat sí distingue el signo de -0.
+        Object.is(value, -0) ? 0 : value,
+      );
+
+/** Como `money`, sin el signo "$" -- el Vendor/Customer Balance Detail
+ * Report real solo lo lleva en los totales ("Total for X" / "TOTAL"),
+ * nunca en las filas de detalle. */
+const plainMoney = (value: number | null | undefined) =>
+  value == null
+    ? "-"
+    : new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
         Object.is(value, -0) ? 0 : value,
       );
 
@@ -122,18 +132,27 @@ async function newDoc(): Promise<{ pdf: PDFDocument; doc: Doc }> {
   return { pdf, doc: { page, bold, regular } as Doc };
 }
 
-/** Pie de página -- fecha/hora de generación + paginación "i/N" -- en
- * TODAS las páginas ya dibujadas de `pdf` (se aplica al final, cuando se
- * conoce el total de páginas). */
-function stampFooters(pdf: PDFDocument, font: PDFFont) {
+/** Pie de página -- fecha/hora de generación + paginación -- en TODAS
+ * las páginas ya dibujadas de `pdf` (se aplica al final, cuando se
+ * conoce el total de páginas). Por defecto: fecha/hora corta + "i/N".
+ * `dateStamp: null` omite la fecha (p.ej. el Export banco, que solo
+ * lleva "Page i of N"); `pageLabel` cambia el formato de paginación. */
+function stampFooters(
+  pdf: PDFDocument,
+  font: PDFFont,
+  options: { dateStamp?: string | null; pageLabel?: (index: number, total: number) => string } = {},
+) {
   const pages = pdf.getPages();
-  const stamp = new Intl.DateTimeFormat("en-US", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date());
+  const dateStamp =
+    options.dateStamp !== undefined
+      ? options.dateStamp
+      : new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+  const pageLabel = options.pageLabel ?? ((index: number, total: number) => `${index}/${total}`);
   for (const [index, page] of pages.entries()) {
-    page.drawText(printable(stamp), { x: MARGIN, y: 16, size: 7, font, color: GRAY_TEXT });
-    right(page, `${index + 1}/${pages.length}`, font, 7, WIDTH - MARGIN, 16, GRAY_TEXT);
+    if (dateStamp) {
+      page.drawText(printable(dateStamp), { x: MARGIN, y: 16, size: 7, font, color: GRAY_TEXT });
+    }
+    right(page, pageLabel(index + 1, pages.length), font, 7, WIDTH - MARGIN, 16, GRAY_TEXT);
   }
 }
 
@@ -235,6 +254,11 @@ function drawTable(
   columns: Array<{ label: string; width: number; align?: "left" | "right" }>,
   rows: TableRow[],
   totalRow?: string[],
+  /** Si la tabla pagina, se llama justo después de la página nueva --
+   * para repetir un bloque de título propio del documento (p.ej. el
+   * Customer Balance Detail Report) antes del encabezado de columnas.
+   * Devuelve el Y donde debe arrancar ese encabezado. */
+  onNewPage?: (startY: number) => number,
 ) {
   const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
   const rowHeight = 12;
@@ -304,7 +328,9 @@ function drawTable(
   const breakPageIfNeeded = (needed: number) => {
     if (yy - needed < BOTTOM_MARGIN) {
       doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
-      pageTop = addPage(pdf, doc);
+      let newTop = addPage(pdf, doc);
+      if (onNewPage) newTop = onNewPage(newTop);
+      pageTop = newTop;
       yy = drawHeader(pageTop);
     }
   };
@@ -325,13 +351,63 @@ function drawTable(
 // 1) Reconciliation Report (QuickBooks)
 // ---------------------------------------------------------------------------
 
+/** Una línea de detalle del Reconciliation Report real de QuickBooks:
+ * DATE | TYPE | REF NO. | PAYEE | AMOUNT (USD). */
+export type ReconciliationDetailLine = {
+  txnDate: IsoDate | null;
+  txnType: string;
+  refNo: string;
+  payee: string;
+  amount: number;
+};
+
+const RECONCILIATION_DETAIL_COLUMNS = [
+  { label: "DATE", width: 70 },
+  { label: "TYPE", width: 110 },
+  { label: "REF NO.", width: 90 },
+  { label: "PAYEE", width: 230 },
+  { label: "AMOUNT (USD)", width: 100, align: "right" as const },
+];
+
+function reconciliationDetailRows(lines: ReconciliationDetailLine[]): string[][] {
+  return lines.map((line) => [
+    line.txnDate ? formatSlashDate(line.txnDate) : "",
+    line.txnType,
+    line.refNo,
+    line.payee,
+    money(line.amount),
+  ]);
+}
+
+const RECONCILIATION_MIN_TABLE_HEIGHT = 16 /* header */ + 12 * 2 /* 1 fila + Total */ + 20 /* título */;
+
+/** Evita dejar un título + encabezado de tabla solos al final de una
+ * página (huérfano): si no entra el mínimo (título + encabezado + 1 fila
+ * + Total), salta de página antes de dibujar nada de esta sección. */
+function ensureRoomFor(pdf: PDFDocument, doc: Doc, y: number, minHeight: number): number {
+  if (y - minHeight < BOTTOM_MARGIN) return addPage(pdf, doc);
+  return y;
+}
+
 export async function buildReconciliationPdf(params: {
   reportDate: IsoDate;
+  /** Fecha de la última conciliación bancaria real (FIRST BANK) -- el
+   * "Period Ending" del QB original. Puede ser anterior a reportDate
+   * (p.ej. el 10/12 reconciliando todavía contra el statement del
+   * 10/09) -- en ese caso, "as of"/"after" se cuentan desde acá. */
   periodEnding: IsoDate;
   reconciledOn: IsoDate | null;
+  beginningBalance: number;
+  clearedChecks: ReconciliationDetailLine[];
+  clearedDeposits: ReconciliationDetailLine[];
   control: ReconciliationControlResult;
-  checks: AgingLine[];
-  deposits: AgingLine[];
+  /** Pendientes "as of" periodEnding (la última conciliación real). */
+  asOfChecks: ReconciliationDetailLine[];
+  asOfDeposits: ReconciliationDetailLine[];
+  /** Pendientes nuevos "after" periodEnding, hasta reportDate -- vacíos
+   * cuando reportDate == periodEnding (ningún tramo nuevo todavía). */
+  afterChecks: ReconciliationDetailLine[];
+  afterDeposits: ReconciliationDetailLine[];
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
   let y = HEIGHT - 50;
@@ -359,48 +435,72 @@ export async function buildReconciliationPdf(params: {
   );
   y -= 24;
 
-  keyValueRow(doc, "Statement ending balance", money(params.control.statementEnding), MARGIN, y);
-  keyValueRow(doc, "Register balance", money(params.control.register), MARGIN + 260, y);
-  y -= 14;
-  keyValueRow(doc, "Total uncleared checks", money(params.control.unclearedChecksTotal), MARGIN, y);
-  keyValueRow(doc, "Total uncleared deposits", money(params.control.unclearedDepositsTotal), MARGIN + 260, y);
-  y -= 14;
-  keyValueRow(
-    doc,
-    params.control.balanced ? "Control (debe ser $0.00)" : "Control -- NO CUADRA",
-    money(params.control.control),
-    MARGIN,
-    y,
-  );
-  y -= 26;
+  // Summary (USD): Statement beginning balance -> Checks/Deposits
+  // cleared (con la cantidad entre paréntesis, aunque sea 0) ->
+  // Statement ending balance -> Uncleared transactions as of
+  // periodEnding (checks + deposits EN UNA SOLA línea, no por
+  // separado) -> Register balance as of periodEnding -> Cleared
+  // transactions after periodEnding -> Uncleared transactions after
+  // periodEnding (también combinados) -> Register balance as of
+  // reportDate (hoy) -- igual que el Summary real de QuickBooks.
+  const clearedChecksTotal = round(params.clearedChecks.reduce((total, item) => total + item.amount, 0));
+  const clearedDepositsTotal = round(params.clearedDeposits.reduce((total, item) => total + item.amount, 0));
+  const uncleardAsOfTotal = round(params.control.asOfChecksTotal + params.control.asOfDepositsTotal);
+  const uncleardAfterTotal = round(params.control.afterChecksTotal + params.control.afterDepositsTotal);
+  const hasAfterTranche = params.reportDate !== params.periodEnding;
 
-  y = sectionTitle(doc, "Uncleared Checks and Payments", y);
-  y = drawTable(
-    pdf,
-    doc,
-    MARGIN,
-    y,
-    [
-      { label: "Reference", width: 400 },
-      { label: "Amount", width: 120, align: "right" },
-    ],
-    params.checks.map((item) => [item.name, money(item.balance)]),
-    ["Total", money(params.control.unclearedChecksTotal)],
-  );
-  y -= 10;
-  y = sectionTitle(doc, "Uncleared Deposits and Credits", y);
-  drawTable(
-    pdf,
-    doc,
-    MARGIN,
-    y,
-    [
-      { label: "Reference", width: 400 },
-      { label: "Amount", width: 120, align: "right" },
-    ],
-    params.deposits.map((item) => [item.name, money(item.balance)]),
-    ["Total", money(params.control.unclearedDepositsTotal)],
-  );
+  doc.page.drawText("Summary (USD)", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
+  y -= 18;
+  keyValueRow(doc, "Statement beginning balance", money(params.beginningBalance), MARGIN, y);
+  y -= 14;
+  keyValueRow(doc, `Checks and payments cleared (${params.clearedChecks.length})`, money(clearedChecksTotal), MARGIN, y);
+  y -= 14;
+  keyValueRow(doc, `Deposits and other credits cleared (${params.clearedDeposits.length})`, money(clearedDepositsTotal), MARGIN, y);
+  y -= 14;
+  keyValueRow(doc, "Statement ending balance", money(params.control.statementEnding), MARGIN, y);
+  y -= 18;
+  keyValueRow(doc, `Uncleared transactions as of ${formatSlashDate(params.periodEnding)}`, money(uncleardAsOfTotal), MARGIN, y);
+  y -= 14;
+  keyValueRow(doc, `Register balance as of ${formatSlashDate(params.periodEnding)}`, money(params.control.registerAsOf), MARGIN, y);
+  y -= 18;
+  if (hasAfterTranche) {
+    keyValueRow(doc, `Cleared transactions after ${formatSlashDate(params.periodEnding)}`, money(0), MARGIN, y);
+    y -= 14;
+    keyValueRow(doc, `Uncleared transactions after ${formatSlashDate(params.periodEnding)}`, money(uncleardAfterTotal), MARGIN, y);
+    y -= 14;
+    // "Register balance as of" (la última fila del Summary) lleva la
+    // fecha de "Reconciled on" -- cuándo se hizo ESTA conciliación --
+    // no reportDate.
+    keyValueRow(doc, `Register balance as of ${formatSlashDate(params.reconciledOn ?? params.reportDate)}`, money(params.control.register), MARGIN, y);
+    y -= 18;
+  }
+  y -= 8;
+
+  const drawDetailTable = (title: string, lines: ReconciliationDetailLine[], total: number) => {
+    y = ensureRoomFor(pdf, doc, y, RECONCILIATION_MIN_TABLE_HEIGHT);
+    y = sectionTitle(doc, title, y, 9.5);
+    y = drawTable(pdf, doc, MARGIN, y, RECONCILIATION_DETAIL_COLUMNS, reconciliationDetailRows(lines), ["", "", "", "Total", money(total)]);
+    y -= 10;
+  };
+
+  y = ensureRoomFor(pdf, doc, y, 16);
+  doc.page.drawText("Details", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
+  y -= 18;
+  drawDetailTable(`Checks and payments cleared (${params.clearedChecks.length})`, params.clearedChecks, clearedChecksTotal);
+  if (params.clearedDeposits.length > 0) {
+    drawDetailTable(`Deposits and other credits cleared (${params.clearedDeposits.length})`, params.clearedDeposits, clearedDepositsTotal);
+  }
+
+  y = ensureRoomFor(pdf, doc, y, 16);
+  doc.page.drawText("Additional Information", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
+  y -= 18;
+
+  drawDetailTable(`Uncleared checks and payments as of ${formatSlashDate(params.periodEnding)}`, params.asOfChecks, params.control.asOfChecksTotal);
+  drawDetailTable(`Uncleared deposits and other credits as of ${formatSlashDate(params.periodEnding)}`, params.asOfDeposits, params.control.asOfDepositsTotal);
+  if (hasAfterTranche) {
+    drawDetailTable(`Uncleared checks and payments after ${formatSlashDate(params.periodEnding)}`, params.afterChecks, params.control.afterChecksTotal);
+    drawDetailTable(`Uncleared deposits and other credits after ${formatSlashDate(params.periodEnding)}`, params.afterDeposits, params.control.afterDepositsTotal);
+  }
   return pdf.save();
 }
 
@@ -408,36 +508,88 @@ export async function buildReconciliationPdf(params: {
 // 2) Export del banco (Deposit Accounts Activity Summary)
 // ---------------------------------------------------------------------------
 
+/** Igual formato que la fecha/hora "Report Created" del export real del
+ * banco: "10/13/2026 11:25:20 AM (ET)". */
+function formatReportCreatedStamp(date: Date): string {
+  const datePart = new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+    timeZone: "America/New_York",
+  }).format(date);
+  const timePart = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZone: "America/New_York",
+  }).format(date);
+  return `${datePart} ${timePart} (ET)`;
+}
+
 export async function buildBankExportPdf(params: {
   reportDate: IsoDate;
+  /** Fecha(s) que cubre este export -- "Date range" del banco, puede
+   * ser anterior a reportDate (réplica: el export sigue fechado el día
+   * de la última actividad real, no el día del informe). */
+  dateRange: IsoDate;
+  accountLabel: string;
+  availableBalance: number;
   closingBalance: number | null;
   movements: BankMovement[];
+  generatedAt?: Date;
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
   let y = HEIGHT - 50;
-  doc.page.drawText("WAGYU FOOD SERVICE LLC", { x: MARGIN, y, size: 13, font: doc.bold, color: NAVY });
-  y -= 18;
+  const headerLine = (text: string, size = 9, color = MUTED) => {
+    doc.page.drawText(printable(text), { x: MARGIN, y, size, font: doc.regular, color });
+    y -= 13;
+  };
   doc.page.drawText("Deposit Accounts Activity Summary", { x: MARGIN, y, size: 12, font: doc.bold, color: NAVY });
-  y -= 16;
-  doc.page.drawText(
-    printable(`Date range: ${formatSlashDate(params.reportDate)}`),
-    { x: MARGIN, y, size: 8.5, font: doc.regular, color: MUTED },
+  y -= 18;
+  headerLine(`Report Created: ${formatReportCreatedStamp(params.generatedAt ?? new Date())}`);
+  headerLine(`Account: ${params.accountLabel} - Available ${money(params.availableBalance)}`);
+  headerLine(`Date range: ${formatSlashDate(params.dateRange)}`);
+  headerLine("Transaction types: All transactions");
+  headerLine("Detail option: Includes transaction detail");
+  y -= 8;
+  // El export real repite la línea de cuenta antes de la tabla.
+  headerLine(`Account: ${params.accountLabel} - Available ${money(params.availableBalance)}`, 9.5, NAVY);
+  y -= 4;
+
+  const debitTotal = round(
+    params.movements.filter((m) => m.direction === "egreso").reduce((total, m) => total + m.amount, 0),
   );
-  y -= 24;
-  keyValueRow(doc, "Closing balance", money(params.closingBalance), MARGIN, y);
-  y -= 24;
-  drawTable(
+  const creditTotal = round(
+    params.movements.filter((m) => m.direction === "ingreso").reduce((total, m) => total + m.amount, 0),
+  );
+  const rows: TableRow[] = params.movements.map((m) => [
+    m.postDate ? formatSlashDate(m.postDate) : "",
+    "",
+    "",
+    m.description,
+    m.direction === "egreso" ? money(m.amount) : "",
+    m.direction === "ingreso" ? money(m.amount) : "",
+    m.calculatedBalance == null ? "" : money(m.calculatedBalance),
+  ]);
+  y = drawTable(
     pdf,
     doc,
     MARGIN,
     y,
     [
-      { label: "Descripción", width: 460 },
-      { label: "Dirección", width: 90 },
-      { label: "Monto", width: 100, align: "right" },
+      { label: "Post Date", width: 70 },
+      { label: "Reference", width: 90 },
+      { label: "Additional Reference", width: 110 },
+      { label: "Description", width: 220 },
+      { label: "Debit", width: 85, align: "right" },
+      { label: "Credit", width: 85, align: "right" },
+      { label: "Calculated Balance", width: 110, align: "right" },
     ],
-    params.movements.map((m) => [m.description, m.direction, money(m.amount)]),
+    rows,
+    [formatSlashDate(params.dateRange), "", "", "Totals", money(debitTotal), money(creditTotal), ""],
   );
+  stampFooters(pdf, doc.regular, { dateStamp: null, pageLabel: (i, n) => `Page ${i} of ${n}` });
   return pdf.save();
 }
 
@@ -451,6 +603,7 @@ function drawAgingTable(
   y: number,
   items: AgingLine[],
   total: number,
+  onNewPage?: (startY: number) => number,
 ): number {
   return drawTable(
     pdf,
@@ -461,8 +614,9 @@ function drawAgingTable(
       { label: "Nombre", width: 460 },
       { label: "Balance", width: 120, align: "right" },
     ],
-    items.map((item) => [item.name, money(item.balance)]),
+    items.map((item) => [item.name, plainMoney(item.balance)]),
     ["TOTAL", money(total)],
+    onNewPage,
   );
 }
 
@@ -470,8 +624,9 @@ function drawAgingTable(
  * Agrupado por nombre, una fila por factura (Date/Transaction type/Num/
  * Due date/Amount/Open balance/Balance), con "Total for <nombre>" como
  * subtotal, cierre "TOTAL" al final, y una columna de Balance corrido
- * (acumulado línea a línea, sin reiniciar por nombre) como en el
- * Vendor/Customer Balance Detail Report original de QuickBooks.
+ * que se REINICIA EN 0 al empezar cada vendor/customer (no se acumula
+ * entre grupos distintos), igual que el Vendor/Customer Balance Detail
+ * Report original de QuickBooks.
  */
 function drawAgingDetailTable(
   pdf: PDFDocument,
@@ -479,6 +634,7 @@ function drawAgingDetailTable(
   y: number,
   groups: AgingGroup[],
   grandTotal: number,
+  onNewPage?: (startY: number) => number,
 ): number {
   const columns = [
     { label: "Date", width: 62 },
@@ -490,9 +646,11 @@ function drawAgingDetailTable(
     { label: "Balance", width: 95, align: "right" as const },
   ];
   const rows: TableRow[] = [];
-  let running = 0;
   for (const group of groups) {
     rows.push({ spanner: group.name });
+    // El Balance corrido se reinicia en 0 al empezar cada vendor/
+    // customer -- no se acumula entre grupos distintos.
+    let running = 0;
     for (const line of group.lines) {
       running += line.openBalance ?? line.balance;
       rows.push([
@@ -500,18 +658,20 @@ function drawAgingDetailTable(
         line.txnType ?? "",
         line.num ?? "",
         line.dueDate ? formatSlashDate(line.dueDate) : "",
-        line.amount == null ? "" : money(line.amount),
-        money(line.openBalance ?? line.balance),
-        money(running),
+        line.amount == null ? "" : plainMoney(line.amount),
+        plainMoney(line.openBalance ?? line.balance),
+        plainMoney(running),
       ]);
     }
-    rows.push({ bold: [`Total for ${group.name}`, "", "", "", "", money(group.subtotal), ""] });
+    // "Total for X" lleva el subtotal tanto en Amount como en Open
+    // balance (las 2 columnas de importe), igual que el original.
+    rows.push({ bold: [`Total for ${group.name}`, "", "", "", money(group.subtotal), money(group.subtotal), ""] });
   }
-  return drawTable(pdf, doc, MARGIN, y, columns, rows, ["TOTAL", "", "", "", "", money(grandTotal), ""]);
+  return drawTable(pdf, doc, MARGIN, y, columns, rows, ["TOTAL", "", "", "", money(grandTotal), money(grandTotal), ""], onNewPage);
 }
 
-function drawAgingHeader(doc: Doc, reportType: string, subtitle: string) {
-  let y = HEIGHT - 50;
+function drawAgingHeader(doc: Doc, reportType: string, subtitle: string, startY = HEIGHT - 50) {
+  let y = startY;
   doc.page.drawText("Wagyu Food Service LLC", { x: MARGIN, y, size: 13, font: doc.bold, color: NAVY });
   y -= 16;
   doc.page.drawText(printable(reportType), { x: MARGIN, y, size: 11, font: doc.bold, color: NAVY });
@@ -520,11 +680,31 @@ function drawAgingHeader(doc: Doc, reportType: string, subtitle: string) {
   return y - 20;
 }
 
+/** "Tuesday, October 13, 2026 01:07 PM GMT-04:00" -- Puerto Rico (AST)
+ * no tiene horario de verano, así que el offset es siempre -04:00. */
+function formatAgingFooterStamp(date: Date): string {
+  const datePart = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/Puerto_Rico",
+  }).format(date);
+  const timePart = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "America/Puerto_Rico",
+  }).format(date);
+  return `${datePart} ${timePart} GMT-04:00`;
+}
+
 export async function buildAgingVendorsPdf(params: {
   reportDate: IsoDate;
   items: AgingLine[];
   rawTotal: number;
   groups?: AgingGroup[];
+  generatedAt?: Date;
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
   const y = drawAgingHeader(doc, "Vendor Balance Detail Report - New", "All Dates");
@@ -534,7 +714,7 @@ export async function buildAgingVendorsPdf(params: {
   } else {
     drawAgingTable(pdf, doc, y, params.items, params.rawTotal);
   }
-  stampFooters(pdf, doc.regular);
+  stampFooters(pdf, doc.regular, { dateStamp: formatAgingFooterStamp(params.generatedAt ?? new Date()) });
   return pdf.save();
 }
 
@@ -543,20 +723,21 @@ export async function buildAgingCustomersPdf(params: {
   items: AgingLine[];
   rawTotal: number;
   groups?: AgingGroup[];
+  generatedAt?: Date;
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
-  const y = drawAgingHeader(
-    doc,
-    "Customer Balance Detail Report - New",
-    `As of ${formatEnglishShortDate(params.reportDate)}`,
-  );
+  const subtitle = `As of ${formatEnglishShortDate(params.reportDate)}`;
+  const y = drawAgingHeader(doc, "Customer Balance Detail Report - New", subtitle);
+  // Si pagina, la página 2 (y siguientes) repite el bloque de título --
+  // no solo el encabezado de columnas de la tabla.
+  const onNewPage = (startY: number) => drawAgingHeader(doc, "Customer Balance Detail Report - New", subtitle, startY);
   const hasDetail = params.groups?.some((group) => group.hasDetail);
   if (hasDetail && params.groups) {
-    drawAgingDetailTable(pdf, doc, y, params.groups, params.rawTotal);
+    drawAgingDetailTable(pdf, doc, y, params.groups, params.rawTotal, onNewPage);
   } else {
-    drawAgingTable(pdf, doc, y, params.items, params.rawTotal);
+    drawAgingTable(pdf, doc, y, params.items, params.rawTotal, onNewPage);
   }
-  stampFooters(pdf, doc.regular);
+  stampFooters(pdf, doc.regular, { dateStamp: formatAgingFooterStamp(params.generatedAt ?? new Date()) });
   return pdf.save();
 }
 
@@ -583,6 +764,13 @@ function financialHorizonRow(
     y = labelValueRow(doc, `${recurrentesLabel} - Recurrentes del ${range}`, money(-step.recurrentes), MARGIN, y) - 2;
   }
   y = labelValueRow(doc, `${agingLabel} - Aging del ${range}`, money(step.agingAdjustment), MARGIN, y) - 2;
+  if (!recurrentesLabel) {
+    // "Total" solo en el primer bloque (7-day) -- Balance Today +
+    // Weekly income projection (+ Aging) de ESE bloque: es el mismo
+    // step.balance que se muestra justo debajo como "7-day balance",
+    // así que SIEMPRE coinciden (nunca un valor fijo aparte).
+    y = labelValueRow(doc, "Total", money(step.balance), MARGIN, y) - 2;
+  }
   y = labelValueRow(doc, `${step.label} balance ${formatSlashDate(step.date)}`, money(step.balance), MARGIN, y) - 2;
   return y - 14;
 }
@@ -728,14 +916,22 @@ export async function buildConsolidatedPdf(params: {
   let y = HEIGHT - 50;
   doc.page.drawText("RECONCILIATION INFORMATION", { x: MARGIN, y, size: 11, font: doc.bold, color: NAVY });
   right(doc.page, formatSlashDate(params.reportDate), doc.bold, 9, MARGIN + 380, y);
-  y -= 18;
+  y -= 16;
+  doc.page.drawText("Date", { x: MARGIN, y, size: 7.5, font: doc.bold, color: MUTED });
+  right(doc.page, "Amount", doc.bold, 7.5, MARGIN + 335, y);
+  y -= 14;
   if (params.control) {
+    // La columna "Date" de estas filas -- a diferencia del Reconciliation
+    // Report propio, que usa la fecha de la última conciliación real --
+    // siempre es reportDate (el día de ESTE informe), igual que en la
+    // planilla de Hernan.
+    const asOfDate = params.reportDate;
     y = labelValueRow(doc, "Statement ending balance S/RECONCILIATION REPORT", money(params.control.statementEnding), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedChecksTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(params.reportDate)}`, money(params.control.unclearedDepositsTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(params.reportDate)}`, money(0), MARGIN, y) - 2;
-    y = labelValueRow(doc, "Register balance", money(params.control.register), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.asOfChecksTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.afterChecksTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.asOfDepositsTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.afterDepositsTotal), MARGIN, y) - 2;
+    y = labelValueRow(doc, "Register balance S/RECONCILIATION REPORT", money(params.control.register), MARGIN, y) - 2;
   }
   const recurring = buildRecurringDetailTable(params.recurring, params.reportDate);
   y = labelValueRow(doc, "Recurrentes prior to this week", money(-recurring.prior.total), MARGIN, y) - 2;
@@ -747,7 +943,10 @@ export async function buildConsolidatedPdf(params: {
   if (params.financial) {
     doc.page.drawText("FINANCIAL REPORT", { x: MARGIN, y, size: 11, font: doc.bold, color: NAVY });
     right(doc.page, formatSlashDate(params.reportDate), doc.bold, 9, MARGIN + 380, y);
-    y -= 18;
+    y -= 16;
+    doc.page.drawText("Date", { x: MARGIN, y, size: 7.5, font: doc.bold, color: MUTED });
+    right(doc.page, "Amount", doc.bold, 7.5, MARGIN + 335, y);
+    y -= 14;
     y = labelValueRow(doc, "Balance - Today", money(params.financial.balanceToday), MARGIN, y) - 2;
     y -= 4;
     const weekStart = sundayWeekStartOf(params.reportDate);
@@ -769,6 +968,7 @@ export async function buildConsolidatedPdf(params: {
     [recurring.prior, "Total-Week"],
     [recurring.thisWeek, "Total-Week"],
     [recurring.nextWeek, "Total-Week"],
+    [recurring.weekAfter, "Total-Week"],
   ] as const) {
     for (const row of bucket.rows) {
       recurringRows.push({ cells: recurringRowCells(row), kind: row.isPaid ? "paid" : "data" });
@@ -788,15 +988,23 @@ export async function buildConsolidatedPdf(params: {
   const page2 = pdf.addPage([WIDTH, HEIGHT]);
   const doc2: Doc = { page: page2, bold: doc.bold, regular: doc.regular };
   let y2 = HEIGHT - 50;
+  doc2.page.drawText(formatSlashDate(params.reportDate), { x: MARGIN, y: y2, size: 10, font: doc.bold, color: NAVY });
+  y2 -= 20;
   keyValueRow(doc2, "Balance - GABRIEL", money(params.balanceGabriel), MARGIN, y2, 300);
   y2 -= 24;
 
-  const { variance: varianceOnlyLines, uncollectedDeposits } = splitVarianceLinesBySection(params.varianceLines);
-  const varianceTotal = totalVarianceOf(varianceOnlyLines);
-  const uncollectedTotal = totalVarianceOf(uncollectedDeposits);
+  // Todas las líneas de Variación Diaria (incluida Costco, aunque su
+  // section siga siendo "uncollected_deposit" para la ecuación de
+  // control) se muestran juntas en "Uncleared checks and payments" --
+  // "Uncleared deposits and other credits" es una sección propia del
+  // formato de Hernan que queda siempre vacía (0.00) en este informe.
+  // El total de control (Gabriel + variación) no cambia: sigue siendo
+  // Gabriel + la suma de TODAS las líneas, sin importar cómo se
+  // agrupen visualmente.
+  const allVarianceTotal = totalVarianceOf(params.varianceLines);
   const varianceColumns = [
-    { label: "Concepto", width: 350 },
-    { label: "Monto", width: 120, align: "right" as const },
+    { label: "", width: 350 },
+    { label: "", width: 120, align: "right" as const },
   ];
   y2 = sectionTitle(doc2, "Variación Diaria - Uncleared checks and payments", y2, 10);
   y2 = drawTable(
@@ -805,24 +1013,16 @@ export async function buildConsolidatedPdf(params: {
     MARGIN,
     y2,
     varianceColumns,
-    varianceOnlyLines.map((line) => [line.concept, money(line.amount)]),
-    ["subtotal", money(varianceTotal)],
+    params.varianceLines.map((line) => [line.concept, money(line.amount)]),
+    ["", money(allVarianceTotal)],
   );
   y2 -= 14;
   y2 = sectionTitle(doc2, "Variación Diaria- Uncleared deposits and other credits", y2, 10);
-  y2 = drawTable(
-    pdf,
-    doc2,
-    MARGIN,
-    y2,
-    varianceColumns,
-    uncollectedDeposits.map((line) => [line.concept, money(line.amount)]),
-    ["subtotal", money(uncollectedTotal)],
-  );
+  y2 = drawTable(pdf, doc2, MARGIN, y2, varianceColumns, [], ["", money(0)]);
   y2 -= 20;
 
   const balanceAfterVariance =
-    params.balanceGabriel == null ? null : params.balanceGabriel + varianceTotal + uncollectedTotal;
+    params.balanceGabriel == null ? null : params.balanceGabriel + allVarianceTotal;
   keyValueRow(doc2, "Balance after Weekly Payments", money(balanceAfterVariance), MARGIN, y2, 300);
   y2 -= 14;
   // "Depósitos del día" (lo nuevo de HOY todavía no ingresado en
@@ -854,7 +1054,11 @@ export async function buildConsolidatedPdf(params: {
   y3 -= 14;
   keyValueRow(doc3, "Prime Meats Balance First Bank Acc", money(primeMeatsBankBalance), MARGIN, y3, 260);
   y3 -= 14;
-  keyValueRow(doc3, "Recurrentes Prime Meats", money(params.primeMeatsRecurring), MARGIN, y3, 260);
+  // Esta fila lleva 2 valores (0.00 y 0.00), no 1 como las demás --
+  // réplica exacta de la planilla de Hernan.
+  doc3.page.drawText(printable("Recurrentes Prime Meats"), { x: MARGIN, y: y3, size: 8.5, font: doc.regular, color: MUTED });
+  right(doc3.page, money(params.primeMeatsRecurring), doc.bold, 9, MARGIN + 200, y3);
+  right(doc3.page, money(params.primeMeatsRecurring), doc.bold, 9, MARGIN + 260, y3);
   y3 -= 14;
   keyValueRow(doc3, "Total First Bank Accounts", money(totalFirstBank), MARGIN, y3, 260);
   y3 -= 30;
