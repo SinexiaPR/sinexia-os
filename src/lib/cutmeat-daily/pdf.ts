@@ -447,7 +447,13 @@ export async function buildReconciliationPdf(params: {
   const clearedDepositsTotal = round(params.clearedDeposits.reduce((total, item) => total + item.amount, 0));
   const uncleardAsOfTotal = round(params.control.asOfChecksTotal + params.control.asOfDepositsTotal);
   const uncleardAfterTotal = round(params.control.afterChecksTotal + params.control.afterDepositsTotal);
-  const hasAfterTranche = params.reportDate !== params.periodEnding;
+  // No basta con reportDate !== periodEnding -- un día sin ninguna
+  // transacción nueva desde la última conciliación (p.ej. el 10/14
+  // reconciliando contra el período al 10/13, pero QuickBooks sin nada
+  // posterior) no debe mostrar "Cleared/Uncleared transactions after"
+  // en el Summary ni las tablas "after" en Details, aunque las fechas
+  // difieran -- eso solo corresponde cuando SÍ hay algo en ese tramo.
+  const hasAfterTranche = params.afterChecks.length > 0 || params.afterDeposits.length > 0;
 
   doc.page.drawText("Summary (USD)", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
   y -= 18;

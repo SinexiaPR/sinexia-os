@@ -1212,6 +1212,55 @@ async function main() {
   assert.ok(reconciliationText1012.includes("BR TRANSPORT") && reconciliationText1012.includes("MAI PEN RAI"), "filas reales del detalle");
   console.log("Reconciliation Report del 10/12 (réplica de QuickBooks: Summary combinado + Details + sin Control) -- OK.");
 
+  // D19b: cuando reportDate != periodEnding pero no hay NADA en el tramo
+  // "after" (p.ej. el 10/14 reconciliando contra el período al 10/13,
+  // sin transacciones nuevas de QuickBooks después) -- el Summary no
+  // debe mostrar "Cleared/Uncleared transactions after" ni Details las
+  // tablas "after" -- antes se mostraban igual (en $0.00) solo porque
+  // reportDate difería de periodEnding, aunque afterChecks/afterDeposits
+  // estuvieran vacíos.
+  const reconciliationNoAfterControl = checkReconciliationControl({
+    statementEnding: 34662.84,
+    unclearedChecks: [{ reference: "BR TRANSPORT", amount: -125, tranche: "as_of" }],
+    unclearedDeposits: [
+      { reference: "SABORES GOURMET", amount: 885.85, tranche: "as_of" },
+      { reference: "RARE 125 REST", amount: 819.77, tranche: "as_of" },
+    ],
+    register: 36243.46,
+  });
+  const reconciliationPdfNoAfter = await buildReconciliationPdf({
+    reportDate: "2026-10-14",
+    periodEnding: "2026-10-13",
+    reconciledOn: "2026-10-15",
+    beginningBalance: 39607.05,
+    clearedChecks: [{ txnDate: "2026-10-12", txnType: "Bill Payment", refNo: "ACH", payee: "QUIRCH FOODS CO.", amount: -3287.43 }],
+    clearedDeposits: [{ txnDate: "2026-10-05", txnType: "Receive Payment", refNo: "53876", payee: "MAI PEN RAI", amount: 299 }],
+    control: reconciliationNoAfterControl,
+    asOfChecks: [{ txnDate: "2025-12-11", txnType: "Bill Payment", refNo: "1004", payee: "BR TRANSPORT", amount: -125 }],
+    asOfDeposits: [
+      { txnDate: "2026-10-12", txnType: "Receive Payment", refNo: "1490", payee: "SABORES GOURMET", amount: 885.85 },
+      { txnDate: "2026-10-12", txnType: "Receive Payment", refNo: "559", payee: "RARE 125 REST", amount: 819.77 },
+    ],
+    afterChecks: [],
+    afterDeposits: [],
+  });
+  const reconciliationTextNoAfter = await extractPdfText(reconciliationPdfNoAfter);
+  assert.ok(
+    !reconciliationTextNoAfter.includes("Cleared transactions after") &&
+      !reconciliationTextNoAfter.includes("Uncleared transactions after"),
+    "sin tramo 'after' con contenido, el Summary no muestra las líneas \"Cleared/Uncleared transactions after\" -- aunque reportDate != periodEnding",
+  );
+  assert.ok(
+    !reconciliationTextNoAfter.includes("Uncleared checks and payments after") &&
+      !reconciliationTextNoAfter.includes("Uncleared deposits and other credits after"),
+    "Details tampoco muestra las tablas \"after\" vacías",
+  );
+  assert.ok(
+    reconciliationTextNoAfter.includes(`Register balance as of ${formatSlashDate("2026-10-13")} ${money(36243.46)}`),
+    "sin tramo after, la última \"Register balance as of\" usa el periodEnding (no reconciledOn) -- es la misma fila 'as of'",
+  );
+  console.log("Reconciliation Report sin tramo \"after\" (10/14 de ejemplo): sin líneas \"after\" aunque reportDate != periodEnding -- OK.");
+
   // D20: Export banco del 10/12 -- réplica del banco.
   const bankExportPdf1012 = await buildBankExportPdf({
     reportDate: REPORT_DATE_1012,
