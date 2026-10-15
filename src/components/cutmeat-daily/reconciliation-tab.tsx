@@ -24,6 +24,7 @@ export function ReconciliationTab({
   reconciliation: {
     statementEnding: number;
     register: number;
+    reconciledOn?: string | null;
     unclearedChecks: Array<{ reference: string; amount: number }>;
     unclearedDeposits: Array<{ reference: string; amount: number }>;
   } | null;
@@ -32,6 +33,7 @@ export function ReconciliationTab({
     reconciliation ? String(reconciliation.statementEnding) : "",
   );
   const [register, setRegister] = useState(reconciliation ? String(reconciliation.register) : "");
+  const [reconciledOn, setReconciledOn] = useState(reconciliation?.reconciledOn ?? "");
   const [checks, setChecks] = useState<Item[]>(
     (reconciliation?.unclearedChecks ?? []).map((item) => ({
       itemType: "uncleared_check" as const,
@@ -66,6 +68,7 @@ export function ReconciliationTab({
         reportId,
         statementEnding: Number(statementEnding) || 0,
         register: Number(register) || 0,
+        reconciledOn: reconciledOn || null,
         items: [...checks, ...deposits]
           .filter((item) => item.reference.trim())
           .map((item) => ({
@@ -155,7 +158,7 @@ export function ReconciliationTab({
             Register debe dar $0.00.
           </p>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <label className="space-y-1 text-sm">
             <span className="text-muted-foreground text-xs">Statement ending balance</span>
             <Input
@@ -172,6 +175,17 @@ export function ReconciliationTab({
               value={register}
               disabled={readOnly}
               onChange={(event) => setRegister(event.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground text-xs">
+              Reconciled on (fecha en QuickBooks, no la de carga)
+            </span>
+            <Input
+              type="date"
+              value={reconciledOn}
+              disabled={readOnly}
+              onChange={(event) => setReconciledOn(event.target.value)}
             />
           </label>
         </div>
