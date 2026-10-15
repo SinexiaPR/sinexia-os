@@ -368,6 +368,7 @@ const bankMovementSchema = z.object({
   direction: z.enum(["ingreso", "egreso"]),
   linkedRecurringId: z.string().uuid().nullable().optional(),
   isNotEnteredDeposit: z.boolean().optional(),
+  isReconciledCleared: z.boolean().optional(),
   note: z.string().trim().max(500).nullable().optional(),
 });
 
@@ -423,6 +424,7 @@ export async function saveBankExport(input: {
           direction: movement.direction,
           linked_recurring_id: movement.linkedRecurringId ?? null,
           is_not_entered_deposit: movement.isNotEnteredDeposit ?? false,
+          is_reconciled_cleared: movement.isReconciledCleared ?? false,
           note: movement.note ?? null,
           updated_by: profile.id,
         })),

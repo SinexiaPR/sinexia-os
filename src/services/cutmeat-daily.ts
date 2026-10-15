@@ -12,6 +12,7 @@ import {
   consolidateCustomerAging,
   consolidateVendorAging,
   groupAgingItems,
+  pickMostRecentClosedBalance,
   splitRecurringByWeek,
   splitVarianceLinesBySection,
   totalVarianceOf,
@@ -331,16 +332,22 @@ export async function getPreviousClosedBalance(
   ]);
   if (historyRes.error) throw historyRes.error;
   if (reportRes.error) throw reportRes.error;
-  const candidates = [
+  return pickMostRecentClosedBalance([
     historyRes.data
-      ? { date: historyRes.data.report_date as IsoDate, balance: Number(historyRes.data.balance_after_weekly) }
+      ? {
+          date: historyRes.data.report_date as IsoDate,
+          balance: Number(historyRes.data.balance_after_weekly),
+          source: "history",
+        }
       : null,
     reportRes.data
-      ? { date: reportRes.data.report_date as IsoDate, balance: Number(reportRes.data.balance_with_not_entered) }
+      ? {
+          date: reportRes.data.report_date as IsoDate,
+          balance: Number(reportRes.data.balance_with_not_entered),
+          source: "report",
+        }
       : null,
-  ].filter((candidate): candidate is { date: IsoDate; balance: number } => candidate !== null);
-  if (!candidates.length) return null;
-  return candidates.reduce((latest, candidate) => (candidate.date > latest.date ? candidate : latest));
+  ]);
 }
 
 /** Líneas libres de Variación Diaria de este informe (concepto + monto,
@@ -535,6 +542,7 @@ export async function getDailyReportWorkspace(
     direction: "ingreso" | "egreso";
     linked_recurring_id: string | null;
     is_not_entered_deposit: boolean;
+    is_reconciled_cleared: boolean;
     note: string | null;
     post_date: IsoDate | null;
     calculated_balance: number | null;
@@ -548,6 +556,7 @@ export async function getDailyReportWorkspace(
     calculatedBalance: row.calculated_balance == null ? null : Number(row.calculated_balance),
     linkedRecurringId: row.linked_recurring_id,
     isNotEnteredDeposit: row.is_not_entered_deposit,
+    isReconciledCleared: row.is_reconciled_cleared,
   }));
 
   const reconciliationControl = reconciliationRow

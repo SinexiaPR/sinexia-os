@@ -36,11 +36,13 @@ import {
   normalizeVendorName,
   groupAgingItems,
   overdueUnpaidRecurring,
+  pickMostRecentClosedBalance,
   round,
   splitRecurringByWeek,
   splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingDetailLine,
+  type BankMovement,
   type ReconciliationLineItem,
   type RecurringDetailRow,
   type RecurringPayment,
@@ -194,12 +196,53 @@ assert.equal(
   35473.05,
   "Gabriel del 10/12 = Balance after Weekly Payments + Not entered Sales del 09/10 (no solo Balance after Weekly Payments)",
 );
+
+// D13b: getPreviousClosedBalance (services/cutmeat-daily.ts) elige entre
+// cutmeat_daily_history y el informe cerrado en vivo -- bug real que
+// bloqueó el botón Generar del 10/12 (ya cerrado): el backfill de
+// history también tiene una fila para el 09/10 (balance_after_weekly =
+// 35,126.77, SIN el depósito de Costco), con la MISMA fecha que el
+// informe en vivo cerrado (balance_with_not_entered = 35,473.05). El
+// reduce original ponía "history" primero en el arreglo y comparaba con
+// ">" estricto, así que en un empate de fecha se quedaba con el PRIMER
+// candidato (history, 35,126.77) en vez del informe en vivo -- de ahí
+// el "Balance GABRIEL + Variación Diaria + Depósitos del día" de
+// 31,308.18 (31,654.46 - 346.28, el monto de Costco) que mostraba la
+// app, 346.28 por debajo del Balance Today real.
+const tiedHistoryCandidate = { date: "2026-10-09" as const, balance: 35126.77, source: "history" as const };
+const tiedReportCandidate = { date: "2026-10-09" as const, balance: 35473.05, source: "report" as const };
+const pickedOnTie = pickMostRecentClosedBalance([tiedHistoryCandidate, tiedReportCandidate]);
+assert.equal(
+  pickedOnTie?.balance,
+  35473.05,
+  "en un empate de fecha entre history y el informe en vivo, gana el informe en vivo (balance_with_not_entered), no el backfill de history",
+);
+const pickedOnTieReversedOrder = pickMostRecentClosedBalance([tiedReportCandidate, tiedHistoryCandidate]);
+assert.equal(pickedOnTieReversedOrder?.balance, 35473.05, "el resultado no depende del orden de los candidatos en el arreglo");
+const pickedNoTie = pickMostRecentClosedBalance([
+  { date: "2026-10-05" as const, balance: 35249.49, source: "history" as const },
+  { date: "2026-10-09" as const, balance: 35473.05, source: "report" as const },
+]);
+assert.equal(pickedNoTie?.balance, 35473.05, "sin empate, gana la fecha más reciente (sin importar la fuente)");
+console.log(
+  "Fix: getPreviousClosedBalance ya no pierde contra un backfill de history con la MISMA fecha que el informe " +
+    "cerrado en vivo -- Gabriel del 10/12 vuelve a salir 35,473.05 (no 35,126.77), y el botón Generar ya no se " +
+    "bloquea con un \"movimiento sin clasificar\" que en realidad no existía.",
+);
+// Corrección de María (15/10): Costco va en la sección de checks
+// (variance), como en la planilla original de Hernan -- "Variación
+// depósitos" queda en 0.00. El total no cambia (checkVarianceReconciliation
+// y balanceAfterVariance suman ambas secciones por igual), pero la
+// agrupación visible en pantalla/PDF sí refleja a Hernan.
 const variance1012: VarianceLine[] = [
   { concept: "Recurrentes de la Semana", amount: -580, section: "variance" },
   { concept: "Aging", amount: -6413.48, section: "variance" },
   { concept: "Samuel Sosa", amount: -1042.4, section: "variance" },
-  { concept: "Costco Wholesale", amount: -346.28, section: "uncollected_deposit" },
+  { concept: "Costco Wholesale", amount: -346.28, section: "variance" },
 ];
+const split1012 = splitVarianceLinesBySection(variance1012);
+assert.equal(totalVarianceOf(split1012.variance), -8382.16, "Variación checks del 10/12 = -8,382.16 (con Costco adentro, como Hernan)");
+assert.equal(split1012.uncollectedDeposits.length, 0, "Variación depósitos del 10/12 queda vacía (0.00)");
 const control1012 = checkVarianceReconciliation(gabriel1012, variance1012, 4563.57, 31654.46);
 assert.equal(
   control1012.expected,
@@ -505,6 +548,33 @@ const gabriel1013 = 31654.46; // final del 10/12 una vez cerrado (todavía en bo
 const control1013Variance = checkVarianceReconciliation(gabriel1013, noBankMovements1013, notEnteredDepositsTotal1013, financial1013.balanceToday);
 assert.equal(control1013Variance.expected, 31654.46, "Gabriel + variación (0.00) + depósitos del día (0.00) = 31,654.46");
 assert.equal(control1013Variance.balanced, true, "control de Variación Diaria del 10/13 cuadra a 0.00");
+
+// D18b: un egreso del banco que ya aparece conciliado como "cleared
+// check" en el Reconciliation Report (p.ej. el ACH de $500 de Jose
+// Manzanares del 10/12 -- no es un recurrente ni un depósito) no debe
+// quedar "sin clasificar" solo porque no tiene linked_recurring_id ni
+// is_not_entered_deposit -- eso bloqueaba el botón Generar del 10/12 ya
+// cerrado con la alerta "Movimiento del banco sin clasificar".
+const bankMovements1012: BankMovement[] = [
+  { id: "ach500", description: "ACH SETTLEMENT / ACH OFFSET", amount: 500, direction: "egreso", isReconciledCleared: true },
+  { id: "mai-pen-rai", description: "53876 MAI PEN RAI", amount: 299, direction: "ingreso", isNotEnteredDeposit: true },
+];
+const classified1012 = classifyBankMovements(bankMovements1012);
+assert.equal(classified1012.unclassified.length, 0, "el ACH de $500 (cleared en conciliación) no queda como \"sin clasificar\"");
+assert.equal(classified1012.classified.length, 1, "el ACH de $500 se clasifica por isReconciledCleared (no por linked_recurring_id)");
+assert.equal(classified1012.notEnteredDeposits.length, 1);
+const stillUnclassified: BankMovement[] = [
+  { id: "sin-clasificar", description: "Movimiento sin marcar", amount: 123, direction: "egreso" },
+];
+assert.equal(
+  classifyBankMovements(stillUnclassified).unclassified.length,
+  1,
+  "un egreso SIN isReconciledCleared ni linked_recurring_id sigue bloqueando como antes -- el fix no desactiva la alerta en general",
+);
+console.log(
+  "Fix: un movimiento del banco marcado isReconciledCleared (mismo egreso ya conciliado como \"cleared check\") " +
+    "se clasifica solo, sin necesitar un recurrente vinculado -- el botón Generar ya no se bloquea por eso.",
+);
 
 const reconciliation1013 = checkReconciliationControl({
   statementEnding: 39607.05,

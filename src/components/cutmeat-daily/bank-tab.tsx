@@ -21,6 +21,7 @@ type Movement = {
   direction: "ingreso" | "egreso";
   linkedRecurringId: string;
   isNotEnteredDeposit: boolean;
+  isReconciledCleared: boolean;
   note: string;
 };
 
@@ -43,6 +44,7 @@ export function BankTab({
     direction: "ingreso" | "egreso";
     linkedRecurringId?: string | null;
     isNotEnteredDeposit?: boolean;
+    isReconciledCleared?: boolean;
   }>;
   recurring: RecurringPayment[];
 }) {
@@ -57,6 +59,7 @@ export function BankTab({
       direction: m.direction,
       linkedRecurringId: m.linkedRecurringId ?? "",
       isNotEnteredDeposit: Boolean(m.isNotEnteredDeposit),
+      isReconciledCleared: Boolean(m.isReconciledCleared),
       note: "",
     })),
   );
@@ -90,6 +93,7 @@ export function BankTab({
           direction: m.direction,
           linkedRecurringId: m.linkedRecurringId || null,
           isNotEnteredDeposit: m.isNotEnteredDeposit,
+          isReconciledCleared: m.isReconciledCleared,
           note: m.note.trim() || null,
         })),
         sourcePdfPath: null,
@@ -130,6 +134,7 @@ export function BankTab({
                   direction: "egreso",
                   linkedRecurringId: "",
                   isNotEnteredDeposit: false,
+                  isReconciledCleared: false,
                   note: "",
                 },
               ])
@@ -143,7 +148,7 @@ export function BankTab({
           {movements.map((movement, index) => (
             <div
               key={movement.id ?? `new-${index}`}
-              className="grid gap-2 rounded-lg border p-3 sm:grid-cols-6"
+              className="grid gap-2 rounded-lg border p-3 sm:grid-cols-7"
             >
               <Input
                 className="sm:col-span-2"
@@ -193,6 +198,17 @@ export function BankTab({
                   }
                 />
                 Not entered Sales
+              </label>
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={movement.isReconciledCleared}
+                  disabled={readOnly}
+                  onChange={(event) =>
+                    update(index, { isReconciledCleared: event.target.checked })
+                  }
+                />
+                Cleared en conciliación
               </label>
               <button
                 type="button"

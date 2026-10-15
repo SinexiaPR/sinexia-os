@@ -501,6 +501,39 @@ export function buildBalanceGabriel(
   return round(previousClosedBalanceWithNotEntered ?? startingBalance);
 }
 
+export type PreviousClosedBalanceCandidate = {
+  date: IsoDate;
+  balance: number;
+  /** "history" = backfill de cutmeat_daily_history (balance_after_weekly,
+   * anterior a la distinción con "Not entered Sales"). "report" =
+   * informe cerrado en vivo (balance_with_not_entered, más completo). */
+  source: "history" | "report";
+};
+
+/**
+ * Elige, entre el backfill de cutmeat_daily_history y el informe cerrado
+ * en vivo más reciente, cuál balance usar como base de Balance GABRIEL --
+ * el de fecha más reciente; si ambas tablas tienen fila para la MISMA
+ * fecha (p.ej. un día que primero se backfilleó y después también se
+ * cerró en vivo), gana el informe en vivo (balance_with_not_entered), no
+ * el backfill (balance_after_weekly), porque es el valor más completo.
+ */
+export function pickMostRecentClosedBalance(
+  candidates: Array<PreviousClosedBalanceCandidate | null>,
+): { date: IsoDate; balance: number } | null {
+  const valid = candidates.filter(
+    (candidate): candidate is PreviousClosedBalanceCandidate => candidate !== null,
+  );
+  if (!valid.length) return null;
+  return valid.reduce((latest, candidate) => {
+    if (candidate.date > latest.date) return candidate;
+    if (candidate.date === latest.date && candidate.source === "report" && latest.source === "history") {
+      return candidate;
+    }
+    return latest;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Not entered Sales
 // ---------------------------------------------------------------------------
@@ -560,6 +593,11 @@ export type BankMovement = {
   linkedRecurringId?: string | null;
   /** Depósito ya identificado como "Not entered Sales". */
   isNotEnteredDeposit?: boolean;
+  /** Egreso que ya aparece conciliado como "cleared check" en el
+   * Reconciliation Report (misma transacción real, mostrada acá solo
+   * para el Export banco/post_date/calculated_balance) -- no es un
+   * recurrente ni un depósito, no necesita más clasificación. */
+  isReconciledCleared?: boolean;
   /** Post Date y Calculated Balance del Export banco real -- solo para
    * ese PDF (Deposit Accounts Activity Summary), no para la clasificación
    * de Variación Diaria. */
@@ -570,8 +608,9 @@ export type BankMovement = {
 export type BankMovementClassification = {
   classified: BankMovement[];
   notEnteredDeposits: BankMovement[];
-  /** Sin recurrente vinculado ni marca de depósito: no entra en ningún
-   * balance hasta que se clasifique. */
+  /** Sin recurrente vinculado, sin marca de depósito, y sin marca de
+   * cleared check ya conciliado: no entra en ningún balance hasta que se
+   * clasifique. */
   unclassified: BankMovement[];
 };
 
@@ -582,7 +621,7 @@ export function classifyBankMovements(
   const notEnteredDeposits: BankMovement[] = [];
   const unclassified: BankMovement[] = [];
   for (const movement of movements) {
-    if (movement.linkedRecurringId) classified.push(movement);
+    if (movement.linkedRecurringId || movement.isReconciledCleared) classified.push(movement);
     else if (movement.isNotEnteredDeposit) notEnteredDeposits.push(movement);
     else unclassified.push(movement);
   }
