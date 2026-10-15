@@ -571,8 +571,8 @@ export async function buildBankExportPdf(params: {
   );
   const rows: TableRow[] = params.movements.map((m) => [
     m.postDate ? formatSlashDate(m.postDate) : "",
-    "",
-    "",
+    m.reference ?? "",
+    m.additionalReference ?? "",
     m.description,
     m.direction === "egreso" ? money(m.amount) : "",
     m.direction === "ingreso" ? money(m.amount) : "",

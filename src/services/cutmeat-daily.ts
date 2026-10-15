@@ -546,12 +546,16 @@ export async function getDailyReportWorkspace(
     note: string | null;
     post_date: IsoDate | null;
     calculated_balance: number | null;
+    reference: string | null;
+    additional_reference: string | null;
   }>;
   const bankMovements: BankMovement[] = bankMovementRows.map((row) => ({
     id: row.id,
     description: row.description,
     amount: Number(row.amount),
     direction: row.direction,
+    reference: row.reference,
+    additionalReference: row.additional_reference,
     postDate: row.post_date,
     calculatedBalance: row.calculated_balance == null ? null : Number(row.calculated_balance),
     linkedRecurringId: row.linked_recurring_id,

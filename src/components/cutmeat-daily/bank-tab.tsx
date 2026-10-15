@@ -22,6 +22,8 @@ type Movement = {
   linkedRecurringId: string;
   isNotEnteredDeposit: boolean;
   isReconciledCleared: boolean;
+  reference: string;
+  additionalReference: string;
   note: string;
 };
 
@@ -45,6 +47,8 @@ export function BankTab({
     linkedRecurringId?: string | null;
     isNotEnteredDeposit?: boolean;
     isReconciledCleared?: boolean;
+    reference?: string | null;
+    additionalReference?: string | null;
   }>;
   recurring: RecurringPayment[];
 }) {
@@ -60,6 +64,8 @@ export function BankTab({
       linkedRecurringId: m.linkedRecurringId ?? "",
       isNotEnteredDeposit: Boolean(m.isNotEnteredDeposit),
       isReconciledCleared: Boolean(m.isReconciledCleared),
+      reference: m.reference ?? "",
+      additionalReference: m.additionalReference ?? "",
       note: "",
     })),
   );
@@ -94,6 +100,8 @@ export function BankTab({
           linkedRecurringId: m.linkedRecurringId || null,
           isNotEnteredDeposit: m.isNotEnteredDeposit,
           isReconciledCleared: m.isReconciledCleared,
+          reference: m.reference.trim() || null,
+          additionalReference: m.additionalReference.trim() || null,
           note: m.note.trim() || null,
         })),
         sourcePdfPath: null,
@@ -135,6 +143,8 @@ export function BankTab({
                   linkedRecurringId: "",
                   isNotEnteredDeposit: false,
                   isReconciledCleared: false,
+                  reference: "",
+                  additionalReference: "",
                   note: "",
                 },
               ])
@@ -146,79 +156,92 @@ export function BankTab({
         </div>
         <div className="mt-3 space-y-3 px-1">
           {movements.map((movement, index) => (
-            <div
-              key={movement.id ?? `new-${index}`}
-              className="grid gap-2 rounded-lg border p-3 sm:grid-cols-7"
-            >
-              <Input
-                className="sm:col-span-2"
-                placeholder="Descripción"
-                value={movement.description}
-                disabled={readOnly}
-                onChange={(event) => update(index, { description: event.target.value })}
-              />
-              <Input
-                inputMode="decimal"
-                placeholder="Monto"
-                value={movement.amount}
-                disabled={readOnly}
-                onChange={(event) => update(index, { amount: event.target.value })}
-              />
-              <select
-                className={selectClass}
-                value={movement.direction}
-                disabled={readOnly}
-                onChange={(event) =>
-                  update(index, { direction: event.target.value as "ingreso" | "egreso" })
-                }
-              >
-                <option value="ingreso">Ingreso</option>
-                <option value="egreso">Egreso</option>
-              </select>
-              <select
-                className={selectClass}
-                value={movement.linkedRecurringId}
-                disabled={readOnly}
-                onChange={(event) => update(index, { linkedRecurringId: event.target.value })}
-              >
-                <option value="">Sin vincular a recurrente…</option>
-                {recurring.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.concept} ({formatDayLabel(item.dueDate)})
-                  </option>
-                ))}
-              </select>
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={movement.isNotEnteredDeposit}
+            <div key={movement.id ?? `new-${index}`} className="space-y-2 rounded-lg border p-3">
+              <div className="grid gap-2 sm:grid-cols-7">
+                <Input
+                  className="sm:col-span-2"
+                  placeholder="Descripción (texto original del banco)"
+                  value={movement.description}
+                  disabled={readOnly}
+                  onChange={(event) => update(index, { description: event.target.value })}
+                />
+                <Input
+                  inputMode="decimal"
+                  placeholder="Monto"
+                  value={movement.amount}
+                  disabled={readOnly}
+                  onChange={(event) => update(index, { amount: event.target.value })}
+                />
+                <select
+                  className={selectClass}
+                  value={movement.direction}
                   disabled={readOnly}
                   onChange={(event) =>
-                    update(index, { isNotEnteredDeposit: event.target.checked })
+                    update(index, { direction: event.target.value as "ingreso" | "egreso" })
                   }
-                />
-                Not entered Sales
-              </label>
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={movement.isReconciledCleared}
+                >
+                  <option value="ingreso">Ingreso</option>
+                  <option value="egreso">Egreso</option>
+                </select>
+                <select
+                  className={selectClass}
+                  value={movement.linkedRecurringId}
                   disabled={readOnly}
-                  onChange={(event) =>
-                    update(index, { isReconciledCleared: event.target.checked })
-                  }
+                  onChange={(event) => update(index, { linkedRecurringId: event.target.value })}
+                >
+                  <option value="">Sin vincular a recurrente…</option>
+                  {recurring.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.concept} ({formatDayLabel(item.dueDate)})
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  placeholder="Reference"
+                  value={movement.reference}
+                  disabled={readOnly}
+                  onChange={(event) => update(index, { reference: event.target.value })}
                 />
-                Cleared en conciliación
-              </label>
-              <button
-                type="button"
-                aria-label="Eliminar"
-                disabled={readOnly}
-                className="text-muted-foreground hover:text-destructive justify-self-end p-1"
-                onClick={() => setMovements(movements.filter((_, i) => i !== index))}
-              >
-                <Trash2 className="size-4" />
-              </button>
+                <Input
+                  placeholder="Additional Reference"
+                  value={movement.additionalReference}
+                  disabled={readOnly}
+                  onChange={(event) => update(index, { additionalReference: event.target.value })}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={movement.isNotEnteredDeposit}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      update(index, { isNotEnteredDeposit: event.target.checked })
+                    }
+                  />
+                  Not entered Sales
+                </label>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={movement.isReconciledCleared}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      update(index, { isReconciledCleared: event.target.checked })
+                    }
+                  />
+                  Cleared en conciliación
+                </label>
+                <button
+                  type="button"
+                  aria-label="Eliminar"
+                  disabled={readOnly}
+                  className="text-muted-foreground hover:text-destructive ml-auto p-1"
+                  onClick={() => setMovements(movements.filter((_, i) => i !== index))}
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
             </div>
           ))}
           {movements.length === 0 ? (

@@ -603,6 +603,11 @@ export type BankMovement = {
    * de Variación Diaria. */
   postDate?: IsoDate | null;
   calculatedBalance?: number | null;
+  /** Reference / Additional Reference del export real del banco -- solo
+   * para ese PDF, columnas propias junto a Post Date/Description (antes
+   * quedaban siempre en blanco porque el dato no se guardaba). */
+  reference?: string | null;
+  additionalReference?: string | null;
 };
 
 export type BankMovementClassification = {

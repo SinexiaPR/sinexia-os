@@ -1285,6 +1285,25 @@ async function main() {
   assert.ok(bankExportText1012.includes("Page 1 of 1"), "pie propio del Export -- sin fecha, solo paginación 'Page i of N'");
   console.log("Export banco del 10/12 (réplica del banco) -- OK.");
 
+  // D20b: Reference y Additional Reference del export real del banco se
+  // imprimen tal cual -- antes esas 2 columnas quedaban siempre en
+  // blanco (el dato ni se guardaba) y la descripción se reescribía con
+  // un texto simplificado en vez del texto original del banco.
+  const bankExportPdfRefs = await buildBankExportPdf({
+    reportDate: "2026-10-14",
+    dateRange: "2026-10-13",
+    accountLabel: "WAGYU FOOD SERVICE LLC - Checking - 221571473 - *5330",
+    availableBalance: 32774.76,
+    closingBalance: 34662.84,
+    movements: [
+      { id: "m1", description: "CHECK PAID DDA CHECK", reference: "1054", additionalReference: "", amount: 346.28, direction: "egreso", postDate: "2026-10-13", calculatedBalance: 34662.84 },
+    ],
+  });
+  const bankExportTextRefs = await extractPdfText(bankExportPdfRefs);
+  assert.ok(bankExportTextRefs.includes("CHECK PAID DDA CHECK"), "descripción original del banco, no reescrita");
+  assert.ok(bankExportTextRefs.includes("1054"), "columna Reference con el número de cheque");
+  console.log("Export banco: Reference/Additional Reference y descripción original -- OK.");
+
   // D21: página 2 del Consolidated del 10/12 -- Costco (uncollected_deposit)
   // se muestra JUNTO a las demás líneas de Variación Diaria en "Uncleared
   // checks and payments" (un solo bloque, total -8,382.16), no separado;
