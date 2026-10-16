@@ -696,6 +696,11 @@ export async function getDailyReportWorkspace(
             balanceToday: financial.balanceToday,
           }
         : null,
+    weeklyPayments,
+    financial,
+    buckets,
+    currentWeekIncome,
+    flatWeeklyIncome: settings.flatWeeklyIncome,
   });
 
   return {

@@ -1102,8 +1102,11 @@ export async function generateDailyPdf(input: {
         break;
       }
       case "consolidated": {
+        const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
         bytes = await buildConsolidatedPdf({
           reportDate,
+          periodEnding:
+            workspace.reconciliation?.asOfDate ?? lastBusinessDayBefore(reportDate, holidaySet),
           control: workspace.reconciliationControl,
           financial: workspace.financial,
           recurring: workspace.recurring.map((item) => ({

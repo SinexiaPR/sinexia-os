@@ -5,15 +5,20 @@
 import type {
   AgingLine,
   BankMovement,
+  FinancialReportResult,
   ReconciliationControlResult,
+  RecurringBucket,
   RecurringPayment,
   VarianceLine,
+  WeeklyPaymentsResult,
 } from "./calculations";
 import {
+  buildFinancialReport,
   checkVarianceReconciliation,
   classifyBankMovements,
   findUnconfiguredVendors,
   overdueUnpaidRecurring,
+  round,
   type VendorAgingConfig,
 } from "./calculations";
 import { formatDayLabel, type IsoDate } from "./dates";
@@ -46,6 +51,11 @@ export function checkDailyReportCompleteness({
   vendorAgingConfig,
   sources,
   varianceReconciliation,
+  weeklyPayments,
+  financial,
+  buckets,
+  currentWeekIncome,
+  flatWeeklyIncome,
 }: {
   reportDate: IsoDate;
   reconciliationControl: ReconciliationControlResult | null;
@@ -65,6 +75,21 @@ export function checkDailyReportCompleteness({
     notEnteredDepositsTotal: number;
     balanceToday: number;
   } | null;
+  /** Controles automáticos del paquete (se ejecutan antes de armarlo,
+   * reusando exactamente los mismos números ya calculados del workspace
+   * -- nunca un segundo cálculo independiente). Todos opcionales/null
+   * mientras falte el dato correspondiente, caso en el que ese control
+   * puntual simplemente no corre (no bloquea por sí solo). */
+  weeklyPayments?: WeeklyPaymentsResult | null;
+  financial?: FinancialReportResult | null;
+  buckets?: {
+    prior: RecurringBucket;
+    thisWeek: RecurringBucket;
+    nextWeek: RecurringBucket;
+    weekAfter: RecurringBucket;
+  } | null;
+  currentWeekIncome?: number | null;
+  flatWeeklyIncome?: number | null;
 }): DailyReportWarning[] {
   const warnings: DailyReportWarning[] = [];
   const blocking = (message: string) => warnings.push({ severity: "blocking", message });
@@ -93,7 +118,65 @@ export function checkDailyReportCompleteness({
           `(diferencia: ${result.difference.toFixed(2)}).`,
       );
     }
+    for (const line of varianceReconciliation.varianceLines) {
+      if (line.section !== "variance" && line.section !== "uncollected_deposit") {
+        blocking(
+          `Variación Diaria: la línea "${line.concept}" no tiene una sección válida (checks o depósitos).`,
+        );
+      }
+    }
   }
+
+  // Balance after Weekly Payments = Register − recurrentes anteriores −
+  // recurrentes de esta semana (nunca un número suelto, siempre
+  // recalculado desde el mismo Register y los mismos buckets que
+  // alimentan el PDF).
+  if (weeklyPayments && financial) {
+    const expectedBalanceToday = round(
+      weeklyPayments.register - weeklyPayments.recurrentesPrior - weeklyPayments.recurrentesThisWeek,
+    );
+    if (round(financial.balanceToday) !== expectedBalanceToday) {
+      blocking(
+        `Balance after Weekly Payments (${financial.balanceToday.toFixed(2)}) no coincide con Register − recurrentes anteriores − recurrentes de esta semana (${expectedBalanceToday.toFixed(2)}).`,
+      );
+    }
+  }
+  // El Register que alimenta Balance after Weekly Payments tiene que ser
+  // el mismo que el del Reconciliation Report -- si diverge, alguna
+  // hoja del paquete quedaría con un número que las demás no respaldan.
+  if (
+    reconciliationControl &&
+    weeklyPayments &&
+    round(reconciliationControl.register) !== round(weeklyPayments.register)
+  ) {
+    blocking(
+      `El Register usado en Balance after Weekly Payments (${weeklyPayments.register.toFixed(2)}) no coincide con el del Reconciliation Report (${reconciliationControl.register.toFixed(2)}).`,
+    );
+  }
+  // Saldos 7/14/21 días: se recalculan desde cero con los mismos
+  // insumos (B, ingresos, recurrentes de cada semana) y se comparan
+  // contra los que trae el Financial Report -- si no coinciden, algo
+  // quedó calculado con datos viejos.
+  if (financial && weeklyPayments && buckets && currentWeekIncome != null && flatWeeklyIncome != null) {
+    const recomputed = buildFinancialReport({
+      reportDate,
+      balanceAfterWeeklyPayments: weeklyPayments.balanceAfterWeeklyPayments,
+      currentWeekIncome,
+      nextWeekBuckets: { total: buckets.nextWeek.total },
+      weekAfterBuckets: { total: buckets.weekAfter.total },
+      flatWeeklyIncome,
+    });
+    if (
+      round(recomputed.day7.balance) !== round(financial.day7.balance) ||
+      round(recomputed.day14.balance) !== round(financial.day14.balance) ||
+      round(recomputed.day21.balance) !== round(financial.day21.balance)
+    ) {
+      blocking(
+        "Los saldos 7/14/21 días del Financial Report no son consistentes con el Balance after Weekly Payments y los recurrentes de cada semana.",
+      );
+    }
+  }
+
   if (!sources.hasBankExport) {
     blocking("Falta cargar el export del banco (PDF).");
   }

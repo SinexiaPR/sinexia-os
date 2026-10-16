@@ -410,6 +410,35 @@ assert.equal(
 );
 console.log("Regla de visibilidad de filas pagadas (gris solo el día exacto del pago, luego desaparece) -- OK.");
 
+// Corrección de María (v3 del 10/15): con periodEnding, la ventana de
+// visibilidad de una fila pagada se amplía a [periodEnding, reportDate]
+// -- confirmado contra el consolidado real de Hernan del 10/15, que
+// muestra a la vez el IRS (pagado 10/14, dentro del período recién
+// conciliado) y Hacienda (pagado 10/15, "after" esa conciliación). Lo de
+// "hace rato" (pagado 09/20, muy antes de periodEnding) sigue sin
+// mostrarse, y lo de "mañana" (pagado 10/06, después de reportDate)
+// tampoco -- la ventana tiene piso Y techo.
+const paidRuleTableWithWindow = buildRecurringDetailTable(paidRuleFixture, "2026-10-05", "2026-10-04");
+const paidRuleVendorsWithWindow = [
+  ...paidRuleTableWithWindow.prior.rows,
+  ...paidRuleTableWithWindow.thisWeek.rows,
+  ...paidRuleTableWithWindow.nextWeek.rows,
+  ...paidRuleTableWithWindow.weekAfter.rows,
+].map((row) => row.vendor);
+assert.deepEqual(
+  [...paidRuleVendorsWithWindow].sort(),
+  [
+    "Pagado ayer (con paidDate)",
+    "Pagado hoy (con paidDate)",
+    "Pagado hoy (sin paidDate, cae a dueDate)",
+    "Pendiente de verdad",
+  ].sort(),
+  "con periodEnding=10/04, se suma 'Pagado ayer' (su pago cae dentro de [10/04,10/05]) -- 'hace rato' y 'mañana' siguen sin mostrarse",
+);
+console.log(
+  "Regla de visibilidad de filas pagadas con periodEnding (ventana [periodEnding, reportDate], como el 10/15 real de Hernan con IRS+Hacienda) -- OK.",
+);
+
 // D16: Reconciliation del 10/12 -- corrección de María: el 10/12 no
 // reconcilia contra un statement propio, sigue reconciliando contra el
 // de FIRST BANK "Period Ending 10/09/2026" (el mismo que el 09/10). Hay
@@ -1429,6 +1458,331 @@ async function main() {
   console.log(
     "Aging con detalle por factura: PDF agrupado por nombre con subtotal y total " +
       "general cuando hay detalle, formato simple sin cambios cuando no lo hay -- OK.",
+  );
+
+  // ---------------------------------------------------------------------
+  // D22: Informe del 10/15/2026 (v3) contra el consolidado REAL de
+  // Hernan del 10/15, que María subió como caso de prueba -- Register
+  // "como Hernan" (incluye lo registrado en QuickBooks hasta hoy, no
+  // solo hasta periodEnding), Hacienda e IRS marcados pagados (uno
+  // "as of", el otro "after"), Variación Diaria separada en sus 2
+  // bloques reales (checks -2,433.90 / depósitos 191.88), y las
+  // etiquetas "as of/after" con la fecha del período conciliado
+  // (10/14/2026), no la del informe. Los typos propios de Hernan
+  // ("Agin", "Nothwestern", IRS/Hacienda invertidos) NO se replican acá
+  // -- los nombres van bien escritos y en el orden real de pago.
+  // ---------------------------------------------------------------------
+  const REPORT_DATE_1015 = "2026-10-15" as const;
+  const PERIOD_ENDING_1015 = "2026-10-14" as const;
+
+  const unclearedChecks1015: ReconciliationLineItem[] = [
+    { reference: "1004 BR TRANSPORT (12/11/2025)", amount: -125.0, tranche: "as_of" },
+    { reference: "Departamento de Hacienda", amount: -80.0, tranche: "after" },
+    { reference: "SINERGIA LLC", amount: -180.0, tranche: "after" },
+    { reference: "1055 Costco Wholesale", amount: -412.4, tranche: "after" },
+    { reference: "Northwestern Selecta", amount: -2397.42, tranche: "after" },
+  ];
+  const unclearedDeposits1015: ReconciliationLineItem[] = [
+    { reference: "1490 SABORES GOURMET", amount: 885.85, tranche: "as_of" },
+    { reference: "559 RARE 125 REST", amount: 819.77, tranche: "as_of" },
+    { reference: "The Butcher-Costco", amount: 191.88, tranche: "after" },
+  ];
+  const reconciliation1015 = checkReconciliationControl({
+    statementEnding: 34338.76,
+    unclearedChecks: unclearedChecks1015,
+    unclearedDeposits: unclearedDeposits1015,
+    register: 33041.44,
+  });
+  assert.ok(reconciliation1015.balanced, "Reconciliation del 10/15 v3 cuadra a 0.00");
+  assert.equal(reconciliation1015.register, 33041.44, "Register del 10/15 v3 = 33,041.44 (incluye checks y depósitos \"after\")");
+
+  const recurring1015: RecurringPayment[] = [
+    { id: "x1", concept: "Caparra Country - Gabriel Manzanares", dueDate: "2026-09-03", amount: 692, isPaid: false },
+    { id: "x2", concept: "Juan Diaz", dueDate: "2026-10-01", amount: 150, isPaid: false },
+    { id: "x3", concept: "Deposito - Jose Manzanares", dueDate: "2026-10-01", amount: 1200, isPaid: false },
+    { id: "x4", concept: "Caparra Country - Gabriel Manzanares", dueDate: "2026-10-01", amount: 692, isPaid: false },
+    { id: "x5", concept: "CCC Logistic - Storage", dueDate: "2026-10-02", amount: 95, isPaid: false },
+    { id: "x6", concept: "NOMINA", dueDate: "2026-10-08", amount: 400, isPaid: false },
+    { id: "x7", concept: "Internal Revenue Service", dueDate: "2026-10-09", amount: 600, isPaid: true },
+    { id: "x8", concept: "Departamento de Hacienda", dueDate: "2026-10-09", amount: 180, isPaid: true },
+    { id: "x9", concept: "Carlos Mercado Seguros", dueDate: null as unknown as never, amount: 0, isPaid: false },
+    { id: "x10", concept: "NOMINA", dueDate: "2026-10-15", amount: 400, isPaid: false },
+    { id: "x11", concept: "SINERGIA LLC", dueDate: "2026-10-16", amount: 180, isPaid: true },
+    { id: "x12", concept: "Gabriel Manzanares - Auto", dueDate: "2026-10-21", amount: 1700, isPaid: false },
+    { id: "x13", concept: "NOMINA", dueDate: "2026-10-22", amount: 400, isPaid: false },
+    { id: "x14", concept: "SINERGIA LLC", dueDate: "2026-10-23", amount: 180, isPaid: false },
+    { id: "x15", concept: "NOMINA", dueDate: "2026-10-29", amount: 400, isPaid: false },
+    { id: "x16", concept: "SINERGIA LLC", dueDate: "2026-10-30", amount: 180, isPaid: false },
+    { id: "x17", concept: "PenFed - Jose Manzanares", dueDate: "2026-10-01", amount: 800, isPaid: true },
+    { id: "x18", concept: "Deposito Oriental Bank - Seg de vida - J Manzanares", dueDate: "2026-10-01", amount: 350, isPaid: true },
+    { id: "x19", concept: "SINERGIA LLC", dueDate: "2026-10-09", amount: 180, isPaid: true },
+  ];
+  const buckets1015 = splitRecurringByWeek(recurring1015, REPORT_DATE_1015);
+  assert.equal(buckets1015.prior.total, 3229.0, "Recurrentes anteriores del 10/15 v3 = 3,229.00 (Hacienda ya pagada, no suma)");
+  assert.equal(buckets1015.thisWeek.total, 400.0, "Recurrentes de esta semana del 10/15 v3 = 400.00 (solo NOMINA 10/15)");
+  assert.equal(buckets1015.nextWeek.total, 2280.0);
+  assert.equal(buckets1015.weekAfter.total, 580.0);
+  const grandTotal1015 = round(
+    buckets1015.prior.total + buckets1015.thisWeek.total + buckets1015.nextWeek.total + buckets1015.weekAfter.total,
+  );
+  assert.equal(grandTotal1015, 6489.0, "TOTAL RECURRENTES A PAGAR del 10/15 v3 = 6,489.00");
+
+  const weeklyPayments1015 = buildBalanceAfterWeeklyPayments(reconciliation1015.register, buckets1015);
+  assert.equal(weeklyPayments1015.balanceAfterWeeklyPayments, 29412.44, "B del 10/15 v3 = 29,412.44");
+
+  const financial1015 = buildFinancialReport({
+    reportDate: REPORT_DATE_1015,
+    balanceAfterWeeklyPayments: weeklyPayments1015.balanceAfterWeeklyPayments,
+    currentWeekIncome: 7500,
+    nextWeekBuckets: { total: buckets1015.nextWeek.total },
+    weekAfterBuckets: { total: buckets1015.weekAfter.total },
+    flatWeeklyIncome: 9000,
+  });
+  assert.equal(financial1015.day7.balance, 36912.44, "7 días del 10/15 v3 = 36,912.44 (como el real de Hernan)");
+  assert.equal(financial1015.day14.balance, 43632.44, "14 días del 10/15 v3 = 43,632.44");
+  assert.equal(financial1015.day21.balance, 52052.44, "21 días del 10/15 v3 = 52,052.44");
+
+  const balanceGabriel1015 = buildBalanceGabriel(31654.46, 0);
+  const varianceLines1015: VarianceLine[] = [
+    { concept: "Diferencia Pago Recurrentes (Internal Revenue Service)", amount: 275.92, section: "variance" },
+    { concept: "Diferencia Pago Recurrentes (Departamento de Hacienda)", amount: 100.0, section: "variance" },
+    { concept: "Northwestern Selecta", amount: -2397.42, section: "variance" },
+    { concept: "Costco Wholesale", amount: -412.4, section: "variance" },
+    { concept: "The Butcher Costco", amount: 191.88, section: "uncollected_deposit" },
+  ];
+  const split1015 = splitVarianceLinesBySection(varianceLines1015);
+  assert.equal(totalVarianceOf(split1015.variance), -2433.9, "Variación checks del 10/15 v3 = -2,433.90 (SIN The Butcher Costco, que es depósito)");
+  assert.equal(totalVarianceOf(split1015.uncollectedDeposits), 191.88, "Variación depósitos del 10/15 v3 = 191.88 (The Butcher Costco, separado de checks)");
+  const varianceCheck1015 = checkVarianceReconciliation(balanceGabriel1015, varianceLines1015, 0, financial1015.balanceToday);
+  assert.ok(varianceCheck1015.balanced, "Control Gabriel del 10/15 v3 cuadra a 0.00");
+  assert.equal(varianceCheck1015.expected, 29412.44, "Gabriel + checks + depósitos + Depósitos del día = 29,412.44");
+
+  const detailRecurring1015: RecurringDetailRow[] = recurring1015.map((item) => ({
+    entryDate: item.dueDate,
+    itemType: "Bill",
+    referenceNumber: null,
+    vendor: item.concept,
+    dueDate: item.dueDate,
+    amount: item.amount,
+    isPaid: item.isPaid,
+    paidDate:
+      item.id === "x7"
+        ? "2026-10-14"
+        : item.id === "x8"
+          ? "2026-10-15"
+          : item.id === "x11"
+            ? "2026-10-15"
+            : item.id === "x17"
+              ? "2026-10-05"
+              : item.id === "x18"
+                ? "2026-10-09"
+                : item.id === "x19"
+                  ? null
+                  : undefined,
+  }));
+
+  // El validador automático (las mismas reglas que corren antes de armar
+  // el paquete) tiene que dar limpio con estos números...
+  const cleanWarnings1015 = checkDailyReportCompleteness({
+    reportDate: REPORT_DATE_1015,
+    reconciliationControl: reconciliation1015,
+    bankMovements: [],
+    recurring: recurring1015,
+    vendorAgingItems: [],
+    vendorAgingConfig: { includedNames: [], excludedNames: [], primeMeatsBalance: 0 },
+    sources: { hasReconciliation: true, hasBankExport: true, hasVendorAging: true, hasCustomerAging: true },
+    varianceReconciliation: {
+      balanceGabriel: balanceGabriel1015,
+      varianceLines: varianceLines1015,
+      notEnteredDepositsTotal: 0,
+      balanceToday: financial1015.balanceToday,
+    },
+    weeklyPayments: weeklyPayments1015,
+    financial: financial1015,
+    buckets: buckets1015,
+    currentWeekIncome: 7500,
+    flatWeeklyIncome: 9000,
+  });
+  assert.equal(
+    cleanWarnings1015.filter((w) => w.severity === "blocking").length,
+    0,
+    "con los números reales del 10/15 v3, el validador automático no bloquea nada",
+  );
+
+  // ...y tiene que BLOQUEAR con un mensaje claro si cualquiera de las
+  // reglas nuevas se rompe -- una por una, sin tocar las demás.
+  const brokenSectionWarnings = checkDailyReportCompleteness({
+    reportDate: REPORT_DATE_1015,
+    reconciliationControl: reconciliation1015,
+    bankMovements: [],
+    recurring: recurring1015,
+    vendorAgingItems: [],
+    vendorAgingConfig: { includedNames: [], excludedNames: [], primeMeatsBalance: 0 },
+    sources: { hasReconciliation: true, hasBankExport: true, hasVendorAging: true, hasCustomerAging: true },
+    varianceReconciliation: {
+      balanceGabriel: balanceGabriel1015,
+      varianceLines: [...varianceLines1015, { concept: "Línea mal cargada", amount: 1, section: "otra" as never }],
+      notEnteredDepositsTotal: 0,
+      balanceToday: financial1015.balanceToday,
+    },
+    weeklyPayments: weeklyPayments1015,
+    financial: financial1015,
+    buckets: buckets1015,
+    currentWeekIncome: 7500,
+    flatWeeklyIncome: 9000,
+  });
+  assert.ok(
+    brokenSectionWarnings.some((w) => w.severity === "blocking" && w.message.includes("sección válida")),
+    "una línea de Variación Diaria con sección inválida bloquea con mensaje claro",
+  );
+
+  const brokenBalanceWarnings = checkDailyReportCompleteness({
+    reportDate: REPORT_DATE_1015,
+    reconciliationControl: reconciliation1015,
+    bankMovements: [],
+    recurring: recurring1015,
+    vendorAgingItems: [],
+    vendorAgingConfig: { includedNames: [], excludedNames: [], primeMeatsBalance: 0 },
+    sources: { hasReconciliation: true, hasBankExport: true, hasVendorAging: true, hasCustomerAging: true },
+    varianceReconciliation: {
+      balanceGabriel: balanceGabriel1015,
+      varianceLines: varianceLines1015,
+      notEnteredDepositsTotal: 0,
+      balanceToday: financial1015.balanceToday,
+    },
+    weeklyPayments: weeklyPayments1015,
+    financial: { ...financial1015, balanceToday: financial1015.balanceToday + 1 },
+    buckets: buckets1015,
+    currentWeekIncome: 7500,
+    flatWeeklyIncome: 9000,
+  });
+  assert.ok(
+    brokenBalanceWarnings.some(
+      (w) => w.severity === "blocking" && w.message.includes("Balance after Weekly Payments") && w.message.includes("Register"),
+    ),
+    "Balance after Weekly Payments desalineado del Register − recurrentes bloquea con mensaje claro",
+  );
+
+  const brokenRegisterWarnings = checkDailyReportCompleteness({
+    reportDate: REPORT_DATE_1015,
+    reconciliationControl: { ...reconciliation1015, register: reconciliation1015.register + 1 },
+    bankMovements: [],
+    recurring: recurring1015,
+    vendorAgingItems: [],
+    vendorAgingConfig: { includedNames: [], excludedNames: [], primeMeatsBalance: 0 },
+    sources: { hasReconciliation: true, hasBankExport: true, hasVendorAging: true, hasCustomerAging: true },
+    varianceReconciliation: {
+      balanceGabriel: balanceGabriel1015,
+      varianceLines: varianceLines1015,
+      notEnteredDepositsTotal: 0,
+      balanceToday: financial1015.balanceToday,
+    },
+    weeklyPayments: weeklyPayments1015,
+    financial: financial1015,
+    buckets: buckets1015,
+    currentWeekIncome: 7500,
+    flatWeeklyIncome: 9000,
+  });
+  assert.ok(
+    brokenRegisterWarnings.some(
+      (w) => w.severity === "blocking" && w.message.includes("Register usado en Balance after Weekly Payments"),
+    ),
+    "Register de la Reconciliation distinto del usado en Balance after Weekly Payments bloquea con mensaje claro",
+  );
+
+  const brokenHorizonWarnings = checkDailyReportCompleteness({
+    reportDate: REPORT_DATE_1015,
+    reconciliationControl: reconciliation1015,
+    bankMovements: [],
+    recurring: recurring1015,
+    vendorAgingItems: [],
+    vendorAgingConfig: { includedNames: [], excludedNames: [], primeMeatsBalance: 0 },
+    sources: { hasReconciliation: true, hasBankExport: true, hasVendorAging: true, hasCustomerAging: true },
+    varianceReconciliation: {
+      balanceGabriel: balanceGabriel1015,
+      varianceLines: varianceLines1015,
+      notEnteredDepositsTotal: 0,
+      balanceToday: financial1015.balanceToday,
+    },
+    weeklyPayments: weeklyPayments1015,
+    financial: {
+      ...financial1015,
+      day7: { ...financial1015.day7, balance: financial1015.day7.balance + 1 },
+    },
+    buckets: buckets1015,
+    currentWeekIncome: 7500,
+    flatWeeklyIncome: 9000,
+  });
+  assert.ok(
+    brokenHorizonWarnings.some((w) => w.severity === "blocking" && w.message.includes("7/14/21 días")),
+    "saldos 7/14/21 días inconsistentes bloquean con mensaje claro",
+  );
+
+  console.log(
+    "Validador automático del paquete (Register, Balance after Weekly Payments, Control Gabriel, " +
+      "7/14/21 días y secciones de Variación Diaria): pasa limpio con los números reales del 10/15 v3 " +
+      "y bloquea con mensaje claro ante cada regla rota -- OK.",
+  );
+
+  // Los 2 PDFs que cambian de verdad en la v3: Reconciliation Information
+  // (etiquetas as of/after con la fecha del período, 10/14/2026, no la
+  // del informe) y la página 2 del Consolidated (Variación Diaria en sus
+  // 2 bloques reales) + A/P Aging Detail Recurrentes (IRS Y Hacienda
+  // visibles, pagados, sin sumar).
+  const consolidatedPdf1015 = await buildConsolidatedPdf({
+    reportDate: REPORT_DATE_1015,
+    periodEnding: PERIOD_ENDING_1015,
+    control: reconciliation1015,
+    financial: financial1015,
+    recurring: detailRecurring1015,
+    varianceLines: varianceLines1015,
+    balanceGabriel: balanceGabriel1015,
+    notEnteredDepositsTotal: 0,
+    vendorAging: null,
+    customerAgingRawTotal: null,
+    customerAgingConsolidated: null,
+    primeMeatsRecurring: 0,
+  });
+  const consolidated1015Page1Text = await extractPdfText(consolidatedPdf1015);
+  assert.ok(
+    consolidated1015Page1Text.includes(`as of ${formatSlashDate(PERIOD_ENDING_1015)}`) &&
+      consolidated1015Page1Text.includes(`after ${formatSlashDate(PERIOD_ENDING_1015)}`),
+    "Reconciliation Information del 10/15 v3: etiquetas as of/after con la fecha del período conciliado (10/14/2026)",
+  );
+  assert.ok(
+    !consolidated1015Page1Text.includes(`as of ${formatSlashDate(REPORT_DATE_1015)}`),
+    "Reconciliation Information del 10/15 v3: NO lleva la fecha del informe (10/15/2026) en las etiquetas as of/after",
+  );
+  assert.ok(
+    consolidated1015Page1Text.includes("Internal Revenue Service") && consolidated1015Page1Text.includes("Departamento de Hacienda"),
+    "A/P Aging Detail Recurrentes del 10/15 v3: IRS Y Hacienda visibles a la vez (ambos pagados, dentro de la ventana periodEnding-reportDate)",
+  );
+  assert.ok(
+    !consolidated1015Page1Text.includes("Nothwestern") && !consolidated1015Page1Text.includes("Agin "),
+    "sin los typos propios de Hernan (Nothwestern, Agin) -- los nombres van bien escritos",
+  );
+
+  const consolidated1015Page2Text = await extractPdfText(consolidatedPdf1015);
+  assert.ok(
+    consolidated1015Page2Text.includes("Variación Diaria - Uncleared checks and payments") &&
+      consolidated1015Page2Text.includes(money(-2433.9)),
+    '"Uncleared checks and payments" del 10/15 v3 = -2,433.90 (SIN The Butcher Costco)',
+  );
+  assert.ok(
+    consolidated1015Page2Text.includes("Variación Diaria- Uncleared deposits and other credits") &&
+      consolidated1015Page2Text.includes(money(191.88)),
+    '"Uncleared deposits and other credits" del 10/15 v3 = 191.88 (The Butcher Costco, en su propio bloque)',
+  );
+  assert.ok(
+    consolidated1015Page2Text.includes("The Butcher Costco") && consolidated1015Page2Text.includes("Northwestern Selecta"),
+    "ambas líneas nuevas de Variación Diaria aparecen en el PDF, cada una en su bloque",
+  );
+
+  console.log(
+    "Consolidated del 10/15 v3 (contra el real de Hernan): Register 33,041.44, B 29,412.44, " +
+      "7/14/21 días 36,912.44/43,632.44/52,052.44, recurrentes 3,229/400/2,280/580/6,489, " +
+      "Variación Diaria separada en checks -2,433.90 / depósitos 191.88, IRS+Hacienda visibles, " +
+      "etiquetas as of/after con 10/14/2026 -- OK.",
   );
 
   console.log("\nTodos los checks de 'Informes diarios' (Cut Meat Distributors) pasaron.");
