@@ -375,6 +375,8 @@ const bankMovementSchema = z.object({
   linkedRecurringId: z.string().uuid().nullable().optional(),
   isNotEnteredDeposit: z.boolean().optional(),
   isReconciledCleared: z.boolean().optional(),
+  reference: z.string().trim().max(200).nullable().optional(),
+  additionalReference: z.string().trim().max(200).nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
 });
 
@@ -431,6 +433,8 @@ export async function saveBankExport(input: {
           linked_recurring_id: movement.linkedRecurringId ?? null,
           is_not_entered_deposit: movement.isNotEnteredDeposit ?? false,
           is_reconciled_cleared: movement.isReconciledCleared ?? false,
+          reference: movement.reference ?? null,
+          additional_reference: movement.additionalReference ?? null,
           note: movement.note ?? null,
           updated_by: profile.id,
         })),
@@ -1098,8 +1102,11 @@ export async function generateDailyPdf(input: {
         break;
       }
       case "consolidated": {
+        const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
         bytes = await buildConsolidatedPdf({
           reportDate,
+          periodEnding:
+            workspace.reconciliation?.asOfDate ?? lastBusinessDayBefore(reportDate, holidaySet),
           control: workspace.reconciliationControl,
           financial: workspace.financial,
           recurring: workspace.recurring.map((item) => ({

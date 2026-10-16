@@ -13,6 +13,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 import {
   buildRecurringDetailTable,
   round,
+  splitVarianceLinesBySection,
   totalVarianceOf,
   type AgingGroup,
   type AgingLine,
@@ -447,7 +448,19 @@ export async function buildReconciliationPdf(params: {
   const clearedDepositsTotal = round(params.clearedDeposits.reduce((total, item) => total + item.amount, 0));
   const uncleardAsOfTotal = round(params.control.asOfChecksTotal + params.control.asOfDepositsTotal);
   const uncleardAfterTotal = round(params.control.afterChecksTotal + params.control.afterDepositsTotal);
-  const hasAfterTranche = params.reportDate !== params.periodEnding;
+  // No basta con reportDate !== periodEnding -- un día sin ninguna
+  // transacción nueva desde la última conciliación (p.ej. el 10/14
+  // reconciliando contra el período al 10/13, pero QuickBooks sin nada
+  // posterior) no debe mostrar "Cleared/Uncleared transactions after"
+  // en el Summary ni las tablas "after" en Details, aunque las fechas
+  // difieran -- eso solo corresponde cuando SÍ hay algo en ese tramo.
+  const hasAfterTranche = params.afterChecks.length > 0 || params.afterDeposits.length > 0;
+  // La última fila "Register balance as of [Reconciled on]" repite el
+  // mismo Register que la fila "as of [periodEnding]" cuando el tramo
+  // "after" neteó a cero (caso raro, pero posible) -- se muestra solo
+  // si de verdad es un número distinto, no solo porque hasAfterTranche
+  // sea true.
+  const showFinalRegisterLine = round(params.control.register) !== round(params.control.registerAsOf);
 
   doc.page.drawText("Summary (USD)", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
   y -= 18;
@@ -468,6 +481,8 @@ export async function buildReconciliationPdf(params: {
     y -= 14;
     keyValueRow(doc, `Uncleared transactions after ${formatSlashDate(params.periodEnding)}`, money(uncleardAfterTotal), MARGIN, y);
     y -= 14;
+  }
+  if (showFinalRegisterLine) {
     // "Register balance as of" (la última fila del Summary) lleva la
     // fecha de "Reconciled on" -- cuándo se hizo ESTA conciliación --
     // no reportDate.
@@ -565,8 +580,8 @@ export async function buildBankExportPdf(params: {
   );
   const rows: TableRow[] = params.movements.map((m) => [
     m.postDate ? formatSlashDate(m.postDate) : "",
-    "",
-    "",
+    m.reference ?? "",
+    m.additionalReference ?? "",
     m.description,
     m.direction === "egreso" ? money(m.amount) : "",
     m.direction === "ingreso" ? money(m.amount) : "",
@@ -893,6 +908,11 @@ function drawRecurringDetailTable(
 
 export async function buildConsolidatedPdf(params: {
   reportDate: IsoDate;
+  /** Fecha de la última conciliación real (as_of_date) -- las etiquetas
+   * "as of / after" de Reconciliation Information y la ventana de
+   * visibilidad de recurrentes pagados usan esta fecha, no reportDate.
+   * Sin ella (compatibilidad), caen a reportDate. */
+  periodEnding?: IsoDate | null;
   control: ReconciliationControlResult | null;
   financial: FinancialReportResult | null;
   recurring: RecurringDetailRow[];
@@ -921,11 +941,12 @@ export async function buildConsolidatedPdf(params: {
   right(doc.page, "Amount", doc.bold, 7.5, MARGIN + 335, y);
   y -= 14;
   if (params.control) {
-    // La columna "Date" de estas filas -- a diferencia del Reconciliation
-    // Report propio, que usa la fecha de la última conciliación real --
-    // siempre es reportDate (el día de ESTE informe), igual que en la
-    // planilla de Hernan.
-    const asOfDate = params.reportDate;
+    // La columna "Date" de estas filas replica la fecha de la última
+    // conciliación real (periodEnding/as_of_date del Reconciliation
+    // Report) -- NO reportDate. Confirmado contra el consolidado real de
+    // Hernan del 10/15: sus etiquetas "as of / after" llevan 10/14/2026
+    // (el período que se conciliadó), no 10/15.
+    const asOfDate = params.periodEnding ?? params.reportDate;
     y = labelValueRow(doc, "Statement ending balance S/RECONCILIATION REPORT", money(params.control.statementEnding), MARGIN, y) - 2;
     y = labelValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.asOfChecksTotal), MARGIN, y) - 2;
     y = labelValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.afterChecksTotal), MARGIN, y) - 2;
@@ -933,7 +954,7 @@ export async function buildConsolidatedPdf(params: {
     y = labelValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.afterDepositsTotal), MARGIN, y) - 2;
     y = labelValueRow(doc, "Register balance S/RECONCILIATION REPORT", money(params.control.register), MARGIN, y) - 2;
   }
-  const recurring = buildRecurringDetailTable(params.recurring, params.reportDate);
+  const recurring = buildRecurringDetailTable(params.recurring, params.reportDate, params.periodEnding);
   y = labelValueRow(doc, "Recurrentes prior to this week", money(-recurring.prior.total), MARGIN, y) - 2;
   y = labelValueRow(doc, "Recurrentes for this week", money(-recurring.thisWeek.total), MARGIN, y) - 2;
   y = labelValueRow(doc, "Balance after Weekly Payments", money(params.financial?.balanceToday ?? null), MARGIN, y) - 2;
@@ -993,14 +1014,18 @@ export async function buildConsolidatedPdf(params: {
   keyValueRow(doc2, "Balance - GABRIEL", money(params.balanceGabriel), MARGIN, y2, 300);
   y2 -= 24;
 
-  // Todas las líneas de Variación Diaria (incluida Costco, aunque su
-  // section siga siendo "uncollected_deposit" para la ecuación de
-  // control) se muestran juntas en "Uncleared checks and payments" --
-  // "Uncleared deposits and other credits" es una sección propia del
-  // formato de Hernan que queda siempre vacía (0.00) en este informe.
-  // El total de control (Gabriel + variación) no cambia: sigue siendo
-  // Gabriel + la suma de TODAS las líneas, sin importar cómo se
-  // agrupen visualmente.
+  // Cada línea de Variación Diaria se muestra en SU bloque -- "variance"
+  // en "Uncleared checks and payments", "uncollected_deposit" en
+  // "Uncleared deposits and other credits" -- con su propio subtotal
+  // real (nunca mezcladas ni forzadas a 0.00). Confirmado contra el
+  // consolidado real de Hernan del 10/15: The Butcher Costco (depósito
+  // sin cobrar) va en el bloque de depósitos, separado del subtotal de
+  // cheques. El total de control (Gabriel + variación) no cambia: sigue
+  // siendo Gabriel + la suma de TODAS las líneas de ambos bloques.
+  const { variance: checksVarianceLines, uncollectedDeposits: depositVarianceLines } =
+    splitVarianceLinesBySection(params.varianceLines);
+  const checksVarianceTotal = totalVarianceOf(checksVarianceLines);
+  const depositVarianceTotal = totalVarianceOf(depositVarianceLines);
   const allVarianceTotal = totalVarianceOf(params.varianceLines);
   const varianceColumns = [
     { label: "", width: 350 },
@@ -1013,12 +1038,20 @@ export async function buildConsolidatedPdf(params: {
     MARGIN,
     y2,
     varianceColumns,
-    params.varianceLines.map((line) => [line.concept, money(line.amount)]),
-    ["", money(allVarianceTotal)],
+    checksVarianceLines.map((line) => [line.concept, money(line.amount)]),
+    ["", money(checksVarianceTotal)],
   );
   y2 -= 14;
   y2 = sectionTitle(doc2, "Variación Diaria- Uncleared deposits and other credits", y2, 10);
-  y2 = drawTable(pdf, doc2, MARGIN, y2, varianceColumns, [], ["", money(0)]);
+  y2 = drawTable(
+    pdf,
+    doc2,
+    MARGIN,
+    y2,
+    varianceColumns,
+    depositVarianceLines.map((line) => [line.concept, money(line.amount)]),
+    ["", money(depositVarianceTotal)],
+  );
   y2 -= 20;
 
   const balanceAfterVariance =

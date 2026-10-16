@@ -222,9 +222,16 @@ export type RecurringDetailTable = {
  * dentro de "prior" y por eso descontaba NOMINA/IRS/Hacienda dos veces.
  *
  * Un recurrente pagado (isPaid=true) nunca suma a ningún total. Se
- * muestra en gris SOLO el día de su pago (paidDate, o dueDate si no hay
- * paidDate informado) -- al día siguiente desaparece de la tabla, igual
- * que en los informes de Hernan.
+ * muestra en gris mientras su pago (paidDate, o dueDate si no hay
+ * paidDate informado) caiga dentro de la ventana [periodEnding,
+ * reportDate] del informe -- es decir, desde la última conciliación real
+ * hasta hoy. Confirmado contra el consolidado real de Hernan del 10/15:
+ * ese día muestra a la vez el IRS (pagado 10/14, dentro del período que
+ * recién se conciliadó con periodEnding 10/14) y Hacienda (pagado 10/15,
+ * ya "after" esa conciliación pero todavía de hoy) -- ninguno de los dos
+ * se muestra en días posteriores. Sin periodEnding (p.ej. llamadas que
+ * todavía no lo tienen a mano), cae al comportamiento anterior: solo el
+ * día exacto de pago.
  *
  * Los pendientes sin vencimiento (p.ej. un recurrente todavía sin
  * facturar, monto $0 -- "Carlos Mercado Seguros") van en la cubeta
@@ -233,6 +240,7 @@ export type RecurringDetailTable = {
 export function buildRecurringDetailTable(
   recurring: RecurringDetailRow[],
   reportDate: IsoDate,
+  periodEnding?: IsoDate | null,
 ): RecurringDetailTable {
   const weekStart = sundayWeekStartOf(reportDate);
   const thisWeekEnd = addDays(weekStart, 6);
@@ -251,11 +259,17 @@ export function buildRecurringDetailTable(
     return null;
   };
 
-  // Un recurrente pagado solo se muestra el día exacto de su pago; antes
-  // o después de ese día, desaparece de la tabla (no solo del total).
+  // Un recurrente pagado se muestra mientras su pago caiga dentro de la
+  // ventana [periodEnding, reportDate] -- fuera de ese rango (antes de
+  // periodEnding o después de reportDate), desaparece de la tabla (no
+  // solo del total). Sin periodEnding, solo el día exacto de pago.
   const visible = recurring.filter((item) => {
     if (!item.isPaid) return true;
     const effectivePaidDate = item.paidDate ?? item.dueDate;
+    if (effectivePaidDate == null) return false;
+    if (periodEnding != null) {
+      return effectivePaidDate >= periodEnding && effectivePaidDate <= reportDate;
+    }
     return effectivePaidDate === reportDate;
   });
 
@@ -603,6 +617,11 @@ export type BankMovement = {
    * de Variación Diaria. */
   postDate?: IsoDate | null;
   calculatedBalance?: number | null;
+  /** Reference / Additional Reference del export real del banco -- solo
+   * para ese PDF, columnas propias junto a Post Date/Description (antes
+   * quedaban siempre en blanco porque el dato no se guardaba). */
+  reference?: string | null;
+  additionalReference?: string | null;
 };
 
 export type BankMovementClassification = {
