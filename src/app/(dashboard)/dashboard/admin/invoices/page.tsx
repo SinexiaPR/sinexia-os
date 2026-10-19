@@ -19,12 +19,22 @@ export default async function AdminInvoicesPage() {
         action={
           <div className="flex gap-2">
             <Button asChild variant="outline">
+              <Link href="/dashboard/admin/invoices/billing-clients">
+                Clientes facturables
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
               <Link href="/dashboard/admin/settings/billing">
                 Configuración
               </Link>
             </Button>
             <Button asChild>
               <Link href="/dashboard/admin/invoices/new">Nueva factura</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/dashboard/admin/invoices/batch">
+                Generar facturas de la semana
+              </Link>
             </Button>
           </div>
         }
