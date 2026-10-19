@@ -90,6 +90,24 @@ export type Invoice = {
   created_at: string;
   is_legacy_import: boolean;
   legacy_client_label: string | null;
+  billing_batch_client_id: string | null;
+  billing_period_start: string | null;
+  billing_period_end: string | null;
+  companies?: { name: string; slug: string } | null;
+};
+
+export type BillingBatchAmountType = "fixed" | "system";
+
+export type BillingBatchClient = {
+  id: string;
+  company_id: string;
+  amount_type: BillingBatchAmountType;
+  fixed_amount: number | null;
+  line_description: string;
+  active: boolean;
+  display_order: number | null;
+  created_at: string;
+  updated_at: string;
   companies?: { name: string; slug: string } | null;
 };
 

@@ -73,6 +73,9 @@ const invoice: Invoice = {
   created_at: "2026-07-14T11:00:00Z",
   is_legacy_import: false,
   legacy_client_label: null,
+  billing_batch_client_id: null,
+  billing_period_start: null,
+  billing_period_end: null,
 };
 const items: InvoiceItem[] = [
   {
