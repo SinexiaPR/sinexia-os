@@ -282,7 +282,13 @@ export async function getRecurringPayments(
     concept: row.vendor,
     dueDate: row.due_date,
     amount: Number(row.amount),
-    isPaid: row.pagado,
+    // Un pago posterior a la fecha de este informe no cuenta como pagado
+    // TODAVIA para ese día -- si no, corregir el estado de un recurrente
+    // hoy reescribiría retroactivamente los buckets de días ya cerrados
+    // anteriores al pago real (confirmado con María 10/26: paid_date debe
+    // ser <= reportDate; sin paid_date, pagado=true vale para cualquier
+    // fecha, como antes).
+    isPaid: row.pagado && (row.paid_date == null || row.paid_date <= reportDate),
     actualAmount: row.paid_amount == null ? null : Number(row.paid_amount),
     period: row.period,
     entryDate: row.fecha,
