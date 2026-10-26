@@ -722,12 +722,14 @@ export async function buildAgingVendorsPdf(params: {
   generatedAt?: Date;
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
-  const y = drawAgingHeader(doc, "Vendor Balance Detail Report - New", "All Dates");
+  const subtitle = `As of ${formatEnglishShortDate(params.reportDate)}`;
+  const y = drawAgingHeader(doc, "Vendor Balance Detail Report - New", subtitle);
+  const onNewPage = (startY: number) => drawAgingHeader(doc, "Vendor Balance Detail Report - New", subtitle, startY);
   const hasDetail = params.groups?.some((group) => group.hasDetail);
   if (hasDetail && params.groups) {
-    drawAgingDetailTable(pdf, doc, y, params.groups, params.rawTotal);
+    drawAgingDetailTable(pdf, doc, y, params.groups, params.rawTotal, onNewPage);
   } else {
-    drawAgingTable(pdf, doc, y, params.items, params.rawTotal);
+    drawAgingTable(pdf, doc, y, params.items, params.rawTotal, onNewPage);
   }
   stampFooters(pdf, doc.regular, { dateStamp: formatAgingFooterStamp(params.generatedAt ?? new Date()) });
   return pdf.save();
