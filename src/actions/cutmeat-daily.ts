@@ -142,6 +142,37 @@ export async function closeDailyReport(input: { companyId: string; reportId: str
       parsed.data.companyId,
       report.data.report_date as IsoDate,
     );
+    // Se congela ANTES de marcar el día como closed -- el trigger
+    // cutmeat_daily_recurring_snapshot_block_closed_write exige que el
+    // informe todavía NO esté cerrado para poder insertar (ver Opción B).
+    // El delete previo cubre el caso borde de cerrar dos veces seguidas
+    // sin reabrir entre medio (no debería pasar por la UI, pero evita
+    // duplicar filas si pasara).
+    const { error: deleteSnapshotError } = await supabase
+      .from("cutmeat_daily_recurring_snapshot")
+      .delete()
+      .eq("report_id", parsed.data.reportId);
+    if (deleteSnapshotError) throw deleteSnapshotError;
+    const { error: snapshotError } = await supabase
+      .from("cutmeat_daily_recurring_snapshot")
+      .insert(
+        (workspace.recurring ?? []).map((item) => ({
+          report_id: parsed.data.reportId,
+          recurrente_id: item.id,
+          vendor: item.vendor,
+          due_date: item.dueDate,
+          amount: item.amount,
+          is_paid: item.isPaid,
+          paid_date: item.paidDate,
+          entry_date: item.entryDate,
+          item_type: item.itemType,
+          reference_number: item.referenceNumber,
+          display_order: item.displayOrder,
+          cutoff_date: workspace.cutoffDate,
+          updated_by: profile.id,
+        })),
+      );
+    if (snapshotError) throw snapshotError;
     const { error } = await supabase
       .from("cutmeat_daily_reports")
       .update({
@@ -193,6 +224,15 @@ export async function reopenDailyReport(input: { companyId: string; reportId: st
       .eq("id", parsed.data.reportId)
       .eq("company_id", parsed.data.companyId);
     if (error) throw error;
+    // Recién DESPUÉS de sacar el día de 'closed' se puede borrar la foto
+    // (el trigger bloquea cualquier escritura en la foto de un día que
+    // todavía figure como closed) -- un día reabierto vuelve a recalcular
+    // los recurrentes en vivo hasta que se cierre otra vez (Opción B).
+    const { error: snapshotError } = await supabase
+      .from("cutmeat_daily_recurring_snapshot")
+      .delete()
+      .eq("report_id", parsed.data.reportId);
+    if (snapshotError) throw snapshotError;
     await logEvent(parsed.data.reportId, "reopened", profile.id);
     refresh(parsed.data.companyId);
     return { success: true };
