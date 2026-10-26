@@ -56,6 +56,22 @@ export function lastBusinessDayBefore(
   return cursor;
 }
 
+/**
+ * Primer día hábil después de la fecha dada, saltando fines de semana y
+ * los feriados configurados -- la fecha de corte por defecto en que se
+ * arma un informe (el informe del viernes D se hace el lunes siguiente).
+ */
+export function nextBusinessDayAfter(
+  value: IsoDate,
+  holidays: Set<IsoDate>,
+): IsoDate {
+  let cursor = addDays(value, 1);
+  while (isWeekend(cursor) || holidays.has(cursor)) {
+    cursor = addDays(cursor, 1);
+  }
+  return cursor;
+}
+
 export function todayInPuertoRico(): IsoDate {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Puerto_Rico",
