@@ -24,6 +24,7 @@ import {
 import {
   addDays,
   lastBusinessDayBefore,
+  nextBusinessDayAfter,
   sundayWeekStartOf,
   todayInPuertoRico,
   type IsoDate,
@@ -259,6 +260,7 @@ function monthStartOf(date: IsoDate): IsoDate {
 export async function getRecurringPayments(
   companyId: string,
   reportDate: IsoDate,
+  cutoffDate: IsoDate,
 ): Promise<CutMeatRecurringPayment[]> {
   const periods = Array.from(
     new Set([monthStartOf(reportDate), monthStartOf(addDays(reportDate, 20))]),
@@ -273,16 +275,32 @@ export async function getRecurringPayments(
     // (varias filas comparten due_date en un orden específico que no se
     // puede derivar de la fecha sola, p.ej. "Juan Diaz" antes de
     // "Deposito - Jose Manzanares" antes de "Caparra", todas 10/01) --
-    // due_date queda como respaldo para filas sin display_order todavía.
+    // due_date queda como respaldo para filas sin display_order todavía
+    // (p.ej. PenFed/Oriental Bank/Liberty Movil), e id como último
+    // desempate explícito para que el orden quede 100% determinístico
+    // entre dos filas que compartan display_order (o ambas null) Y
+    // due_date -- antes dependía del orden físico implícito de la base
+    // (confirmado 10/26: no mueve ninguna fila de las que ya se cargaron).
     .order("display_order", { ascending: true, nullsFirst: false })
-    .order("due_date", { ascending: true, nullsFirst: false });
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
   if (error) throw error;
   return (data ?? []).map((row) => ({
     id: row.id,
     concept: row.vendor,
     dueDate: row.due_date,
     amount: Number(row.amount),
-    isPaid: row.pagado,
+    // Un pago posterior a la fecha de CORTE (cuándo se armó el informe
+    // con los datos de QuickBooks -- normalmente el día hábil siguiente a
+    // reportDate, o el reconciled_on real si ya está guardado) no cuenta
+    // como pagado todavía para ese informe -- si no, corregir el estado
+    // de un recurrente hoy reescribiría retroactivamente los buckets de
+    // días ya cerrados cuyo corte fue anterior al pago real (confirmado
+    // con María 10/26: la comparación es contra la fecha de corte, NO
+    // contra reportDate -- un informe hecho el día hábil siguiente a D ya
+    // "ve" un pago hecho el mismo D). Sin paid_date, pagado=true vale
+    // para cualquier fecha, como antes.
+    isPaid: row.pagado && (row.paid_date == null || row.paid_date <= cutoffDate),
     actualAmount: row.paid_amount == null ? null : Number(row.paid_amount),
     period: row.period,
     entryDate: row.fecha,
@@ -431,10 +449,26 @@ export async function getDailyReportWorkspace(
   const weekAfterStart = addDays(weekStart, 14);
   const weekAfterEnd = addDays(weekStart, 20);
 
+  // Fecha de corte para decidir si un recurrente ya "cuenta" como pagado
+  // en este informe: el reconciled_on real guardado (cuándo se armó el
+  // informe con los datos de QuickBooks) si ya existe, o si no el día
+  // hábil siguiente a reportDate -- se necesita ANTES del Promise.all de
+  // abajo porque getRecurringPayments depende de ella.
+  const holidays = await getCutMeatHolidays(companyId);
+  const holidaySet = new Set(holidays.map((h) => h.holidayDate));
+  const reconciledOnRes = report
+    ? await supabase
+        .from("cutmeat_daily_reconciliation")
+        .select("reconciled_on")
+        .eq("report_id", report.id)
+        .maybeSingle()
+    : { data: null };
+  const cutoffDate =
+    reconciledOnRes.data?.reconciled_on ?? nextBusinessDayAfter(reportDate, holidaySet);
+
   const [
     settings,
     vendorConfig,
-    holidays,
     recurring,
     incomeDays,
     previousClosed,
@@ -451,8 +485,7 @@ export async function getDailyReportWorkspace(
   ] = await Promise.all([
     getCutMeatSettings(companyId),
     getCutMeatVendorConfig(companyId),
-    getCutMeatHolidays(companyId),
-    getRecurringPayments(companyId, reportDate),
+    getRecurringPayments(companyId, reportDate, cutoffDate),
     getIncomeProjection(companyId, weekStart, addDays(weekStart, 6)),
     getPreviousClosedBalance(companyId, reportDate),
     report
