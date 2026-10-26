@@ -245,6 +245,9 @@ export type CutMeatRecurringPayment = RecurringPayment & {
   /** Fecha real de pago (banco/QuickBooks) -- controla cuándo una fila
    * pagada deja de mostrarse en la tabla de recurrentes del PDF. */
   paidDate: IsoDate | null;
+  /** Orden explícito de cutmeat_recurrentes -- se necesita al cerrar el
+   * día para congelarlo también en cutmeat_daily_recurring_snapshot. */
+  displayOrder: number | null;
 };
 
 function monthStartOf(date: IsoDate): IsoDate {
@@ -309,6 +312,49 @@ export async function getRecurringPayments(
     vendor: row.vendor,
     note: row.notes,
     paidDate: row.paid_date,
+    displayOrder: row.display_order,
+  }));
+}
+
+/**
+ * Foto congelada de recurrentes de un día ya CERRADO -- se lee de
+ * cutmeat_daily_recurring_snapshot en vez de recalcular en vivo desde
+ * cutmeat_recurrentes, para que corregir un recurrente hoy nunca cambie
+ * retroactivamente los buckets de un día cerrado (ver nota de
+ * getRecurringPayments). `period`/`note`/`actualAmount` no se
+ * congelaron porque ningún cálculo ni PDF de un día cerrado los usa
+ * (confirmado: solo id/concept/dueDate/amount/isPaid alimentan
+ * splitRecurringByWeek, y entryDate/itemType/referenceNumber/vendor/
+ * dueDate/amount/isPaid/paidDate alimentan el PDF consolidado) -- se
+ * devuelven en null/placeholder solo para cumplir el tipo.
+ */
+export async function getRecurringPaymentsSnapshot(
+  reportId: string,
+): Promise<CutMeatRecurringPayment[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("cutmeat_daily_recurring_snapshot")
+    .select("*")
+    .eq("report_id", reportId)
+    .order("display_order", { ascending: true, nullsFirst: false })
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.recurrente_id ?? row.id,
+    concept: row.vendor,
+    dueDate: row.due_date,
+    amount: Number(row.amount),
+    isPaid: row.is_paid,
+    actualAmount: null,
+    period: monthStartOf(row.due_date ?? row.cutoff_date),
+    entryDate: row.entry_date,
+    itemType: row.item_type,
+    referenceNumber: row.reference_number,
+    vendor: row.vendor,
+    note: null,
+    paidDate: row.paid_date,
+    displayOrder: row.display_order,
   }));
 }
 
@@ -466,6 +512,15 @@ export async function getDailyReportWorkspace(
   const cutoffDate =
     reconciledOnRes.data?.reconciled_on ?? nextBusinessDayAfter(reportDate, holidaySet);
 
+  // Un día ya CERRADO lee los recurrentes de su foto congelada
+  // (cutmeat_daily_recurring_snapshot), nunca recalculándolos en vivo --
+  // así, corregir un recurrente hoy no cambia retroactivamente los
+  // buckets ya enviados al dueño (Opción B, aprobada 10/26).
+  const recurringPromise =
+    report?.status === "closed"
+      ? getRecurringPaymentsSnapshot(report.id)
+      : getRecurringPayments(companyId, reportDate, cutoffDate);
+
   const [
     settings,
     vendorConfig,
@@ -485,7 +540,7 @@ export async function getDailyReportWorkspace(
   ] = await Promise.all([
     getCutMeatSettings(companyId),
     getCutMeatVendorConfig(companyId),
-    getRecurringPayments(companyId, reportDate, cutoffDate),
+    recurringPromise,
     getIncomeProjection(companyId, weekStart, addDays(weekStart, 6)),
     getPreviousClosedBalance(companyId, reportDate),
     report
@@ -743,6 +798,7 @@ export async function getDailyReportWorkspace(
     holidays,
     reportDate,
     weekStart,
+    cutoffDate,
     reconciliation: reconciliationRow
       ? {
           statementEnding: Number(reconciliationRow.statement_ending),
