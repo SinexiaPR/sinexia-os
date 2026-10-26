@@ -275,9 +275,15 @@ export async function getRecurringPayments(
     // (varias filas comparten due_date en un orden específico que no se
     // puede derivar de la fecha sola, p.ej. "Juan Diaz" antes de
     // "Deposito - Jose Manzanares" antes de "Caparra", todas 10/01) --
-    // due_date queda como respaldo para filas sin display_order todavía.
+    // due_date queda como respaldo para filas sin display_order todavía
+    // (p.ej. PenFed/Oriental Bank/Liberty Movil), e id como último
+    // desempate explícito para que el orden quede 100% determinístico
+    // entre dos filas que compartan display_order (o ambas null) Y
+    // due_date -- antes dependía del orden físico implícito de la base
+    // (confirmado 10/26: no mueve ninguna fila de las que ya se cargaron).
     .order("display_order", { ascending: true, nullsFirst: false })
-    .order("due_date", { ascending: true, nullsFirst: false });
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
   if (error) throw error;
   return (data ?? []).map((row) => ({
     id: row.id,
