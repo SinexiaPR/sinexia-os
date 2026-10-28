@@ -135,4 +135,5 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for full details.
 | [DEPLOYMENT.md](./DEPLOYMENT.md)     | Setup, deploy, rollback                                        |
 | [CHANGELOG.md](./CHANGELOG.md)       | Version history                                                |
 | [CLIENTS.md](./CLIENTS.md)           | Client companies and extractor plans                           |
+| [DATA_LOADS.md](./DATA_LOADS.md)     | Cargas operativas de datos y su registro (`data_load_log`)     |
 | [INVOICING.md](./INVOICING.md)       | Invoice lifecycle, security, numbering and correction strategy |
