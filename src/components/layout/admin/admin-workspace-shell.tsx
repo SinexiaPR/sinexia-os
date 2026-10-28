@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { SignOutControl } from "@/components/auth/sign-out-control";
 import { AdminHeader } from "@/components/layout/admin/admin-header";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
 import { WhatsAppSupportButton } from "@/components/support/whatsapp-support-button";
@@ -25,9 +24,6 @@ export function AdminWorkspaceShell({
       <div className="hidden w-56 shrink-0 border-r border-border/80 md:block">
         <div className="sticky top-0 flex h-svh flex-col">
           <AdminSidebar badgeCounts={badgeCounts} className="flex-1" />
-          <div className="border-t border-sidebar-border p-3">
-            <SignOutControl variant="nav" />
-          </div>
         </div>
       </div>
 

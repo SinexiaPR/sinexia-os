@@ -90,7 +90,6 @@ export function ClientHeader({
               onNavigate={() => setMobileNavOpen(false)}
               className="flex-1"
             />
-            <SignOutControl variant="nav" />
           </SheetContent>
         </Sheet>
 
@@ -135,6 +134,8 @@ export function ClientHeader({
               <Link href="/dashboard/profile">Perfil</Link>
             </DropdownMenuItem>
             <InstallMenuItem />
+            <DropdownMenuSeparator />
+            <SignOutControl />
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -33,13 +33,16 @@ export default async function CalendarPage({
   const end = new Date(`${today}T12:00:00Z`);
   end.setUTCMonth(end.getUTCMonth() + 18);
   const params = await searchParams;
-  const [items, options] = await Promise.all([
+  const [allItems, options] = await Promise.all([
     getCalendarItems(
       start.toISOString().slice(0, 10),
       end.toISOString().slice(0, 10),
     ),
     getCalendarOptions(),
   ]);
+  // Las tareas programadas (item_type "task") no se muestran en esta vista
+  // por pedido explícito; los datos siguen intactos en calendar_items.
+  const items = allItems.filter((item) => item.itemType !== "task");
   const selected = params.item
     ? (items.find(
         (item) =>

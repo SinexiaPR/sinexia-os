@@ -1,8 +1,13 @@
 import { notFound } from "next/navigation";
 
+import { LeaveAccrualReport } from "@/components/leave-accrual/leave-accrual-report";
 import { PayrollWorkspace } from "@/components/payroll/payroll-workspace";
 import { TresbeClientPayrolls } from "@/components/tresbe-payroll/client-payrolls";
 import { requireAuth } from "@/lib/auth/session";
+import {
+  getLeaveAccrualSettings,
+  getSibaritaReportRows,
+} from "@/services/leave-accrual";
 import {
   getPayrollWorkspace,
   resolveSibaritaCompany,
@@ -41,12 +46,41 @@ export default async function PayrollPage({
   )
     notFound();
   const data = await getPayrollWorkspace(company.id, params.payroll);
+  const isAdmin = profile.role === "admin";
+  const leaveAccrual = isAdmin
+    ? await Promise.all([
+        getSibaritaReportRows(),
+        getLeaveAccrualSettings(company.id),
+      ])
+    : null;
   return (
-    <PayrollWorkspace
-      key={data.selected?.id}
-      company={company}
-      isAdmin={profile.role === "admin"}
-      {...data}
-    />
+    <div className="space-y-8">
+      <PayrollWorkspace
+        key={data.selected?.id}
+        company={company}
+        isAdmin={isAdmin}
+        {...data}
+      />
+      {leaveAccrual ? (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Vacaciones y enfermedad</h2>
+            <p className="text-muted-foreground text-sm">
+              Balance de acumulación para empleados W2 de {company.name}.
+            </p>
+          </div>
+          <LeaveAccrualReport
+            rows={leaveAccrual[0]}
+            companySettings={[
+              {
+                companyId: company.id,
+                companyName: company.name,
+                sickBalanceCapHours: leaveAccrual[1].sickBalanceCapHours,
+              },
+            ]}
+          />
+        </section>
+      ) : null}
+    </div>
   );
 }

@@ -186,10 +186,10 @@ export function PayrollWorkspace({
       {tab === "weekly" ? (
         <div className="space-y-6">
           {!selected || selected.status !== "draft" ? (
-            <SurfaceCard>
-              <h2 className="font-semibold">Crear nómina semanal</h2>
+            <SurfaceCard padding="sm">
+              <h2 className="text-sm font-semibold">Crear nómina semanal</h2>
               <form
-                className="mt-4 flex flex-wrap items-end gap-3"
+                className="mt-2 flex flex-wrap items-end gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const value =
@@ -199,16 +199,16 @@ export function PayrollWorkspace({
                   run(() => createWeeklyPayroll(company.id, value));
                 }}
               >
-                <label className="text-sm">
+                <label className="text-xs">
                   Inicio de semana
                   <Input
                     name="weekStart"
                     type="date"
                     required
-                    className="mt-1"
+                    className="mt-1 h-8"
                   />
                 </label>
-                <Button type="submit" disabled={pending}>
+                <Button type="submit" size="sm" disabled={pending}>
                   Crear borrador
                 </Button>
               </form>
@@ -246,7 +246,7 @@ export function PayrollWorkspace({
                 </div>
               </SurfaceCard>
               <SurfaceCard padding="sm">
-                <div className="text-muted-foreground grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-3 py-2 text-[11px] font-semibold tracking-wide uppercase">
+                <div className="text-muted-foreground grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-2 py-1.5 text-[11px] font-semibold tracking-wide uppercase">
                   <div>Empleado</div>
                   <div className="text-right">Rate</div>
                   <div className="text-right">Horas</div>
@@ -260,7 +260,7 @@ export function PayrollWorkspace({
                       entry.compensation_type_snapshot === "fixed_weekly";
                     const isOpen = expanded.has(entry.id);
                     return (
-                      <div key={entry.id} className="px-3 py-2">
+                      <div key={entry.id} className="px-2 py-1">
                         <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] items-center gap-2">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">
@@ -293,7 +293,7 @@ export function PayrollWorkspace({
                                 e.target.value,
                               )
                             }
-                            className="h-8 text-right text-sm"
+                            className="h-7 text-right text-sm"
                           />
                           <Input
                             type="number"
@@ -308,7 +308,7 @@ export function PayrollWorkspace({
                                 e.target.value,
                               )
                             }
-                            className="h-8 text-right text-sm"
+                            className="h-7 text-right text-sm"
                           />
                           <p className="text-right text-sm font-semibold">
                             {money.format(calculatePayrollEntry(entry))}
@@ -324,7 +324,7 @@ export function PayrollWorkspace({
                           </button>
                         </div>
                         {isOpen ? (
-                          <div className="mt-2 grid gap-3 border-t pt-3 text-xs sm:grid-cols-5">
+                          <div className="mt-1 grid gap-2 border-t pt-2 text-xs sm:grid-cols-5">
                             <label className="text-muted-foreground">
                               Horas entrenamiento
                               <Input
@@ -340,7 +340,7 @@ export function PayrollWorkspace({
                                     e.target.value,
                                   )
                                 }
-                                className="mt-1 h-8"
+                                className="mt-1 h-7"
                               />
                             </label>
                             <label className="text-muted-foreground">
@@ -358,7 +358,7 @@ export function PayrollWorkspace({
                                     e.target.value,
                                   )
                                 }
-                                className="mt-1 h-8"
+                                className="mt-1 h-7"
                               />
                             </label>
                             <label className="text-muted-foreground">
@@ -376,7 +376,7 @@ export function PayrollWorkspace({
                                     e.target.value,
                                   )
                                 }
-                                className="mt-1 h-8"
+                                className="mt-1 h-7"
                               />
                             </label>
                             <label className="text-muted-foreground">
@@ -394,7 +394,7 @@ export function PayrollWorkspace({
                                     e.target.value,
                                   )
                                 }
-                                className="mt-1 h-8"
+                                className="mt-1 h-7"
                               />
                             </label>
                             <label className="text-muted-foreground">
@@ -410,7 +410,7 @@ export function PayrollWorkspace({
                                     e.target.value,
                                   )
                                 }
-                                className="mt-1 h-8"
+                                className="mt-1 h-7"
                               />
                             </label>
                           </div>

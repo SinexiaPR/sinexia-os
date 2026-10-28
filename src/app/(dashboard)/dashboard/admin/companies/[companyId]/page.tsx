@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import { CalendarClock, FileText, FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { MetricCard, SurfaceCard } from "@/components/ui/surface-card";
 import { requireAdmin } from "@/lib/auth/session";
 import {
   getAdminCompanyWorkspace,
-  getSibaritaPayrollHistory,
+  getSibaritaRecentActivity,
 } from "@/services/company-workspace";
 
 export const dynamic = "force-dynamic";
@@ -20,19 +21,6 @@ const dateFormat = new Intl.DateTimeFormat("es", {
 });
 function formatDate(value: string | null) {
   return value ? dateFormat.format(new Date(value)) : "Sin actividad";
-}
-
-const currencyFormat = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-});
-const weekRangeFormat = new Intl.DateTimeFormat("es", {
-  day: "numeric",
-  month: "short",
-  timeZone: "America/Puerto_Rico",
-});
-function formatWeekRange(weekStart: string, weekEnd: string) {
-  return `${weekRangeFormat.format(new Date(`${weekStart}T12:00:00`))} – ${weekRangeFormat.format(new Date(`${weekEnd}T12:00:00`))}`;
 }
 
 const invoiceStatusLabels: Record<string, string> = {
@@ -87,10 +75,13 @@ export default async function AdminCompanyPage({
       ) : null}
     </>
   );
-  const payrollHistory =
+  const sibaritaActivity =
     company.slug === "sibarita"
-      ? await getSibaritaPayrollHistory(company.id)
+      ? await getSibaritaRecentActivity(company.id)
       : null;
+  // Cut Meat y Sibarita piden los títulos de sección en acordeón colapsado.
+  const accordionTitles =
+    company.slug === "cut-meat-distributors" || company.slug === "sibarita";
 
   return (
     <div className="space-y-6">
@@ -132,41 +123,25 @@ export default async function AdminCompanyPage({
             {company.slug === "sibarita" ? (
               <Button asChild variant="outline">
                 <Link href={`/dashboard/payroll?company=${company.id}`}>
-                  Nómina semanal
+                  Nómina
+                </Link>
+              </Button>
+            ) : null}
+            {company.slug === "cut" ? (
+              <Button asChild variant="outline">
+                <Link href={`/dashboard/admin/companies/${company.id}/nomina`}>
+                  Nómina
                 </Link>
               </Button>
             ) : null}
             {company.slug === "cut-meat-distributors" ? (
-              <>
-                <Button asChild variant="outline">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/daily-reports`}
-                  >
-                    Informes diarios
-                  </Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/recurrentes`}
-                  >
-                    Recurrentes
-                  </Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/historial-diario`}
-                  >
-                    Historial diario
-                  </Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link
-                    href={`/dashboard/admin/companies/${company.id}/paquete-dueno`}
-                  >
-                    Paquete para el dueño
-                  </Link>
-                </Button>
-              </>
+              <Button asChild variant="outline">
+                <Link
+                  href={`/dashboard/admin/companies/${company.id}/informes`}
+                >
+                  Informes
+                </Link>
+              </Button>
             ) : null}
             <Button asChild variant="outline">
               <Link href={`/dashboard/inbox?company=${company.id}`}>
@@ -183,24 +158,30 @@ export default async function AdminCompanyPage({
         </div>
       </header>
 
-      <section aria-labelledby="resumen-operativo">
-        {hasRecentActivity ? (
-          <h2 id="resumen-operativo" className="text-lg font-semibold">
-            Resumen operativo
-          </h2>
-        ) : (
-          <details className="group">
-            <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium">
-              Sin actividad de documentos esta semana
-              <span className="transition-transform group-open:rotate-90">
-                ▸
-              </span>
-            </summary>
-            {operationalSummary}
-          </details>
-        )}
-        {hasRecentActivity ? operationalSummary : null}
-      </section>
+      {accordionTitles ? (
+        <CollapsibleSection title="Resumen operativo">
+          {operationalSummary}
+        </CollapsibleSection>
+      ) : (
+        <section aria-labelledby="resumen-operativo">
+          {hasRecentActivity ? (
+            <h2 id="resumen-operativo" className="text-lg font-semibold">
+              Resumen operativo
+            </h2>
+          ) : (
+            <details className="group">
+              <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium">
+                Sin actividad de documentos esta semana
+                <span className="transition-transform group-open:rotate-90">
+                  ▸
+                </span>
+              </summary>
+              {operationalSummary}
+            </details>
+          )}
+          {hasRecentActivity ? operationalSummary : null}
+        </section>
+      )}
 
       <SurfaceCard>
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -242,7 +223,53 @@ export default async function AdminCompanyPage({
         </div>
       </SurfaceCard>
 
-      {categories.length ? (
+      {categories.length && company.slug !== "tresbe" ? (
+        accordionTitles ? (
+          <CollapsibleSection
+            title="Categorías operativas"
+            icon={<FolderOpen className="text-muted-foreground size-5" />}
+          >
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {categories.map((category) => (
+                <Link
+                  key={category.slug}
+                  href={`/dashboard/admin/companies/${company.id}/${category.slug}`}
+                  className="border-border/80 bg-card hover:border-primary/40 focus-visible:ring-ring/50 rounded-lg border p-5 shadow-sm transition outline-none focus-visible:ring-[3px]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-semibold">{category.label}</h3>
+                    {category.urgentCount ? (
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                        {category.urgentCount} urgentes
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-4 text-2xl font-semibold tabular-nums">
+                    {category.count}
+                  </p>
+                  <p className="text-muted-foreground text-sm">
+                    {category.count === 1 ? "archivo" : "archivos"} ·{" "}
+                    {category.documentCount} documentos ·{" "}
+                    {category.reportCount} reportes
+                  </p>
+                  {category.insights.length ? (
+                    <p className="text-foreground mt-3 text-xs font-medium">
+                      {category.insights.join(" · ")}
+                    </p>
+                  ) : null}
+                  <p className="text-muted-foreground mt-3 text-xs">
+                    Última actualización: {formatDate(category.latestAt)}
+                  </p>
+                  {category.pendingCount ? (
+                    <p className="mt-1 text-xs font-medium text-amber-700">
+                      {category.pendingCount} pendientes
+                    </p>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+          </CollapsibleSection>
+        ) : (
         <section aria-labelledby="categorias">
           <div className="flex items-center gap-2">
             <FolderOpen className="text-muted-foreground size-5" />
@@ -290,118 +317,79 @@ export default async function AdminCompanyPage({
             ))}
           </div>
         </section>
+        )
       ) : null}
 
-      {payrollHistory ? (
-        <section aria-labelledby="historial-nomina">
-          <h2 id="historial-nomina" className="text-lg font-semibold">
-            Historial de nómina (archivo)
-          </h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Cargado desde las planillas semanales de Sibarita en Google
-            Drive. Solo de referencia, no editable desde acá.
-          </p>
-          {payrollHistory.length ? (
-            <div className="mt-4 space-y-4">
-              {payrollHistory.map((week) => (
-                <SurfaceCard key={week.weekStart}>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="font-semibold">
-                      {formatWeekRange(week.weekStart, week.weekEnd)}
-                    </h3>
-                    <p className="text-muted-foreground text-sm">
-                      {currencyFormat.format(week.totalPay)} total ·{" "}
-                      {currencyFormat.format(week.totalTips)} propinas ·{" "}
-                      {week.totalHours.toFixed(2)}h
-                    </p>
-                  </div>
-                  <div className="mt-3 overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-muted-foreground border-b text-left text-xs uppercase">
-                          <th className="py-1.5 pr-3 font-medium">
-                            Empleado
-                          </th>
-                          <th className="py-1.5 pr-3 font-medium">
-                            Sección
-                          </th>
-                          <th className="py-1.5 pr-3 text-right font-medium">
-                            Horas
-                          </th>
-                          <th className="py-1.5 pr-3 text-right font-medium">
-                            Propinas
-                          </th>
-                          <th className="py-1.5 text-right font-medium">
-                            Total
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {week.rows.map((row) => (
-                          <tr key={row.id} className="border-b last:border-0">
-                            <td className="py-1.5 pr-3">
-                              {row.employee_name}
-                            </td>
-                            <td className="text-muted-foreground py-1.5 pr-3">
-                              {row.section ?? "—"}
-                            </td>
-                            <td className="py-1.5 pr-3 text-right tabular-nums">
-                              {Number(row.total_hours).toFixed(2)}
-                            </td>
-                            <td className="py-1.5 pr-3 text-right tabular-nums">
-                              {currencyFormat.format(
-                                Number(row.tips) + Number(row.other_pay),
-                              )}
-                            </td>
-                            <td className="py-1.5 text-right font-medium tabular-nums">
-                              {currencyFormat.format(row.weekly_payroll)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </SurfaceCard>
+      {sibaritaActivity ? (
+        <CollapsibleSection
+          title="Últimas actividades"
+          icon={<CalendarClock className="text-muted-foreground size-5" />}
+        >
+          {sibaritaActivity.length ? (
+            <div className="space-y-2">
+              {sibaritaActivity.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="hover:border-primary/40 block rounded-lg border px-4 py-3 transition"
+                >
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    {formatDate(item.timestamp)}
+                  </p>
+                </Link>
               ))}
             </div>
           ) : (
-            <SurfaceCard className="mt-4">
-              <p className="text-muted-foreground text-sm">
-                Todavía no hay nóminas cargadas en el historial.
-              </p>
-            </SurfaceCard>
-          )}
-        </section>
-      ) : null}
-
-      <SurfaceCard>
-        <div className="flex items-center gap-2">
-          <CalendarClock className="text-muted-foreground size-5" />
-          <h2 className="text-lg font-semibold">
-            Actividad reciente de {company.name}
-          </h2>
-        </div>
-        <div className="mt-5 space-y-3">
-          {activity.length ? (
-            activity.map((item) => (
-              <Link
-                key={item.id}
-                href={item.href}
-                className="hover:border-primary/40 block rounded-lg border px-4 py-3 transition"
-              >
-                <p className="text-sm font-medium">{item.title}</p>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  {item.description} · {formatDate(item.timestamp)}
-                </p>
-              </Link>
-            ))
-          ) : (
             <p className="text-muted-foreground text-sm">
-              No hay actividad reciente para esta empresa.
+              Todavía no hay actividad de nómina para esta empresa.
             </p>
           )}
-        </div>
-      </SurfaceCard>
+        </CollapsibleSection>
+      ) : null}
+
+      {(() => {
+        const activityList = (
+          <div className={accordionTitles ? "space-y-3" : "mt-5 space-y-3"}>
+            {activity.length ? (
+              activity.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="hover:border-primary/40 block rounded-lg border px-4 py-3 transition"
+                >
+                  <p className="text-sm font-medium">{item.title}</p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    {item.description} · {formatDate(item.timestamp)}
+                  </p>
+                </Link>
+              ))
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                No hay actividad reciente para esta empresa.
+              </p>
+            )}
+          </div>
+        );
+        return accordionTitles ? (
+          <CollapsibleSection
+            title={`Actividad reciente de ${company.name}`}
+            icon={<CalendarClock className="text-muted-foreground size-5" />}
+          >
+            {activityList}
+          </CollapsibleSection>
+        ) : (
+          <SurfaceCard>
+            <div className="flex items-center gap-2">
+              <CalendarClock className="text-muted-foreground size-5" />
+              <h2 className="text-lg font-semibold">
+                Actividad reciente de {company.name}
+              </h2>
+            </div>
+            {activityList}
+          </SurfaceCard>
+        );
+      })()}
     </div>
   );
 }

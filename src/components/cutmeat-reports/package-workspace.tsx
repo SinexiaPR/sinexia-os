@@ -77,7 +77,7 @@ export function PackageWorkspace({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              {company.name} · Paquete para el dueño
+              {company.name} · PDFs
             </p>
             <h1 className="mt-2 text-xl font-semibold tracking-tight">{reportDate}</h1>
             {!canWrite ? (

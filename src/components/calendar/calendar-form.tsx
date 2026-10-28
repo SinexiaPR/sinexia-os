@@ -95,9 +95,8 @@ export function CalendarForm({
               className={field}
               id="itemType"
               name="itemType"
-              defaultValue={item?.itemType ?? "task"}
+              defaultValue={item?.itemType ?? "activity"}
             >
-              <option value="task">Tarea</option>
               <option value="activity">Actividad</option>
               <option value="reminder">Recordatorio</option>
               <option value="internal_message">Mensaje interno</option>

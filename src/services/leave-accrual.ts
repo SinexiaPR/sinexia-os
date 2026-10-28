@@ -63,7 +63,7 @@ function monthBounds(year: number, month: number) {
   return { start, end };
 }
 
-async function getSibaritaReportRows(): Promise<LeaveAccrualReportRow[]> {
+export async function getSibaritaReportRows(): Promise<LeaveAccrualReportRow[]> {
   const supabase = await createClient();
   const company = await resolveSibaritaCompany();
   if (!company) return [];
@@ -156,7 +156,7 @@ async function getSibaritaReportRows(): Promise<LeaveAccrualReportRow[]> {
   });
 }
 
-async function getTresbeReportRows(): Promise<LeaveAccrualReportRow[]> {
+export async function getTresbeReportRows(): Promise<LeaveAccrualReportRow[]> {
   const supabase = await createClient();
   const company = await resolveTresbeCompany();
   if (!company) return [];

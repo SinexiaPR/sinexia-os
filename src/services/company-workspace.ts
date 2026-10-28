@@ -414,3 +414,76 @@ export async function getSibaritaPayrollHistory(companyId: string) {
   }
   return Array.from(weeks.values());
 }
+
+export type SibaritaRecentActivityItem = {
+  id: string;
+  kind: "created" | "submitted" | "approved";
+  label: string;
+  weekStart: string;
+  weekEnd: string;
+  timestamp: string;
+  href: string;
+};
+
+const weekRangeFormat = new Intl.DateTimeFormat("es", {
+  day: "numeric",
+  month: "short",
+  timeZone: "America/Puerto_Rico",
+});
+function formatWeekRangeLabel(weekStart: string, weekEnd: string) {
+  return `${weekRangeFormat.format(new Date(`${weekStart}T12:00:00`))} – ${weekRangeFormat.format(new Date(`${weekEnd}T12:00:00`))}`;
+}
+
+/** Últimas 10 cargas, envíos y aprobaciones de nómina de Sibarita, de nuevas a viejas. */
+export async function getSibaritaRecentActivity(
+  companyId: string,
+): Promise<SibaritaRecentActivityItem[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("weekly_payrolls")
+    .select("id,week_start,week_end,status,created_at,submitted_at,approved_at")
+    .eq("company_id", companyId)
+    .order("week_start", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+
+  const items: SibaritaRecentActivityItem[] = [];
+  for (const row of data ?? []) {
+    const weekLabel = formatWeekRangeLabel(row.week_start, row.week_end);
+    const href = `/dashboard/payroll?company=${companyId}&payroll=${row.id}`;
+    items.push({
+      id: `${row.id}-created`,
+      kind: "created",
+      label: `Semana ${weekLabel} cargada`,
+      weekStart: row.week_start,
+      weekEnd: row.week_end,
+      timestamp: row.created_at,
+      href,
+    });
+    if (row.submitted_at) {
+      items.push({
+        id: `${row.id}-submitted`,
+        kind: "submitted",
+        label: `Semana ${weekLabel} enviada`,
+        weekStart: row.week_start,
+        weekEnd: row.week_end,
+        timestamp: row.submitted_at,
+        href,
+      });
+    }
+    if (row.approved_at) {
+      items.push({
+        id: `${row.id}-approved`,
+        kind: "approved",
+        label: `Semana ${weekLabel} aprobada`,
+        weekStart: row.week_start,
+        weekEnd: row.week_end,
+        timestamp: row.approved_at,
+        href,
+      });
+    }
+  }
+  return items
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 10);
+}
