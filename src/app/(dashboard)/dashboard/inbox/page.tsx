@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { DocumentUploadForm } from "@/components/dashboard/document-upload-form";
 import { DocumentList } from "@/components/dashboard/document-list";
 import { AdminDocumentFilters } from "@/components/dashboard/admin-document-filters";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireAuth } from "@/lib/auth/session";
@@ -45,6 +47,7 @@ export default async function InboxPage({
   const viewedDocumentIds = await getViewedDocumentIds(profile.id);
 
   const isClient = profile.role === "client";
+  const hasFilters = Object.values(filters).some(Boolean);
   const companies = profile.role === "admin" ? await getCompanies() : [];
 
   return (
@@ -94,8 +97,24 @@ export default async function InboxPage({
         isAdmin={profile.role === "admin"}
         emptyMessage={
           isClient
-            ? "Aún no tiene documentos. Envíe el primero arriba."
-            : "Todavía no hay documentos de ningún cliente."
+            ? "Aún no tiene documentos"
+            : hasFilters
+              ? "No hay documentos con estos filtros"
+              : "Todavía no hay documentos"
+        }
+        emptyDescription={
+          isClient
+            ? "Envíe el primero con el formulario de arriba y Sinexia lo recibirá de inmediato."
+            : hasFilters
+              ? "Prueba con otro estado o quita los filtros."
+              : "Cuando una empresa envíe un archivo, aparecerá aquí para que lo revises."
+        }
+        emptyAction={
+          !isClient && hasFilters ? (
+            <Button asChild variant="outline">
+              <Link href="/dashboard/inbox">Quitar filtros</Link>
+            </Button>
+          ) : undefined
         }
       />
     </div>
