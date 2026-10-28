@@ -268,6 +268,7 @@ export function CutMeatDailyWorkspace({
 
       {tab === "resumen" ? (
         <SummaryTab
+          key={reportDate}
           companyId={company.id}
           workspace={workspace}
           readOnly={readOnly}
@@ -275,6 +276,7 @@ export function CutMeatDailyWorkspace({
       ) : null}
       {tab === "conciliacion" ? (
         <ReconciliationTab
+          key={reportDate}
           companyId={company.id}
           reportId={workspace.report?.id ?? null}
           readOnly={readOnly}
@@ -283,6 +285,7 @@ export function CutMeatDailyWorkspace({
       ) : null}
       {tab === "banco" ? (
         <BankTab
+          key={reportDate}
           companyId={company.id}
           reportId={workspace.report?.id ?? null}
           readOnly={readOnly}
@@ -293,6 +296,7 @@ export function CutMeatDailyWorkspace({
       ) : null}
       {tab === "recurrentes" ? (
         <RecurringTab
+          key={reportDate}
           companyId={company.id}
           reportDate={reportDate}
           recurring={workspace.recurring}
@@ -300,6 +304,7 @@ export function CutMeatDailyWorkspace({
       ) : null}
       {tab === "proyeccion" ? (
         <IncomeTab
+          key={reportDate}
           companyId={company.id}
           weekStart={workspace.weekStart}
           incomeDays={workspace.incomeDays}
@@ -308,6 +313,7 @@ export function CutMeatDailyWorkspace({
       ) : null}
       {tab === "aging" ? (
         <AgingTab
+          key={reportDate}
           companyId={company.id}
           reportId={workspace.report?.id ?? null}
           readOnly={readOnly}
@@ -319,6 +325,7 @@ export function CutMeatDailyWorkspace({
       ) : null}
       {tab === "configuracion" ? (
         <SettingsTab
+          key={reportDate}
           companyId={company.id}
           vendorConfig={workspace.vendorConfig}
           holidays={workspace.holidays}
@@ -327,6 +334,7 @@ export function CutMeatDailyWorkspace({
       ) : null}
       {tab === "pdfs" ? (
         <PdfTab
+          key={reportDate}
           companyId={company.id}
           reportDate={reportDate}
           generatedPdfs={workspace.generatedPdfs}
