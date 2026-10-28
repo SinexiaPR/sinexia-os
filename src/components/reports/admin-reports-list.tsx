@@ -21,7 +21,7 @@ type AdminReportsListProps = {
 };
 
 function formatDate(date: string) {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("es", {
     month: "short",
     day: "numeric",
     year: "numeric",

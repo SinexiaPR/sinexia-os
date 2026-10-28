@@ -41,7 +41,9 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-function arSuggestions(reportId: string): Array<{ label: string; href: string }> {
+function arSuggestions(
+  reportId: string,
+): Array<{ label: string; href: string }> {
   const q = (text: string) =>
     `/dashboard/sia?reportId=${reportId}&q=${encodeURIComponent(text)}`;
   return [
@@ -73,7 +75,7 @@ export async function ClientReportCard({
   const statusLabel = status ? (STATUS_LABELS[status] ?? status) : null;
   const brief =
     status === "completed"
-      ? profile?.summary ?? processing?.structured_summary?.briefSummary
+      ? (profile?.summary ?? processing?.structured_summary?.briefSummary)
       : null;
   const isAR =
     profile?.document_type === "accounts_receivable" ||
@@ -85,85 +87,90 @@ export async function ClientReportCard({
   return (
     <div id={`report-${report.id}`}>
       <SurfaceCard padding="lg">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <ReportCategoryDisplay category={report.category} variant="client" />
-            <ReportNewBadge show={isUnread} />
-          </div>
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            {report.title}
-          </h2>
-          <p className="text-sm text-muted-foreground">Periodo: {report.period}</p>
-          <p className="text-sm text-muted-foreground">
-            Publicado el {formatDate(report.created_at)}
-          </p>
-          {report.notes ? (
-            <p className="border-t border-border/60 pt-3 text-sm leading-relaxed text-muted-foreground">
-              {report.notes}
-            </p>
-          ) : null}
-
-          {statusLabel ? (
-            <p className="pt-2 text-sm text-muted-foreground">
-              SinexIA:{" "}
-              <span
-                className={cn(
-                  "font-medium",
-                  status === "completed" && "text-emerald-700",
-                  status === "failed" && "text-red-700",
-                  status === "requires_ocr" && "text-amber-700",
-                )}
-              >
-                {statusLabel}
-              </span>
-            </p>
-          ) : null}
-
-          {status === "requires_ocr" ? (
-            <p className="text-sm text-amber-800">
-              Este documento requiere OCR para ser analizado por SinexIA.
-            </p>
-          ) : null}
-
-          {brief ? (
-            <div className="space-y-1 pt-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Resumen
-              </p>
-              <p className="text-sm leading-relaxed text-foreground/90">
-                {brief}
-              </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <ReportCategoryDisplay
+                category={report.category}
+                variant="client"
+              />
+              <ReportNewBadge show={isUnread} />
             </div>
-          ) : null}
-
-          {suggestions.length ? (
-            <div className="space-y-2 pt-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Preguntas sugeridas
+            <h2 className="text-foreground text-lg font-semibold tracking-tight">
+              {report.title}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              Periodo: {report.period}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Publicado el {formatDate(report.created_at)}
+            </p>
+            {report.notes ? (
+              <p className="border-border/60 text-muted-foreground border-t pt-3 text-sm leading-relaxed">
+                {report.notes}
               </p>
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((s) => (
-                  <Link
-                    key={s.label}
-                    href={s.href}
-                    className="rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-                  >
-                    {s.label}
-                  </Link>
-                ))}
+            ) : null}
+
+            {statusLabel ? (
+              <p className="text-muted-foreground pt-2 text-sm">
+                SinexIA:{" "}
+                <span
+                  className={cn(
+                    "font-medium",
+                    status === "completed" && "text-emerald-700",
+                    status === "failed" && "text-red-700",
+                    status === "requires_ocr" && "text-amber-700",
+                  )}
+                >
+                  {statusLabel}
+                </span>
+              </p>
+            ) : null}
+
+            {status === "requires_ocr" ? (
+              <p className="text-sm text-amber-800">
+                Este documento requiere OCR para ser analizado por SinexIA.
+              </p>
+            ) : null}
+
+            {brief ? (
+              <div className="space-y-1 pt-1">
+                <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                  Resumen
+                </p>
+                <p className="text-foreground/90 text-sm leading-relaxed">
+                  {brief}
+                </p>
               </div>
-            </div>
-          ) : null}
-        </div>
+            ) : null}
 
-        <ClientReportActions
-          reportId={report.id}
-          profileId={profileId}
-          signedUrl={signedUrl}
-          isUnread={isUnread}
-        />
-      </div>
+            {suggestions.length ? (
+              <div className="space-y-2 pt-2">
+                <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                  Preguntas sugeridas
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestions.map((s) => (
+                    <Link
+                      key={s.label}
+                      href={s.href}
+                      className="border-border/80 bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground rounded-full border px-3 py-1.5 text-xs transition-colors"
+                    >
+                      {s.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <ClientReportActions
+            reportId={report.id}
+            profileId={profileId}
+            signedUrl={signedUrl}
+            isUnread={isUnread}
+          />
+        </div>
       </SurfaceCard>
     </div>
   );

@@ -67,6 +67,13 @@ const quickActions: PaletteItem[] = [
     group: "Acciones",
   },
   {
+    id: "action-settings",
+    label: "Configuración y herramientas técnicas",
+    href: "/dashboard/admin/settings",
+    icon: Settings,
+    group: "Acciones",
+  },
+  {
     id: "action-billing-settings",
     label: "Configuración de facturación",
     href: "/dashboard/admin/settings/billing",

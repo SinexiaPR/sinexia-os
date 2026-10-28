@@ -82,6 +82,7 @@ export function AdminHeader({
       <UserMenu
         profile={profile}
         subtitle="Administrador"
+        settingsHref="/dashboard/admin/settings"
         notificationUnreadCount={notificationUnreadCount}
       />
     </header>

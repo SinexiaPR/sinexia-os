@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { AdminIntegrityCheck } from "@/components/reports/admin-integrity-check";
-import { AdminReportForm } from "@/components/reports/admin-report-form";
+import { PublishReportDrawer } from "@/components/reports/publish-report-drawer";
+import { ReportsCompanyFilter } from "@/components/reports/reports-company-filter";
 import { AdminReportsList } from "@/components/reports/admin-reports-list";
 import { ClientReportCard } from "@/components/reports/client-report-card";
 import { ReportsViewHandler } from "@/components/reports/reports-view-handler";
@@ -25,10 +25,10 @@ export const metadata: Metadata = {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ company?: string }>;
+  searchParams: Promise<{ company?: string; publicar?: string }>;
 }) {
   const profile = await requireAuth();
-  const { company: companyFilter } = await searchParams;
+  const { company: companyFilter, publicar } = await searchParams;
 
   if (profile.role === "admin") {
     const [companies, reports] = await Promise.all([
@@ -41,43 +41,26 @@ export default async function ReportsPage({
     ]);
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-5">
         <PageHeader
           title="Reportes"
-          description="Publica reportes para las empresas clientes y consulta los ya publicados."
-        />
-
-        <SurfaceCard padding="lg">
-          <h2 className="text-base font-semibold tracking-tight">
-            Publicar reporte
-          </h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Elige la empresa, agrega los datos y sube el PDF, Excel o CSV
-            terminado. SinexIA procesa el archivo automáticamente; no hace falta
-            llenar campos contables.
-          </p>
-          <div className="mt-6">
-            <AdminReportForm
+          description="Reportes publicados para las empresas clientes."
+          action={
+            <PublishReportDrawer
               companies={companies}
               initialCompanyId={companyFilter}
+              defaultOpen={publicar === "1"}
             />
-          </div>
-        </SurfaceCard>
+          }
+        />
 
-        <SurfaceCard padding="lg">
-          <AdminIntegrityCheck />
-        </SurfaceCard>
+        <ReportsCompanyFilter companies={companies} value={companyFilter} />
 
-        <div className="space-y-4">
-          <h2 className="text-base font-semibold tracking-tight">
-            Todos los reportes
-          </h2>
-          <AdminReportsList
-            reports={reports}
-            processingByReportId={processingMap}
-            profilesByReportId={profilesMap}
-          />
-        </div>
+        <AdminReportsList
+          reports={reports}
+          processingByReportId={processingMap}
+          profilesByReportId={profilesMap}
+        />
       </div>
     );
   }

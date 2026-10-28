@@ -15,7 +15,7 @@ export function ReportNewBadge({ show }: { show: boolean }) {
   if (!show) return null;
 
   return (
-    <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-700">
+    <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-700 uppercase">
       Nuevo
     </span>
   );
@@ -39,7 +39,7 @@ export function ClientReportActions({
             reportId={reportId}
             href={signedUrl}
             onViewed={markLocalViewed}
-            className="inline-flex h-11 w-full items-center justify-center rounded-md border border-border px-5 text-sm font-medium text-primary sm:min-w-[140px]"
+            className="border-border text-primary inline-flex h-11 w-full items-center justify-center rounded-md border px-5 text-sm font-medium sm:min-w-[140px]"
           >
             Ver reporte
           </ReportViewLink>
@@ -48,13 +48,13 @@ export function ClientReportActions({
             href={signedUrl}
             download
             onViewed={markLocalViewed}
-            className="inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground sm:min-w-[140px]"
+            className="bg-primary text-primary-foreground inline-flex h-11 w-full items-center justify-center rounded-md px-5 text-sm font-medium sm:min-w-[140px]"
           >
             Descargar
           </ReportViewLink>
         </>
       ) : (
-        <span className="inline-flex h-11 w-full items-center justify-center text-sm text-muted-foreground sm:w-auto">
+        <span className="text-muted-foreground inline-flex h-11 w-full items-center justify-center text-sm sm:w-auto">
           No disponible
         </span>
       )}
@@ -63,7 +63,7 @@ export function ClientReportActions({
         href={`/dashboard/sia?reportId=${reportId}`}
         onViewed={markLocalViewed}
         className={cn(
-          "inline-flex h-11 w-full items-center justify-center rounded-md border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]",
+          "border-primary/30 text-primary hover:bg-primary/5 inline-flex h-11 w-full items-center justify-center rounded-md border px-5 text-sm font-medium sm:min-w-[140px]",
           isUnread && "ring-1 ring-red-500/20",
         )}
       >
@@ -86,7 +86,7 @@ export function ClientReportSiaLink({
       reportId={reportId}
       href={`/dashboard/sia?reportId=${reportId}`}
       onViewed={() => addLocalViewedReport(profileId, reportId)}
-      className="inline-flex h-11 w-full items-center justify-center rounded-md border border-primary/30 px-5 text-sm font-medium text-primary hover:bg-primary/5 sm:min-w-[140px]"
+      className="border-primary/30 text-primary hover:bg-primary/5 inline-flex h-11 w-full items-center justify-center rounded-md border px-5 text-sm font-medium sm:min-w-[140px]"
     >
       Preguntar a SinexIA
     </ReportViewLink>

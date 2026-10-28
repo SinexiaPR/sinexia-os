@@ -25,6 +25,8 @@ const selectClassName =
 type AdminReportFormProps = {
   companies: Company[];
   initialCompanyId?: string;
+  /** Se llama una vez cuando el reporte se publica con éxito. */
+  onPublished?: () => void;
 };
 
 function assignFileToInput(input: HTMLInputElement | null, file: File) {
@@ -37,6 +39,7 @@ function assignFileToInput(input: HTMLInputElement | null, file: File) {
 export function AdminReportForm({
   companies,
   initialCompanyId,
+  onPublished,
 }: AdminReportFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const submissionInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +62,8 @@ export function AdminReportForm({
     setLocalError(null);
     if (submissionInputRef.current) submissionInputRef.current.value = "";
     if (pickerInputRef.current) pickerInputRef.current.value = "";
+    onPublished?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando cambia el estado de la acción
   }, [state]);
 
   function handleFileSelect(file: File | undefined) {

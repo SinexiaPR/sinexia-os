@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, User } from "lucide-react";
+import { Bell, Settings, User } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { SignOutControl } from "@/components/auth/sign-out-control";
@@ -25,6 +25,8 @@ type UserMenuProps = {
   /** Segunda línea del encabezado del menú (rol o nombre de la empresa). */
   subtitle?: string | null;
   notificationUnreadCount: number;
+  /** Solo admin: enlace a Configuración en el menú. */
+  settingsHref?: string;
 };
 
 function getInitials(profile: Profile) {
@@ -42,6 +44,7 @@ export function UserMenu({
   profile,
   subtitle,
   notificationUnreadCount,
+  settingsHref,
 }: UserMenuProps) {
   const [unreadCount, setUnreadCount] = useState(notificationUnreadCount);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -93,6 +96,14 @@ export function UserMenu({
               Perfil
             </Link>
           </DropdownMenuItem>
+          {settingsHref ? (
+            <DropdownMenuItem asChild>
+              <Link href={settingsHref}>
+                <Settings />
+                Configuración
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem onSelect={() => setPanelOpen(true)}>
             <Bell />
             Notificaciones
