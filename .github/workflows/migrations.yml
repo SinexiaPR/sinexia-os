@@ -1,0 +1,42 @@
+name: Migrations
+
+# Aplica todas las migraciones sobre una base Supabase vacía y efímera.
+# Detecta migraciones rotas o con dependencias fuera de orden antes de tocar producción.
+# No usa credenciales ni ramas de Supabase, y no despliega nada.
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - ".github/workflows/migrations.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `supabase start` aplica supabase/migrations en orden sobre una base nueva.
+      - name: Start local Supabase and apply migrations
+        run: supabase start
+
+      - name: Confirm every migration is recorded
+        run: |
+          expected=$(ls supabase/migrations/*.sql | wc -l)
+          applied=$(docker exec supabase_db_sinexia-os psql -U postgres -tAc \
+            "select count(*) from supabase_migrations.schema_migrations")
+          echo "archivos=$expected aplicadas=$applied"
+          test "$expected" -eq "$applied"
+
+      - name: Stop
+        if: always()
+        run: supabase stop --no-backup
