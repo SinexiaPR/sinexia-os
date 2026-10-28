@@ -1,4 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#1e3a5f"/>
-  <text x="16" y="22" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="16" font-weight="700">S</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="60 60 456 456" role="img" aria-label="Sinexia">
+  <rect x="60" y="60" width="456" height="456" fill="#0039a8"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <!-- lazos exteriores finos -->
+    <path d="M262 171A112 118 0 1 0 258 401" stroke-width="7"/>
+    <path d="M322 176A112 118 0 1 1 372 408" stroke-width="7"/>
+    <!-- trazos gruesos que se cruzan en el centro y terminan en flecha -->
+    <path d="M262 171C318 168 344 220 366 268" stroke-width="14"/>
+    <path d="M370 408C304 410 272 352 240 306c-8-12-18-26-28-38" stroke-width="14"/>
+  </g>
+  <!-- puntas de flecha -->
+  <path d="M388 312 332 292l38-42z" fill="#fff"/>
+  <path d="M188 254l56 20-36 38z" fill="#fff"/>
 </svg>

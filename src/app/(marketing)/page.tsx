@@ -36,7 +36,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-1 flex-col items-center px-6 py-16 sm:py-24">
       <div className="w-full max-w-md text-center">
-        <BrandMark className="size-12 text-lg" />
+        <BrandMark className="mx-auto size-24 rounded-2xl shadow-[var(--shadow-card)]" />
 
         <h1 className="text-foreground mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
           {siteConfig.portalTitle}
