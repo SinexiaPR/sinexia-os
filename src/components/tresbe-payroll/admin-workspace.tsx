@@ -375,7 +375,7 @@ export function TresbePayrollAdminWorkspace({
                   )
                 }
               >
-                <Plus className="size-4" /> Nueva nómina
+                <Plus className="size-4" /> Iniciar carga de nómina
               </Button>
               <button
                 type="button"
@@ -491,7 +491,23 @@ export function TresbePayrollAdminWorkspace({
             </SurfaceCard>
           ) : null}
 
-          {selected ? (
+          {selected && !editable ? (
+            <SurfaceCard>
+              <p className="text-muted-foreground text-xs uppercase">
+                Periodo
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">
+                {selected.week_start} — {selected.week_end}
+              </h2>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {statusLabel[selected.status]} · ya no se puede editar. Usá
+                &quot;Iniciar carga de nómina&quot; arriba para la próxima
+                semana.
+              </p>
+            </SurfaceCard>
+          ) : null}
+
+          {selected && editable ? (
             <>
               <SurfaceCard>
                 <div className="flex flex-wrap items-start justify-between gap-4">
