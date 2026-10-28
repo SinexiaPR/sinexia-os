@@ -41,6 +41,8 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --shadow-card: 0 1px 2px 0 oklch(0.2 0.02 260 / 0.04);
+  --shadow-popover: 0 8px 24px -8px oklch(0.2 0.02 260 / 0.18);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -117,6 +119,63 @@
   --danger-soft: oklch(0.96 0.03 27);
   --info: oklch(0.42 0.1 255);
   --info-soft: oklch(0.96 0.025 255);
+}
+
+/* Modo oscuro preparado vía tokens; no se activa en ninguna parte todavía.
+   Para activarlo basta con añadir la clase `dark` a <html>. */
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.16 0.015 260);
+  --foreground: oklch(0.96 0.005 260);
+  --card: oklch(0.2 0.02 260);
+  --card-foreground: oklch(0.96 0.005 260);
+  --popover: oklch(0.2 0.02 260);
+  --popover-foreground: oklch(0.96 0.005 260);
+  --primary: oklch(0.82 0.06 260);
+  --primary-foreground: oklch(0.2 0.03 260);
+  --secondary: oklch(0.26 0.02 260);
+  --secondary-foreground: oklch(0.96 0.005 260);
+  --muted: oklch(0.25 0.02 260);
+  --muted-foreground: oklch(0.72 0.02 260);
+  --accent: oklch(0.28 0.02 260);
+  --accent-foreground: oklch(0.96 0.005 260);
+  --destructive: oklch(0.65 0.2 27);
+  --border: oklch(0.3 0.02 260);
+  --input: oklch(0.32 0.02 260);
+  --ring: oklch(0.7 0.06 260);
+  --sidebar: oklch(0.14 0.03 260);
+  --success: oklch(0.8 0.13 155);
+  --success-soft: oklch(0.28 0.05 155);
+  --warning: oklch(0.85 0.12 85);
+  --warning-soft: oklch(0.3 0.05 80);
+  --danger: oklch(0.8 0.13 27);
+  --danger-soft: oklch(0.3 0.06 27);
+  --info: oklch(0.82 0.08 255);
+  --info-soft: oklch(0.28 0.05 255);
+}
+
+/* Foco visible para teclado en cualquier control que no defina el suyo
+   (especificidad cero: los anillos propios de cada componente lo reemplazan). */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Objetivos táctiles de al menos 44 px en pantallas táctiles. */
+@media (pointer: coarse) {
+  :where(
+    button:not([role="checkbox"], [role="switch"], [role="tab"]),
+    select,
+    input:not(
+      [type="checkbox"],
+      [type="radio"],
+      [type="hidden"],
+      [type="file"]
+    ),
+    summary
+  ) {
+    min-height: 2.75rem;
+  }
 }
 
 @layer base {

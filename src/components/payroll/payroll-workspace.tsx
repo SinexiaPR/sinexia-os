@@ -36,6 +36,7 @@ import { PaginationBar } from "@/components/ui/pagination-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/toast";
 import { paginate } from "@/lib/pagination";
 import { calculatePayrollEntry } from "@/lib/payroll/calculations";
 import {
@@ -100,6 +101,7 @@ export function PayrollWorkspace({
       else next.add(id);
       return next;
     });
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const total = useMemo(
     () =>
@@ -136,7 +138,11 @@ export function PayrollWorkspace({
     startTransition(async () => {
       setMessage(null);
       const result = await operation();
-      setMessage(result.error ?? "Guardado correctamente.");
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+      toast({ title: "Guardado correctamente", tone: "success" });
       if (result.success) window.location.reload();
     });
 
@@ -332,8 +338,8 @@ export function PayrollWorkspace({
 
       {message ? (
         <p
-          role="status"
-          className={`rounded-lg px-4 py-3 text-sm ${message.includes("correctamente") ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}
+          role="alert"
+          className="bg-danger-soft text-danger rounded-lg px-4 py-3 text-sm"
         >
           {message}
         </p>

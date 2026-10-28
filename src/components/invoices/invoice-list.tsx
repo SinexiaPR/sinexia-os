@@ -23,13 +23,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { FilterPanel } from "@/components/ui/filter-panel";
 import { PaginationBar } from "@/components/ui/pagination-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import {
   EMPTY_INVOICE_FILTERS,
@@ -211,8 +215,10 @@ export function InvoiceList({
             ))}
           </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
+          <FilterPanel
+            title="Más filtros"
+            align="end"
+            trigger={
               <Button variant="outline" className="h-10">
                 <SlidersHorizontal className="size-4" />
                 Más filtros
@@ -222,86 +228,83 @@ export function InvoiceList({
                   </span>
                 ) : null}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 space-y-3">
+            }
+          >
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Cliente</label>
+              <Combobox
+                aria-label="Cliente"
+                options={companies}
+                value={filters.companyId}
+                onValueChange={(companyId) => update({ companyId })}
+                allLabel="Todos los clientes"
+                placeholder="Todos los clientes"
+                searchPlaceholder="Buscar cliente…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="filtro-correo" className="text-sm font-medium">
+                Correo
+              </label>
+              <select
+                id="filtro-correo"
+                className={selectClassName}
+                value={filters.email}
+                onChange={(event) =>
+                  update({
+                    email: event.target.value as InvoiceFilters["email"],
+                  })
+                }
+              >
+                <option value="">Todo</option>
+                <option value="sent">Enviado</option>
+                <option value="not_sent">No enviado</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Cliente</label>
-                <Combobox
-                  aria-label="Cliente"
-                  options={companies}
-                  value={filters.companyId}
-                  onValueChange={(companyId) => update({ companyId })}
-                  allLabel="Todos los clientes"
-                  placeholder="Todos los clientes"
-                  searchPlaceholder="Buscar cliente…"
+                <label htmlFor="filtro-desde" className="text-sm font-medium">
+                  Desde
+                </label>
+                <Input
+                  id="filtro-desde"
+                  type="date"
+                  className="h-10"
+                  value={filters.dateFrom}
+                  onChange={(event) => update({ dateFrom: event.target.value })}
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="filtro-correo" className="text-sm font-medium">
-                  Correo
+                <label htmlFor="filtro-hasta" className="text-sm font-medium">
+                  Hasta
                 </label>
-                <select
-                  id="filtro-correo"
-                  className={selectClassName}
-                  value={filters.email}
-                  onChange={(event) =>
-                    update({
-                      email: event.target.value as InvoiceFilters["email"],
-                    })
-                  }
-                >
-                  <option value="">Todo</option>
-                  <option value="sent">Enviado</option>
-                  <option value="not_sent">No enviado</option>
-                </select>
+                <Input
+                  id="filtro-hasta"
+                  type="date"
+                  className="h-10"
+                  value={filters.dateTo}
+                  onChange={(event) => update({ dateTo: event.target.value })}
+                />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <label htmlFor="filtro-desde" className="text-sm font-medium">
-                    Desde
-                  </label>
-                  <Input
-                    id="filtro-desde"
-                    type="date"
-                    className="h-10"
-                    value={filters.dateFrom}
-                    onChange={(event) =>
-                      update({ dateFrom: event.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label htmlFor="filtro-hasta" className="text-sm font-medium">
-                    Hasta
-                  </label>
-                  <Input
-                    id="filtro-hasta"
-                    type="date"
-                    className="h-10"
-                    value={filters.dateTo}
-                    onChange={(event) => update({ dateTo: event.target.value })}
-                  />
-                </div>
-              </div>
-              {advancedCount > 0 ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    update({
-                      companyId: "",
-                      email: "",
-                      dateFrom: "",
-                      dateTo: "",
-                    })
-                  }
-                >
-                  Limpiar filtros
-                </Button>
-              ) : null}
-            </PopoverContent>
-          </Popover>
+            </div>
+            {advancedCount > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  update({
+                    companyId: "",
+                    email: "",
+                    dateFrom: "",
+                    dateTo: "",
+                  })
+                }
+              >
+                Limpiar filtros
+              </Button>
+            ) : null}
+          </FilterPanel>
         </div>
       </div>
 
@@ -339,216 +342,208 @@ export function InvoiceList({
           }
         />
       ) : (
-        <div className="max-h-[70vh] overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-card text-muted-foreground sticky top-0 z-10 text-xs">
-              <tr className="border-b">
-                <th scope="col" className="w-10 px-2 py-2.5">
-                  <span className="sr-only">Detalle</span>
-                </th>
-                <th scope="col" className="px-2 py-2.5 font-medium">
-                  Factura
-                </th>
-                <th
-                  scope="col"
-                  className="hidden px-2 py-2.5 font-medium md:table-cell"
-                >
-                  Cliente
-                </th>
-                <th
-                  scope="col"
-                  className="hidden px-2 py-2.5 font-medium md:table-cell"
-                >
-                  Vence
-                </th>
-                <th scope="col" className="px-2 py-2.5 text-right font-medium">
-                  Total
-                </th>
-                <th scope="col" className="px-2 py-2.5 font-medium">
-                  Estado
-                </th>
-                <th scope="col" className="px-3 py-2.5 text-right font-medium">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {view.items.map((invoice) => {
-                const isOpen = expanded.has(invoice.id);
-                const detailId = `detalle-${invoice.id}`;
-                const canDelete =
-                  ["draft", "cancelled"].includes(invoice.status) &&
-                  !invoice.is_legacy_import;
-                return (
-                  <Fragment key={invoice.id}>
-                    <tr className="border-b last:border-0">
-                      <td className="px-2 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-10"
-                          aria-expanded={isOpen}
-                          aria-controls={detailId}
-                          aria-label={`${isOpen ? "Ocultar" : "Ver"} detalle de ${invoiceLabel(invoice)}`}
-                          onClick={() => toggle(invoice.id)}
-                        >
-                          <ChevronDown
-                            className={cn(
-                              "size-4 transition-transform",
-                              isOpen && "rotate-180",
-                            )}
-                          />
-                        </Button>
-                      </td>
-                      <td className="px-2 py-2 font-medium">
-                        <span>{invoiceLabel(invoice)}</span>
-                        <span className="text-muted-foreground block text-xs font-normal md:hidden">
-                          {clientName(invoice)}
-                        </span>
-                      </td>
-                      <td className="hidden px-2 py-2 md:table-cell">
+        <Table containerClassName="max-h-[70vh]">
+          <TableHeader>
+            <TableRow className="border-b">
+              <TableHead className="w-10 px-2 py-2.5">
+                <span className="sr-only">Detalle</span>
+              </TableHead>
+              <TableHead className="px-2 py-2.5 font-medium">Factura</TableHead>
+              <TableHead
+                scope="col"
+                className="hidden px-2 py-2.5 font-medium md:table-cell"
+              >
+                Cliente
+              </TableHead>
+              <TableHead
+                scope="col"
+                className="hidden px-2 py-2.5 font-medium md:table-cell"
+              >
+                Vence
+              </TableHead>
+              <TableHead className="px-2 py-2.5 text-right font-medium">
+                Total
+              </TableHead>
+              <TableHead className="px-2 py-2.5 font-medium">Estado</TableHead>
+              <TableHead className="px-3 py-2.5 text-right font-medium">
+                Acciones
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {view.items.map((invoice) => {
+              const isOpen = expanded.has(invoice.id);
+              const detailId = `detalle-${invoice.id}`;
+              const canDelete =
+                ["draft", "cancelled"].includes(invoice.status) &&
+                !invoice.is_legacy_import;
+              return (
+                <Fragment key={invoice.id}>
+                  <TableRow className="border-b last:border-0">
+                    <TableCell className="px-2 py-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-10"
+                        aria-expanded={isOpen}
+                        aria-controls={detailId}
+                        aria-label={`${isOpen ? "Ocultar" : "Ver"} detalle de ${invoiceLabel(invoice)}`}
+                        onClick={() => toggle(invoice.id)}
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-4 transition-transform",
+                            isOpen && "rotate-180",
+                          )}
+                        />
+                      </Button>
+                    </TableCell>
+                    <TableCell className="px-2 py-2 font-medium">
+                      <span>{invoiceLabel(invoice)}</span>
+                      <span className="text-muted-foreground block text-xs font-normal md:hidden">
                         {clientName(invoice)}
-                      </td>
-                      <td className="hidden px-2 py-2 tabular-nums md:table-cell">
-                        {invoice.due_date ?? "—"}
-                      </td>
-                      <td className="px-2 py-2 text-right font-medium tabular-nums">
-                        {money(invoice)}
-                      </td>
-                      <td className="px-2 py-2">
-                        <StatusBadge
-                          tone={INVOICE_STATUS_TONES[invoice.status]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden px-2 py-2 md:table-cell">
+                      {clientName(invoice)}
+                    </TableCell>
+                    <TableCell className="hidden px-2 py-2 tabular-nums md:table-cell">
+                      {invoice.due_date ?? "—"}
+                    </TableCell>
+                    <TableCell className="px-2 py-2 text-right font-medium tabular-nums">
+                      {money(invoice)}
+                    </TableCell>
+                    <TableCell className="px-2 py-2">
+                      <StatusBadge tone={INVOICE_STATUS_TONES[invoice.status]}>
+                        {labelFor(INVOICE_STATUS_LABELS, invoice.status)}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell className="px-3 py-2">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="h-10"
                         >
-                          {labelFor(INVOICE_STATUS_LABELS, invoice.status)}
-                        </StatusBadge>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="h-10"
+                          <Link
+                            href={`/dashboard/admin/invoices/${invoice.id}`}
                           >
-                            <Link
-                              href={`/dashboard/admin/invoices/${invoice.id}`}
-                            >
-                              Ver
-                            </Link>
-                          </Button>
-                          {canDelete ? (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-10"
-                                  disabled={pending}
-                                  aria-label={`Más acciones de ${invoiceLabel(invoice)}`}
-                                >
-                                  <MoreHorizontal className="size-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onSelect={() => remove(invoice)}
-                                >
-                                  <Trash2 />
-                                  Eliminar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                    {isOpen ? (
-                      <tr id={detailId} className="bg-muted/30 border-b">
-                        <td />
-                        <td colSpan={6} className="px-2 py-3">
-                          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-4">
-                            <div className="md:hidden">
-                              <dt className="text-muted-foreground text-xs">
-                                Vence
-                              </dt>
-                              <dd className="tabular-nums">
-                                {invoice.due_date ?? "—"}
-                              </dd>
-                            </div>
+                            Ver
+                          </Link>
+                        </Button>
+                        {canDelete ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-10"
+                                disabled={pending}
+                                aria-label={`Más acciones de ${invoiceLabel(invoice)}`}
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => remove(invoice)}
+                              >
+                                <Trash2 />
+                                Eliminar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {isOpen ? (
+                    <TableRow id={detailId} className="bg-muted/30 border-b">
+                      <TableCell />
+                      <TableCell colSpan={6} className="px-2 py-3">
+                        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-4">
+                          <div className="md:hidden">
+                            <dt className="text-muted-foreground text-xs">
+                              Vence
+                            </dt>
+                            <dd className="tabular-nums">
+                              {invoice.due_date ?? "—"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground text-xs">
+                              Emisión
+                            </dt>
+                            <dd className="tabular-nums">
+                              {invoice.invoice_date ?? "Sin fecha"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground text-xs">
+                              Correo
+                            </dt>
+                            <dd>
+                              {labelFor(
+                                DELIVERY_STATUS_LABELS,
+                                invoice.email_status,
+                              )}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground text-xs">
+                              Enviada
+                            </dt>
+                            <dd className="tabular-nums">
+                              {shortDate(invoice.sent_at)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground text-xs">
+                              Pagada
+                            </dt>
+                            <dd className="tabular-nums">
+                              {shortDate(invoice.paid_at)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground text-xs">
+                              Vista
+                            </dt>
+                            <dd className="tabular-nums">
+                              {invoice.viewed_at
+                                ? invoice.viewed_at
+                                    .slice(0, 16)
+                                    .replace("T", " ")
+                                : "No vista"}
+                            </dd>
+                          </div>
+                          {invoice.pdf_storage_path ? (
                             <div>
                               <dt className="text-muted-foreground text-xs">
-                                Emisión
-                              </dt>
-                              <dd className="tabular-nums">
-                                {invoice.invoice_date ?? "Sin fecha"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-muted-foreground text-xs">
-                                Correo
+                                PDF
                               </dt>
                               <dd>
-                                {labelFor(
-                                  DELIVERY_STATUS_LABELS,
-                                  invoice.email_status,
-                                )}
+                                <a
+                                  href={`/api/invoices/${invoice.id}/download`}
+                                  className="text-primary underline-offset-4 hover:underline"
+                                >
+                                  Descargar PDF
+                                </a>
                               </dd>
                             </div>
-                            <div>
-                              <dt className="text-muted-foreground text-xs">
-                                Enviada
-                              </dt>
-                              <dd className="tabular-nums">
-                                {shortDate(invoice.sent_at)}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-muted-foreground text-xs">
-                                Pagada
-                              </dt>
-                              <dd className="tabular-nums">
-                                {shortDate(invoice.paid_at)}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-muted-foreground text-xs">
-                                Vista
-                              </dt>
-                              <dd className="tabular-nums">
-                                {invoice.viewed_at
-                                  ? invoice.viewed_at
-                                      .slice(0, 16)
-                                      .replace("T", " ")
-                                  : "No vista"}
-                              </dd>
-                            </div>
-                            {invoice.pdf_storage_path ? (
-                              <div>
-                                <dt className="text-muted-foreground text-xs">
-                                  PDF
-                                </dt>
-                                <dd>
-                                  <a
-                                    href={`/api/invoices/${invoice.id}/download`}
-                                    className="text-primary underline-offset-4 hover:underline"
-                                  >
-                                    Descargar PDF
-                                  </a>
-                                </dd>
-                              </div>
-                            ) : null}
-                          </dl>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                          ) : null}
+                        </dl>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
 
       <PaginationBar view={view} onPageChange={setPage} />
