@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "test:document-upload": "tsx scripts/test-document-upload.ts",
     "test:calendar": "tsx scripts/test-calendar.ts",
+    "test:calendar-agenda": "tsx scripts/test-calendar-agenda.ts",
     "test:admin-home": "tsx scripts/test-admin-home.ts",
     "test:company-tabs": "tsx scripts/test-company-tabs.ts",
     "test:company-workspace": "tsx scripts/test-company-workspace.ts",
