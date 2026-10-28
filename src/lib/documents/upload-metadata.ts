@@ -1,3 +1,5 @@
+import { DOCUMENT_TYPE_LABELS, labelFor } from "@/lib/labels";
+
 export const CLIENT_DOCUMENT_TYPES = [
   "Invoice",
   "Receipt",
@@ -51,7 +53,8 @@ export function getDocumentDisplayType(values: {
   document_type: string;
   document_type_description?: string | null;
 }) {
+  const label = labelFor(DOCUMENT_TYPE_LABELS, values.document_type);
   return values.document_type === "Other" && values.document_type_description
-    ? `Other · ${values.document_type_description}`
-    : values.document_type;
+    ? `${label} · ${values.document_type_description}`
+    : label;
 }

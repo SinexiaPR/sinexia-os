@@ -1,0 +1,67 @@
+// Diccionario central de etiquetas legibles (español) para valores internos.
+// Toda cadena que venga de la base de datos o de un enum debe pasar por aquí
+// antes de mostrarse, para no filtrar valores crudos como `not_configured`.
+
+export const INVOICE_STATUS_LABELS = {
+  draft: "Borrador",
+  issued: "Emitida",
+  sent: "Enviada",
+  viewed: "Vista",
+  paid: "Pagada",
+  overdue: "Vencida",
+  cancelled: "Cancelada",
+} as const;
+
+export const DELIVERY_STATUS_LABELS = {
+  pending: "Pendiente",
+  sent: "Enviado",
+  failed: "Falló",
+  not_configured: "No configurado",
+} as const;
+
+export const DOCUMENT_PRIORITY_LABELS = {
+  routine: "Rutina",
+  urgent: "Urgente",
+} as const;
+
+// Los valores en inglés se guardan así en la base de datos y en los filtros;
+// solo cambia lo que se muestra.
+export const DOCUMENT_TYPE_LABELS = {
+  Invoice: "Factura",
+  Receipt: "Recibo",
+  "Bank Statement": "Estado bancario",
+  "Payment Receipt": "Comprobante de pago",
+  "Payroll / Timesheets": "Nómina / Horas",
+  "Tax Document": "Documento tributario",
+  Contract: "Contrato",
+  Identification: "Identificación",
+  Other: "Otro",
+  "Credit Note": "Nota de crédito",
+  Statement: "Estado de cuenta",
+} as const;
+
+export const SEMAPHORE_LABELS = {
+  green: "Al día",
+  amber: "Con pendientes",
+  red: "Atención urgente",
+} as const;
+
+type Dictionary = Readonly<Record<string, string>>;
+
+/** "not_configured" → "Not configured" como último recurso, nunca el valor crudo. */
+function humanize(value: string): string {
+  const spaced = value.replace(/[_-]+/g, " ").trim();
+  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : "—";
+}
+
+/**
+ * Devuelve la etiqueta en español de `value` según `dictionary`.
+ * Valores vacíos → "—"; valores desconocidos → versión legible del valor.
+ */
+export function labelFor(
+  dictionary: Dictionary,
+  value: string | null | undefined,
+): string {
+  if (!value) return "—";
+  return dictionary[value] ?? humanize(value);
+}
