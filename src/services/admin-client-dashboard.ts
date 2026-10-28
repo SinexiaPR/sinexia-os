@@ -19,7 +19,8 @@ function latestByCompany<T extends { company_id: string }>(
   rows: T[],
 ): Map<string, T> {
   const map = new Map<string, T>();
-  for (const row of rows) if (!map.has(row.company_id)) map.set(row.company_id, row);
+  for (const row of rows)
+    if (!map.has(row.company_id)) map.set(row.company_id, row);
   return map;
 }
 
@@ -27,11 +28,23 @@ function tresbePayrollState(
   row: { status: string; updated_at: string } | undefined,
 ): { state: DashboardItemState; label: string; lastUpdated: string | null } {
   if (!row)
-    return { state: "pending", label: "Sin cargar esta semana", lastUpdated: null };
+    return {
+      state: "pending",
+      label: "Sin cargar esta semana",
+      lastUpdated: null,
+    };
   if (row.status === "draft")
-    return { state: "in_progress", label: "Borrador", lastUpdated: row.updated_at };
+    return {
+      state: "in_progress",
+      label: "Borrador",
+      lastUpdated: row.updated_at,
+    };
   if (row.status === "calculated" || row.status === "corrected")
-    return { state: "in_progress", label: "Calculada", lastUpdated: row.updated_at };
+    return {
+      state: "in_progress",
+      label: "Calculada",
+      lastUpdated: row.updated_at,
+    };
   if (row.status === "sent" || row.status === "viewed")
     return { state: "done", label: "Enviada", lastUpdated: row.updated_at };
   return { state: "done", label: "Al día", lastUpdated: row.updated_at };
@@ -49,7 +62,11 @@ function weeklyPayrollState(
   today: string,
 ): { state: DashboardItemState; label: string; lastUpdated: string | null } {
   if (!row)
-    return { state: "pending", label: "Sin cargar ninguna semana", lastUpdated: null };
+    return {
+      state: "pending",
+      label: "Sin cargar ninguna semana",
+      lastUpdated: null,
+    };
   const weekLabel = `semana del ${formatIsoDate(row.week_start)}`;
   if (row.status === "submitted")
     return {
@@ -63,18 +80,35 @@ function weeklyPayrollState(
   if (row.status === "draft")
     return {
       state: "pending",
-      label: withinLag ? `Borrador (${weekLabel})` : `Atrasada: borrador desde la ${weekLabel}`,
+      label: withinLag
+        ? `Borrador (${weekLabel})`
+        : `Atrasada: borrador desde la ${weekLabel}`,
       lastUpdated: row.updated_at,
     };
-  if (withinLag) return { state: "done", label: `Al día (${weekLabel})`, lastUpdated: row.updated_at };
-  return { state: "pending", label: `Atrasada desde la ${weekLabel}`, lastUpdated: row.updated_at };
+  if (withinLag)
+    return {
+      state: "done",
+      label: `Al día (${weekLabel})`,
+      lastUpdated: row.updated_at,
+    };
+  return {
+    state: "pending",
+    label: `Atrasada desde la ${weekLabel}`,
+    lastUpdated: row.updated_at,
+  };
 }
 
-function invoiceWeeklyState(
-  rows: { status: string; invoice_date: string }[],
-): { state: DashboardItemState; label: string; lastUpdated: string | null } {
+function invoiceWeeklyState(rows: { status: string; invoice_date: string }[]): {
+  state: DashboardItemState;
+  label: string;
+  lastUpdated: string | null;
+} {
   if (!rows.length)
-    return { state: "pending", label: "Sin facturar esta semana", lastUpdated: null };
+    return {
+      state: "pending",
+      label: "Sin facturar esta semana",
+      lastUpdated: null,
+    };
   const lastUpdated = rows.reduce(
     (latest, r) => (r.invoice_date > latest ? r.invoice_date : latest),
     rows[0].invoice_date,
@@ -83,7 +117,11 @@ function invoiceWeeklyState(
     return { state: "done", label: "Facturado esta semana", lastUpdated };
   if (rows.some((r) => r.status === "draft"))
     return { state: "in_progress", label: "Borrador sin emitir", lastUpdated };
-  return { state: "pending", label: "Sin facturar esta semana", lastUpdated: null };
+  return {
+    state: "pending",
+    label: "Sin facturar esta semana",
+    lastUpdated: null,
+  };
 }
 
 function recencyState(
@@ -93,7 +131,8 @@ function recencyState(
   doneLabelPrefix: string,
   pendingLabel: string,
 ): { state: DashboardItemState; label: string; lastUpdated: string | null } {
-  if (!lastUpdated) return { state: "pending", label: pendingLabel, lastUpdated: null };
+  if (!lastUpdated)
+    return { state: "pending", label: pendingLabel, lastUpdated: null };
   const updatedDate = lastUpdated.slice(0, 10);
   if (updatedDate >= weekStart)
     return {
@@ -114,7 +153,9 @@ function recencyState(
   };
 }
 
-export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> {
+export async function getAdminClientDashboard(): Promise<
+  ClientDashboardCard[]
+> {
   const supabase = await createClient();
   const today = todayInCordoba();
   const weekStart = weekStartOf(today);
@@ -264,6 +305,7 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
         return {
           id: config.id,
           key: config.key,
+          actionType: config.action_type,
           label: config.label,
           state: config.manual_status ?? "pending",
           stateLabel: config.manual_status_label ?? "Pendiente",
@@ -276,6 +318,7 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
       return {
         id: config.id,
         key: config.key,
+        actionType: config.action_type,
         label: config.label,
         state: derived.state,
         stateLabel: derived.label,

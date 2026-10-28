@@ -6,7 +6,5 @@ type DocumentStatusBadgeProps = {
 };
 
 export function DocumentStatusBadge({ status }: DocumentStatusBadgeProps) {
-  return (
-    <Badge variant={status}>{DOCUMENT_STATUS_LABELS[status]}</Badge>
-  );
+  return <Badge variant={status}>{DOCUMENT_STATUS_LABELS[status]}</Badge>;
 }

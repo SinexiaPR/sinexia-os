@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 type RecentActivityFeedProps = {
   items: AdminActivityItem[];
   className?: string;
+  /** Solo la lista, sin tarjeta ni encabezado (para usar dentro de un acordeón). */
+  bare?: boolean;
 };
 
 const activityIcons = {
@@ -25,53 +27,66 @@ function formatTimestamp(timestamp: string) {
   }).format(new Date(timestamp));
 }
 
+function ActivityList({ items }: { items: AdminActivityItem[] }) {
+  if (items.length === 0) {
+    return (
+      <p className="text-muted-foreground py-8 text-center text-sm">
+        Todavía no hay actividad reciente.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {items.map((item) => {
+        const Icon = activityIcons[item.kind];
+        return (
+          <li key={item.id}>
+            <Link
+              href={item.href}
+              className="border-border/70 hover:bg-muted/40 focus-visible:ring-ring flex min-h-11 items-start gap-3 rounded-md border px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <span
+                aria-hidden
+                className="bg-info-soft text-info mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg"
+              >
+                <Icon className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-start justify-between gap-3">
+                  <span className="text-foreground text-sm font-medium">
+                    {item.title}
+                  </span>
+                  <span className="text-muted-foreground shrink-0 text-xs">
+                    {formatTimestamp(item.timestamp)}
+                  </span>
+                </span>
+                <span className="text-muted-foreground mt-1 block text-sm">
+                  {item.description}
+                </span>
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function RecentActivityFeed({
   items,
   className,
+  bare = false,
 }: RecentActivityFeedProps) {
+  if (bare) return <ActivityList items={items} />;
   return (
     <SurfaceCard className={className} padding="md">
       <h2 className="text-base font-semibold tracking-tight">
         Actividad reciente
       </h2>
-      <p className="text-muted-foreground mt-1 text-sm">
+      <p className="text-muted-foreground mt-1 mb-5 text-sm">
         Últimos documentos y reportes publicados de todas las empresas.
       </p>
-
-      {items.length === 0 ? (
-        <p className="text-muted-foreground py-10 text-center text-sm">
-          Todavía no hay actividad reciente.
-        </p>
-      ) : (
-        <div className="mt-5 space-y-2">
-          {items.map((item) => {
-            const Icon = activityIcons[item.kind];
-
-            return (
-              <Link
-                key={item.id}
-                href={item.href}
-                className="border-border/70 hover:bg-muted/40 flex items-start gap-3 rounded-md border px-4 py-3 transition-colors"
-              >
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600">
-                  <Icon className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-foreground font-medium">{item.title}</p>
-                    <span className="text-muted-foreground shrink-0 text-xs">
-                      {formatTimestamp(item.timestamp)}
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    {item.description}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+      <ActivityList items={items} />
     </SurfaceCard>
   );
 }
