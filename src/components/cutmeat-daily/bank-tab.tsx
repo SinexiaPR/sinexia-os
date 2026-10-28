@@ -25,6 +25,11 @@ type Movement = {
   reference: string;
   additionalReference: string;
   note: string;
+  /** Post Date / Calculated Balance del export real del banco -- esta
+   * pantalla no los edita, pero hay que conservarlos al reguardar para
+   * no pisar lo que ya haya cargado una skill de Claude. */
+  postDate: string | null;
+  calculatedBalance: number | null;
 };
 
 export function BankTab({
@@ -49,6 +54,8 @@ export function BankTab({
     isReconciledCleared?: boolean;
     reference?: string | null;
     additionalReference?: string | null;
+    postDate?: string | null;
+    calculatedBalance?: number | null;
   }>;
   recurring: RecurringPayment[];
 }) {
@@ -67,6 +74,8 @@ export function BankTab({
       reference: m.reference ?? "",
       additionalReference: m.additionalReference ?? "",
       note: "",
+      postDate: m.postDate ?? null,
+      calculatedBalance: m.calculatedBalance ?? null,
     })),
   );
   const [message, setMessage] = useState<string | null>(null);
@@ -86,7 +95,9 @@ export function BankTab({
       setMessage("Primero creá el informe de este día.");
       return;
     }
-    const prepared = movements.filter((m) => m.description.trim() && Number(m.amount) > 0);
+    const prepared = movements.filter(
+      (m) => m.description.trim() && Number(m.amount) > 0,
+    );
     startTransition(async () => {
       const result = await saveBankExport({
         companyId,
@@ -103,10 +114,14 @@ export function BankTab({
           reference: m.reference.trim() || null,
           additionalReference: m.additionalReference.trim() || null,
           note: m.note.trim() || null,
+          postDate: m.postDate,
+          calculatedBalance: m.calculatedBalance,
         })),
         sourcePdfPath: null,
       });
-      setMessage("error" in result ? result.error : "Export del banco guardado.");
+      setMessage(
+        "error" in result ? result.error : "Export del banco guardado.",
+      );
       if (!("error" in result)) router.refresh();
     });
   };
@@ -114,7 +129,9 @@ export function BankTab({
   return (
     <div className="space-y-6">
       <SurfaceCard>
-        <h2 className="text-base font-semibold">Deposit Accounts Activity Summary</h2>
+        <h2 className="text-base font-semibold">
+          Deposit Accounts Activity Summary
+        </h2>
         <label className="mt-4 block max-w-xs space-y-1 text-sm">
           <span className="text-muted-foreground text-xs">Closing balance</span>
           <Input
@@ -146,6 +163,8 @@ export function BankTab({
                   reference: "",
                   additionalReference: "",
                   note: "",
+                  postDate: null,
+                  calculatedBalance: null,
                 },
               ])
             }
@@ -156,28 +175,37 @@ export function BankTab({
         </div>
         <div className="mt-3 space-y-3 px-1">
           {movements.map((movement, index) => (
-            <div key={movement.id ?? `new-${index}`} className="space-y-2 rounded-lg border p-3">
+            <div
+              key={movement.id ?? `new-${index}`}
+              className="space-y-2 rounded-lg border p-3"
+            >
               <div className="grid gap-2 sm:grid-cols-7">
                 <Input
                   className="sm:col-span-2"
                   placeholder="Descripción (texto original del banco)"
                   value={movement.description}
                   disabled={readOnly}
-                  onChange={(event) => update(index, { description: event.target.value })}
+                  onChange={(event) =>
+                    update(index, { description: event.target.value })
+                  }
                 />
                 <Input
                   inputMode="decimal"
                   placeholder="Monto"
                   value={movement.amount}
                   disabled={readOnly}
-                  onChange={(event) => update(index, { amount: event.target.value })}
+                  onChange={(event) =>
+                    update(index, { amount: event.target.value })
+                  }
                 />
                 <select
                   className={selectClass}
                   value={movement.direction}
                   disabled={readOnly}
                   onChange={(event) =>
-                    update(index, { direction: event.target.value as "ingreso" | "egreso" })
+                    update(index, {
+                      direction: event.target.value as "ingreso" | "egreso",
+                    })
                   }
                 >
                   <option value="ingreso">Ingreso</option>
@@ -187,7 +215,9 @@ export function BankTab({
                   className={selectClass}
                   value={movement.linkedRecurringId}
                   disabled={readOnly}
-                  onChange={(event) => update(index, { linkedRecurringId: event.target.value })}
+                  onChange={(event) =>
+                    update(index, { linkedRecurringId: event.target.value })
+                  }
                 >
                   <option value="">Sin vincular a recurrente…</option>
                   {recurring.map((item) => (
@@ -200,13 +230,17 @@ export function BankTab({
                   placeholder="Reference"
                   value={movement.reference}
                   disabled={readOnly}
-                  onChange={(event) => update(index, { reference: event.target.value })}
+                  onChange={(event) =>
+                    update(index, { reference: event.target.value })
+                  }
                 />
                 <Input
                   placeholder="Additional Reference"
                   value={movement.additionalReference}
                   disabled={readOnly}
-                  onChange={(event) => update(index, { additionalReference: event.target.value })}
+                  onChange={(event) =>
+                    update(index, { additionalReference: event.target.value })
+                  }
                 />
               </div>
               <div className="flex flex-wrap items-center gap-4">
@@ -216,7 +250,9 @@ export function BankTab({
                     checked={movement.isNotEnteredDeposit}
                     disabled={readOnly}
                     onChange={(event) =>
-                      update(index, { isNotEnteredDeposit: event.target.checked })
+                      update(index, {
+                        isNotEnteredDeposit: event.target.checked,
+                      })
                     }
                   />
                   Not entered Sales
@@ -227,7 +263,9 @@ export function BankTab({
                     checked={movement.isReconciledCleared}
                     disabled={readOnly}
                     onChange={(event) =>
-                      update(index, { isReconciledCleared: event.target.checked })
+                      update(index, {
+                        isReconciledCleared: event.target.checked,
+                      })
                     }
                   />
                   Cleared en conciliación
@@ -237,7 +275,9 @@ export function BankTab({
                   aria-label="Eliminar"
                   disabled={readOnly}
                   className="text-muted-foreground hover:text-destructive ml-auto p-1"
-                  onClick={() => setMovements(movements.filter((_, i) => i !== index))}
+                  onClick={() =>
+                    setMovements(movements.filter((_, i) => i !== index))
+                  }
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -245,7 +285,9 @@ export function BankTab({
             </div>
           ))}
           {movements.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Sin movimientos cargados.</p>
+            <p className="text-muted-foreground text-sm">
+              Sin movimientos cargados.
+            </p>
           ) : null}
         </div>
       </SurfaceCard>
@@ -254,7 +296,9 @@ export function BankTab({
         <Button onClick={save} disabled={pending || readOnly}>
           Guardar export del banco
         </Button>
-        {message ? <span className="text-muted-foreground text-sm">{message}</span> : null}
+        {message ? (
+          <span className="text-muted-foreground text-sm">{message}</span>
+        ) : null}
       </div>
     </div>
   );
