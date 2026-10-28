@@ -18,11 +18,11 @@ type DocumentListProps = {
 
 export function DocumentList({
   documents,
-  title = "Inbox",
-  emptyMessage = "No items yet.",
+  title = "Documentos",
+  emptyMessage = "Aún no hay documentos.",
   showCompany = false,
   viewAllHref,
-  viewAllLabel = "View all",
+  viewAllLabel = "Ver todos",
   viewedDocumentIds,
   profileId,
   isAdmin = false,

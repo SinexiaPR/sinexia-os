@@ -19,7 +19,7 @@ export async function reprocessReport(reportId: string) {
 
   const normalizedReportId = reportId.trim();
   if (!normalizedReportId) {
-    return { error: "Missing report id." };
+    return { error: "Falta el identificador del reporte." };
   }
 
   const supabase = await createClient();
@@ -32,11 +32,13 @@ export async function reprocessReport(reportId: string) {
   console.info("[sinexia-processing] reprocess_lookup", {
     reportId: normalizedReportId,
     companyId: report?.company_id ?? null,
-    lookupResult: report ? "authenticated_admin" : error?.message ?? "not_found",
+    lookupResult: report
+      ? "authenticated_admin"
+      : (error?.message ?? "not_found"),
   });
 
   if (error || !report) {
-    return { error: "Report not found." };
+    return { error: "Reporte no encontrado." };
   }
 
   const result = await processReportDocument({
@@ -48,7 +50,7 @@ export async function reprocessReport(reportId: string) {
   revalidatePath("/dashboard/reports");
 
   if (!result.ok) {
-    return { error: result.error ?? "Processing failed." };
+    return { error: result.error ?? "El procesamiento falló." };
   }
 
   return { success: true, status: result.status };
@@ -59,7 +61,7 @@ export async function enqueueReportProcessing(reportId: string) {
 
   const normalizedReportId = reportId.trim();
   if (!normalizedReportId) {
-    return { error: "Missing report id." };
+    return { error: "Falta el identificador del reporte." };
   }
 
   const supabase = await createClient();
@@ -70,10 +72,14 @@ export async function enqueueReportProcessing(reportId: string) {
     .maybeSingle();
 
   if (error || !report) {
-    return { error: "Report not found." };
+    return { error: "Reporte no encontrado." };
   }
 
-  scheduleReportProcessing(normalizedReportId, false, report as ReportProcessingSource);
+  scheduleReportProcessing(
+    normalizedReportId,
+    false,
+    report as ReportProcessingSource,
+  );
   return { success: true };
 }
 
@@ -85,12 +91,12 @@ export async function correctProcessingClassification(params: {
   await requireAdmin();
 
   if (!ALLOWED_TYPES.has(params.detectedDocumentType)) {
-    return { error: "Invalid document type." };
+    return { error: "Tipo de documento no válido." };
   }
 
   const period = params.detectedPeriod.trim();
   if (!period) {
-    return { error: "Period is required." };
+    return { error: "El período es obligatorio." };
   }
 
   const supabase = await createClient();
@@ -103,7 +109,7 @@ export async function correctProcessingClassification(params: {
     .eq("report_id", params.reportId);
 
   if (error) {
-    return { error: "Failed to update classification." };
+    return { error: "No se pudo actualizar la clasificación." };
   }
 
   revalidatePath("/dashboard/reports");
@@ -131,7 +137,7 @@ export async function getReportProcessingStatus(reportId: string) {
   const { data, error } = await query.maybeSingle();
 
   if (error) {
-    return { error: "Failed to load status." };
+    return { error: "No se pudo cargar el estado." };
   }
 
   return { data };

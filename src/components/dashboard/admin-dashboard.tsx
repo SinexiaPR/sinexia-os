@@ -8,7 +8,7 @@ export async function AdminDashboard() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Dashboard"
+        title="Inicio"
         description="Estado de cada cliente activo: nómina, facturación y el resto de sus acciones principales."
       />
       <AdminClientCards cards={cards} />

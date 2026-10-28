@@ -1,9 +1,5 @@
 import Link from "next/link";
-import {
-  BarChart3,
-  CheckCircle2,
-  FileText,
-} from "lucide-react";
+import { BarChart3, CheckCircle2, FileText } from "lucide-react";
 
 import { SurfaceCard } from "@/components/ui/surface-card";
 import type { AdminActivityItem } from "@/services/activity";
@@ -21,7 +17,7 @@ const activityIcons = {
 } as const;
 
 function formatTimestamp(timestamp: string) {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("es", {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -29,17 +25,22 @@ function formatTimestamp(timestamp: string) {
   }).format(new Date(timestamp));
 }
 
-export function RecentActivityFeed({ items, className }: RecentActivityFeedProps) {
+export function RecentActivityFeed({
+  items,
+  className,
+}: RecentActivityFeedProps) {
   return (
     <SurfaceCard className={className} padding="md">
-      <h2 className="text-base font-semibold tracking-tight">Recent activity</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Latest documents and published reports across all companies.
+      <h2 className="text-base font-semibold tracking-tight">
+        Actividad reciente
+      </h2>
+      <p className="text-muted-foreground mt-1 text-sm">
+        Últimos documentos y reportes publicados de todas las empresas.
       </p>
 
       {items.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          No recent activity yet.
+        <p className="text-muted-foreground py-10 text-center text-sm">
+          Todavía no hay actividad reciente.
         </p>
       ) : (
         <div className="mt-5 space-y-2">
@@ -50,19 +51,19 @@ export function RecentActivityFeed({ items, className }: RecentActivityFeedProps
               <Link
                 key={item.id}
                 href={item.href}
-                className="flex items-start gap-3 rounded-md border border-border/70 px-4 py-3 transition-colors hover:bg-muted/40"
+                className="border-border/70 hover:bg-muted/40 flex items-start gap-3 rounded-md border px-4 py-3 transition-colors"
               >
                 <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600">
                   <Icon className="size-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium text-foreground">{item.title}</p>
-                    <span className="shrink-0 text-xs text-muted-foreground">
+                    <p className="text-foreground font-medium">{item.title}</p>
+                    <span className="text-muted-foreground shrink-0 text-xs">
                       {formatTimestamp(item.timestamp)}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="text-muted-foreground mt-1 text-sm">
                     {item.description}
                   </p>
                 </div>
@@ -102,15 +103,15 @@ export function PendingMetricCard({
           </span>
         </span>
       ) : null}
-      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         {label}
       </p>
       <div className="mt-6">
-        <p className="text-4xl font-semibold tracking-tight text-foreground tabular-nums">
+        <p className="text-foreground text-4xl font-semibold tracking-tight tabular-nums">
           {value}
         </p>
         {hint ? (
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
             {hint}
           </p>
         ) : null}

@@ -40,10 +40,10 @@ function AlertCard({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="font-medium text-foreground">{title}</p>
+              <p className="text-foreground font-medium">{title}</p>
               <span className="size-2 shrink-0 rounded-full bg-red-500/90" />
             </div>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
               {description}
             </p>
           </div>
@@ -86,8 +86,8 @@ export function ClientNotificationAlerts({
           title="Documentos sin ver"
           description={
             unviewedDocumentsCount === 1
-              ? "Tiene 1 documento en su Inbox que aún no ha abierto."
-              : `Tiene ${unviewedDocumentsCount} documentos en su Inbox que aún no ha abierto.`
+              ? "Tiene 1 documento en Documentos que aún no ha abierto."
+              : `Tiene ${unviewedDocumentsCount} documentos en Documentos que aún no ha abierto.`
           }
           href="/dashboard/inbox"
           icon={FileText}

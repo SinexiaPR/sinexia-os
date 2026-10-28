@@ -58,7 +58,7 @@ export function DocumentRowClient({
     addLocalViewedDocument(profileId, document.id);
   }
 
-  const fileName = document.file_url.split("/").pop() ?? "Document";
+  const fileName = document.file_url.split("/").pop() ?? "Documento";
   const displayType = getDocumentDisplayType(document);
 
   return (
@@ -75,11 +75,11 @@ export function DocumentRowClient({
           <p className="text-foreground font-medium">{displayType}</p>
           {document.priority === "urgent" ? (
             <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-600/15 ring-inset">
-              {isAdmin ? "Urgente" : "Urgent"}
+              Urgente
             </span>
           ) : (
             <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium">
-              {isAdmin ? "Rutina" : "Routine"}
+              Rutina
             </span>
           )}
           <DocumentStatusBadge status={document.status} />

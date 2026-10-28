@@ -99,11 +99,11 @@ async function AdminReportRow({
                 rel="noopener noreferrer"
                 className="border-border text-primary hover:bg-muted/50 inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium"
               >
-                Download
+                Descargar
               </Link>
             )
           ) : (
-            <span className="text-muted-foreground text-sm">Unavailable</span>
+            <span className="text-muted-foreground text-sm">No disponible</span>
           )}
           <DeleteReportButton reportId={report.id} />
         </div>
@@ -123,7 +123,7 @@ export async function AdminReportsList({
     return (
       <SurfaceCard padding="lg">
         <p className="text-muted-foreground py-8 text-center text-sm">
-          No reports published yet.
+          Aún no hay reportes publicados.
         </p>
       </SurfaceCard>
     );

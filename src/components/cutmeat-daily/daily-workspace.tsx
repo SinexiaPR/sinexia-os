@@ -1,11 +1,12 @@
 "use client";
 
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Info,
@@ -13,7 +14,11 @@ import {
   Unlock,
 } from "lucide-react";
 
-import { closeDailyReport, ensureDailyReport, reopenDailyReport } from "@/actions/cutmeat-daily";
+import {
+  closeDailyReport,
+  ensureDailyReport,
+  reopenDailyReport,
+} from "@/actions/cutmeat-daily";
 import { AgingTab } from "@/components/cutmeat-daily/aging-tab";
 import { BankTab } from "@/components/cutmeat-daily/bank-tab";
 import { IncomeTab } from "@/components/cutmeat-daily/income-tab";
@@ -48,7 +53,7 @@ const tabs: Array<{ key: Tab; label: string }> = [
   { key: "conciliacion", label: "Conciliación" },
   { key: "banco", label: "Banco" },
   { key: "recurrentes", label: "Recurrentes" },
-  { key: "proyeccion", label: "THIS WEEK" },
+  { key: "proyeccion", label: "ESTA SEMANA" },
   { key: "aging", label: "Aging" },
   { key: "configuracion", label: "Configuración" },
   { key: "pdfs", label: "PDFs" },
@@ -77,12 +82,17 @@ export function CutMeatDailyWorkspace({
   const [pending, startTransition] = useTransition();
 
   const goToDate = (value: string) => {
-    router.push(`/dashboard/admin/companies/${company.id}/daily-reports?date=${value}`);
+    router.push(
+      `/dashboard/admin/companies/${company.id}/daily-reports?date=${value}`,
+    );
   };
 
   const create = () => {
     startTransition(async () => {
-      const result = await ensureDailyReport({ companyId: company.id, reportDate });
+      const result = await ensureDailyReport({
+        companyId: company.id,
+        reportDate,
+      });
       if ("error" in result) {
         setMessage(result.error ?? null);
         return;
@@ -94,7 +104,10 @@ export function CutMeatDailyWorkspace({
   const close = () => {
     if (!workspace.report) return;
     startTransition(async () => {
-      const result = await closeDailyReport({ companyId: company.id, reportId: workspace.report!.id });
+      const result = await closeDailyReport({
+        companyId: company.id,
+        reportId: workspace.report!.id,
+      });
       setMessage("error" in result ? result.error : "Día cerrado.");
       router.refresh();
     });
@@ -103,7 +116,10 @@ export function CutMeatDailyWorkspace({
   const reopen = () => {
     if (!workspace.report) return;
     startTransition(async () => {
-      const result = await reopenDailyReport({ companyId: company.id, reportId: workspace.report!.id });
+      const result = await reopenDailyReport({
+        companyId: company.id,
+        reportId: workspace.report!.id,
+      });
       setMessage("error" in result ? result.error : "Día reabierto.");
       router.refresh();
     });
@@ -112,18 +128,22 @@ export function CutMeatDailyWorkspace({
   if (!workspace.settings) {
     return (
       <div className="space-y-6">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href={`/dashboard/admin/companies/${company.id}`}>
-            <ArrowLeft className="size-4" />
-            Volver a {company.name}
-          </Link>
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Clientes", href: "/dashboard/admin/companies" },
+            {
+              label: company.name,
+              href: `/dashboard/admin/companies/${company.id}`,
+            },
+            { label: "Reportes diarios" },
+          ]}
+        />
         <SurfaceCard>
           <p className="text-sm">
             Esta empresa todavía no tiene la configuración inicial de
-            &quot;Informes diarios&quot; (proveedores, feriados, Prime
-            Meats). Corré la migración de seed o configurala desde la
-            pestaña Configuración una vez creado el primer informe.
+            &quot;Informes diarios&quot; (proveedores, feriados, Prime Meats).
+            Corré la migración de seed o configurala desde la pestaña
+            Configuración una vez creado el primer informe.
           </p>
         </SurfaceCard>
       </div>
@@ -131,18 +151,26 @@ export function CutMeatDailyWorkspace({
   }
 
   const readOnly = workspace.report?.status === "closed";
-  const blockingWarnings = workspace.warnings.filter((warning) => warning.severity === "blocking");
-  const infoWarnings = workspace.warnings.filter((warning) => warning.severity === "info");
+  const blockingWarnings = workspace.warnings.filter(
+    (warning) => warning.severity === "blocking",
+  );
+  const infoWarnings = workspace.warnings.filter(
+    (warning) => warning.severity === "info",
+  );
 
   return (
     <div className="space-y-5">
       <header className="space-y-5">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href={`/dashboard/admin/companies/${company.id}`}>
-            <ArrowLeft className="size-4" />
-            Volver a {company.name}
-          </Link>
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Clientes", href: "/dashboard/admin/companies" },
+            {
+              label: company.name,
+              href: `/dashboard/admin/companies/${company.id}`,
+            },
+            { label: "Reportes diarios" },
+          ]}
+        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
@@ -184,7 +212,9 @@ export function CutMeatDailyWorkspace({
             <input
               type="date"
               value={reportDate}
-              onChange={(event) => event.target.value && goToDate(event.target.value)}
+              onChange={(event) =>
+                event.target.value && goToDate(event.target.value)
+              }
               className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
             />
             <Button
@@ -240,7 +270,9 @@ export function CutMeatDailyWorkspace({
         </SurfaceCard>
       ) : null}
 
-      {message ? <p className="text-muted-foreground text-sm">{message}</p> : null}
+      {message ? (
+        <p className="text-muted-foreground text-sm">{message}</p>
+      ) : null}
 
       {readOnly ? (
         <p className="text-muted-foreground text-sm">
@@ -257,7 +289,11 @@ export function CutMeatDailyWorkspace({
       />
 
       {tab === "resumen" ? (
-        <SummaryTab companyId={company.id} workspace={workspace} readOnly={readOnly} />
+        <SummaryTab
+          companyId={company.id}
+          workspace={workspace}
+          readOnly={readOnly}
+        />
       ) : null}
       {tab === "conciliacion" ? (
         <ReconciliationTab
@@ -338,7 +374,9 @@ export function CutMeatDailyWorkspace({
             </Link>
           ))}
           {recentReports.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Sin informes previos.</p>
+            <p className="text-muted-foreground text-sm">
+              Sin informes previos.
+            </p>
           ) : null}
         </div>
       </SurfaceCard>

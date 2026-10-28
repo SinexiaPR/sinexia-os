@@ -1,6 +1,6 @@
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -58,12 +58,16 @@ export default async function AdminCompanyInvoicesPage({
 
   return (
     <div className="space-y-5">
-      <Button asChild variant="ghost" className="-ml-3">
-        <Link href={`/dashboard/admin/companies/${companyId}`}>
-          <ArrowLeft className="size-4" />
-          Volver a {workspace.company.name}
-        </Link>
-      </Button>
+      <Breadcrumbs
+        items={[
+          { label: "Clientes", href: "/dashboard/admin/companies" },
+          {
+            label: workspace.company.name,
+            href: `/dashboard/admin/companies/${companyId}`,
+          },
+          { label: "Facturas" },
+        ]}
+      />
       <PageHeader
         eyebrow={workspace.company.name}
         title="Facturas"

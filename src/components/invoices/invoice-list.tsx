@@ -9,17 +9,14 @@ import { deleteInvoice } from "@/actions/invoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import {
+  DELIVERY_STATUS_LABELS,
+  INVOICE_STATUS_LABELS,
+  labelFor,
+} from "@/lib/labels";
 import type { Invoice, InvoiceStatus } from "@/types/invoices";
 
-const statusLabels: Record<InvoiceStatus, string> = {
-  draft: "Borrador",
-  issued: "Emitida",
-  sent: "Enviada",
-  viewed: "Vista",
-  paid: "Pagada",
-  overdue: "Vencida",
-  cancelled: "Cancelada",
-};
+const statusLabels: Record<InvoiceStatus, string> = INVOICE_STATUS_LABELS;
 
 export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
   const router = useRouter();
@@ -174,9 +171,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                 <td className="font-medium">{money(invoice)}</td>
                 <td>{statusLabels[invoice.status]}</td>
                 <td>
-                  {invoice.email_status === "sent"
-                    ? "Enviado"
-                    : (invoice.email_status ?? "—")}
+                  {labelFor(DELIVERY_STATUS_LABELS, invoice.email_status)}
                 </td>
                 <td>{invoice.sent_at?.slice(0, 10) ?? "—"}</td>
                 <td>{invoice.paid_at?.slice(0, 10) ?? "—"}</td>

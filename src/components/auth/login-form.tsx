@@ -21,28 +21,28 @@ export function LoginForm() {
   return (
     <form action={formAction} className="space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
-        <p className="text-sm text-muted-foreground">
-          Access your Sinexia OS workspace
+        <h1 className="text-xl font-semibold tracking-tight">Iniciar sesión</h1>
+        <p className="text-muted-foreground text-sm">
+          Accede a tu portal de Sinexia
         </p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Correo electrónico</Label>
           <Input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="you@company.com"
+            placeholder="tu@empresa.com"
             required
             disabled={isPending}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">Contraseña</Label>
           <Input
             id="password"
             name="password"
@@ -62,7 +62,7 @@ export function LoginForm() {
       ) : null}
 
       <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-        {isPending ? "Signing in…" : "Sign in"}
+        {isPending ? "Iniciando sesión…" : "Iniciar sesión"}
       </Button>
     </form>
   );

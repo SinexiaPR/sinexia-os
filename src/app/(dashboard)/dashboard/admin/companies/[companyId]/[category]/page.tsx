@@ -1,6 +1,6 @@
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import { DocumentList } from "@/components/dashboard/document-list";
 import { AdminReportsList } from "@/components/reports/admin-reports-list";
@@ -70,12 +70,16 @@ export default async function AdminCompanyCategoryPage({
   return (
     <div className="space-y-5">
       <header className="space-y-4">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href={`/dashboard/admin/companies/${detail.company.id}`}>
-            <ArrowLeft className="size-4" />
-            Volver a {detail.company.name}
-          </Link>
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Clientes", href: "/dashboard/admin/companies" },
+            {
+              label: detail.company.name,
+              href: `/dashboard/admin/companies/${detail.company.id}`,
+            },
+            { label: detail.category.label },
+          ]}
+        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

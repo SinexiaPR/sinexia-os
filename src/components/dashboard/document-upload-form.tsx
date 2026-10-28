@@ -1,5 +1,6 @@
 "use client";
 
+import { DOCUMENT_TYPE_LABELS, labelFor } from "@/lib/labels";
 import { Camera, FileUp, X } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
 
@@ -121,7 +122,7 @@ export function DocumentUploadForm() {
             <option value="">Seleccionar</option>
             {CLIENT_DOCUMENT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {type}
+                {labelFor(DOCUMENT_TYPE_LABELS, type)}
               </option>
             ))}
           </select>

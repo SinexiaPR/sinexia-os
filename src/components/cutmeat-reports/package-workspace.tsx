@@ -1,9 +1,16 @@
 "use client";
 
-import Link from "next/link";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { AlertTriangle, ArrowLeft, Check, Download, ImageIcon, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Download,
+  ImageIcon,
+  RefreshCw,
+} from "lucide-react";
 
 import { markSentToOwner } from "@/actions/cutmeat-report-packages";
 import { Button } from "@/components/ui/button";
@@ -32,7 +39,9 @@ export function PackageWorkspace({
   const [message, setMessage] = useState<string | null>(null);
 
   const goToDate = (value: string) => {
-    router.push(`/dashboard/admin/companies/${company.id}/paquete-dueno?date=${value}`);
+    router.push(
+      `/dashboard/admin/companies/${company.id}/paquete-dueno?date=${value}`,
+    );
   };
 
   const generate = () => {
@@ -57,8 +66,16 @@ export function PackageWorkspace({
 
   const markSent = (packageId: string) => {
     startTransition(async () => {
-      const result = await markSentToOwner({ companyId: company.id, packageId, reportDate });
-      setMessage("error" in result ? result.error ?? null : "Marcado como enviado al dueño.");
+      const result = await markSentToOwner({
+        companyId: company.id,
+        packageId,
+        reportDate,
+      });
+      setMessage(
+        "error" in result
+          ? (result.error ?? null)
+          : "Marcado como enviado al dueño.",
+      );
       router.refresh();
     });
   };
@@ -68,33 +85,49 @@ export function PackageWorkspace({
   return (
     <div className="space-y-5">
       <header className="space-y-5">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href={`/dashboard/admin/companies/${company.id}`}>
-            <ArrowLeft className="size-4" />
-            Volver a {company.name}
-          </Link>
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Clientes", href: "/dashboard/admin/companies" },
+            {
+              label: company.name,
+              href: `/dashboard/admin/companies/${company.id}`,
+            },
+            { label: "Paquete del dueño" },
+          ]}
+        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {company.name} · PDFs
             </p>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight">{reportDate}</h1>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight">
+              {reportDate}
+            </h1>
             {!canWrite ? (
-              <p className="text-muted-foreground mt-2 text-sm">Modo de solo lectura.</p>
+              <p className="text-muted-foreground mt-2 text-sm">
+                Modo de solo lectura.
+              </p>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => goToDate(addDays(reportDate, -1))}>
+            <Button
+              variant="outline"
+              onClick={() => goToDate(addDays(reportDate, -1))}
+            >
               Día anterior
             </Button>
             <input
               type="date"
               value={reportDate}
-              onChange={(event) => event.target.value && goToDate(event.target.value)}
+              onChange={(event) =>
+                event.target.value && goToDate(event.target.value)
+              }
               className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
             />
-            <Button variant="outline" onClick={() => goToDate(addDays(reportDate, 1))}>
+            <Button
+              variant="outline"
+              onClick={() => goToDate(addDays(reportDate, 1))}
+            >
               Día siguiente
             </Button>
           </div>
@@ -131,19 +164,26 @@ export function PackageWorkspace({
                 resaltadas primero. Cada generación crea una versión nueva.
               </p>
             </div>
-            <Button disabled={pending || !eligibility.eligible} onClick={generate}>
+            <Button
+              disabled={pending || !eligibility.eligible}
+              onClick={generate}
+            >
               <RefreshCw className="size-4" />
               {latest ? "Regenerar" : "Generar"}
             </Button>
           </div>
-          {message ? <p className="text-muted-foreground mt-3 text-sm">{message}</p> : null}
+          {message ? (
+            <p className="text-muted-foreground mt-3 text-sm">{message}</p>
+          ) : null}
         </SurfaceCard>
       ) : message ? (
         <p className="text-muted-foreground text-sm">{message}</p>
       ) : null}
 
       <SurfaceCard padding="sm">
-        <h2 className="px-1 text-base font-semibold">Versiones ({versions.length})</h2>
+        <h2 className="px-1 text-base font-semibold">
+          Versiones ({versions.length})
+        </h2>
         <div className="mt-3 space-y-3 px-1">
           {versions.map((pkg) => (
             <div
@@ -185,7 +225,12 @@ export function PackageWorkspace({
                   </Button>
                 ) : null}
                 {canWrite && !pkg.sentToOwner ? (
-                  <Button size="sm" variant="ghost" disabled={pending} onClick={() => markSent(pkg.id)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => markSent(pkg.id)}
+                  >
                     Marcar enviado al dueño
                   </Button>
                 ) : null}

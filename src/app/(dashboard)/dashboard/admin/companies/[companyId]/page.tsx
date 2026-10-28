@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarClock, FileText, FolderOpen } from "lucide-react";
@@ -86,9 +87,12 @@ export default async function AdminCompanyPage({
   return (
     <div className="space-y-6">
       <header className="space-y-5">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href="/dashboard">← Dashboard</Link>
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Clientes", href: "/dashboard/admin/companies" },
+            { label: company.name },
+          ]}
+        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
@@ -249,8 +253,8 @@ export default async function AdminCompanyPage({
                   </p>
                   <p className="text-muted-foreground text-sm">
                     {category.count === 1 ? "archivo" : "archivos"} ·{" "}
-                    {category.documentCount} documentos ·{" "}
-                    {category.reportCount} reportes
+                    {category.documentCount} documentos · {category.reportCount}{" "}
+                    reportes
                   </p>
                   {category.insights.length ? (
                     <p className="text-foreground mt-3 text-xs font-medium">
@@ -270,53 +274,53 @@ export default async function AdminCompanyPage({
             </div>
           </CollapsibleSection>
         ) : (
-        <section aria-labelledby="categorias">
-          <div className="flex items-center gap-2">
-            <FolderOpen className="text-muted-foreground size-5" />
-            <h2 id="categorias" className="text-lg font-semibold">
-              Categorías operativas
-            </h2>
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {categories.map((category) => (
-              <Link
-                key={category.slug}
-                href={`/dashboard/admin/companies/${company.id}/${category.slug}`}
-                className="border-border/80 bg-card hover:border-primary/40 focus-visible:ring-ring/50 rounded-lg border p-5 shadow-sm transition outline-none focus-visible:ring-[3px]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-semibold">{category.label}</h3>
-                  {category.urgentCount ? (
-                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                      {category.urgentCount} urgentes
-                    </span>
+          <section aria-labelledby="categorias">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="text-muted-foreground size-5" />
+              <h2 id="categorias" className="text-lg font-semibold">
+                Categorías operativas
+              </h2>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {categories.map((category) => (
+                <Link
+                  key={category.slug}
+                  href={`/dashboard/admin/companies/${company.id}/${category.slug}`}
+                  className="border-border/80 bg-card hover:border-primary/40 focus-visible:ring-ring/50 rounded-lg border p-5 shadow-sm transition outline-none focus-visible:ring-[3px]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-semibold">{category.label}</h3>
+                    {category.urgentCount ? (
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                        {category.urgentCount} urgentes
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-4 text-2xl font-semibold tabular-nums">
+                    {category.count}
+                  </p>
+                  <p className="text-muted-foreground text-sm">
+                    {category.count === 1 ? "archivo" : "archivos"} ·{" "}
+                    {category.documentCount} documentos · {category.reportCount}{" "}
+                    reportes
+                  </p>
+                  {category.insights.length ? (
+                    <p className="text-foreground mt-3 text-xs font-medium">
+                      {category.insights.join(" · ")}
+                    </p>
                   ) : null}
-                </div>
-                <p className="mt-4 text-2xl font-semibold tabular-nums">
-                  {category.count}
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  {category.count === 1 ? "archivo" : "archivos"} ·{" "}
-                  {category.documentCount} documentos · {category.reportCount}{" "}
-                  reportes
-                </p>
-                {category.insights.length ? (
-                  <p className="text-foreground mt-3 text-xs font-medium">
-                    {category.insights.join(" · ")}
+                  <p className="text-muted-foreground mt-3 text-xs">
+                    Última actualización: {formatDate(category.latestAt)}
                   </p>
-                ) : null}
-                <p className="text-muted-foreground mt-3 text-xs">
-                  Última actualización: {formatDate(category.latestAt)}
-                </p>
-                {category.pendingCount ? (
-                  <p className="mt-1 text-xs font-medium text-amber-700">
-                    {category.pendingCount} pendientes
-                  </p>
-                ) : null}
-              </Link>
-            ))}
-          </div>
-        </section>
+                  {category.pendingCount ? (
+                    <p className="mt-1 text-xs font-medium text-amber-700">
+                      {category.pendingCount} pendientes
+                    </p>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+          </section>
         )
       ) : null}
 

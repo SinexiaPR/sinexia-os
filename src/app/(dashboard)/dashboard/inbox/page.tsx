@@ -15,7 +15,7 @@ import type { AdminDocumentFiltersValue } from "@/services/documents";
 import { getViewedDocumentIds } from "@/services/notifications";
 
 export const metadata: Metadata = {
-  title: "Inbox",
+  title: "Documentos",
 };
 
 export default async function InboxPage({
@@ -51,9 +51,7 @@ export default async function InboxPage({
     <div className={isClient ? "space-y-5 pb-6 sm:space-y-6" : "space-y-12"}>
       {isClient ? (
         <header className="space-y-2">
-          <h1 className="text-xl font-semibold tracking-tight">
-            Inbox
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight">Documentos</h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
             Envíe documentos desde su teléfono o computadora. Todo llega aquí
             automáticamente.
@@ -61,8 +59,8 @@ export default async function InboxPage({
         </header>
       ) : (
         <PageHeader
-          title="Inbox"
-          description="All files uploaded by client companies, in one place."
+          title="Documentos"
+          description="Todos los archivos que suben las empresas clientes, en un solo lugar."
         />
       )}
 
@@ -73,8 +71,8 @@ export default async function InboxPage({
               Enviar documento
             </h2>
             <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              Tome una foto o adjunte un archivo. Sinexia lo recibirá en su
-              Inbox.
+              Tome una foto o adjunte un archivo. Sinexia lo recibirá en sus
+              documentos.
             </p>
             <div className="mt-6">
               <DocumentUploadForm />
@@ -89,15 +87,15 @@ export default async function InboxPage({
 
       <DocumentList
         documents={items}
-        title={isClient ? "Su Inbox" : "All Inbox items"}
+        title={isClient ? "Sus documentos" : "Todos los documentos"}
         showCompany={profile.role === "admin"}
         viewedDocumentIds={viewedDocumentIds}
         profileId={profile.id}
         isAdmin={profile.role === "admin"}
         emptyMessage={
           isClient
-            ? "Su Inbox está vacío. Envíe su primer documento arriba."
-            : "No items in any client Inbox yet."
+            ? "Aún no tiene documentos. Envíe el primero arriba."
+            : "Todavía no hay documentos de ningún cliente."
         }
       />
     </div>

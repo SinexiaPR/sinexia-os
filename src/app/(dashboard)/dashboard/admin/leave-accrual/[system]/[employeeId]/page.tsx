@@ -22,7 +22,14 @@ export default async function LeaveAccrualEmployeeDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Vacaciones y enfermedad"
+        breadcrumbs={[
+          { label: "Clientes", href: "/dashboard/admin/companies" },
+          {
+            label: "Vacaciones y enfermedad",
+            href: "/dashboard/admin/leave-accrual",
+          },
+          { label: detail.employeeName },
+        ]}
         title={detail.employeeName}
         description={`${detail.companyName} · Ley 180-1998, según enmendada por la Ley 4-2017`}
       />

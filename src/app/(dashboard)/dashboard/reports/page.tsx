@@ -19,7 +19,7 @@ import { getViewedReportIds } from "@/services/notifications";
 import { getAllReports, getReportsForCompany } from "@/services/reports";
 
 export const metadata: Metadata = {
-  title: "Reports",
+  title: "Reportes",
 };
 
 export default async function ReportsPage({
@@ -43,18 +43,18 @@ export default async function ReportsPage({
     return (
       <div className="space-y-6">
         <PageHeader
-          title="Reports"
-          description="Publish report files to client companies."
+          title="Reportes"
+          description="Publica reportes para las empresas clientes y consulta los ya publicados."
         />
 
         <SurfaceCard padding="lg">
           <h2 className="text-base font-semibold tracking-tight">
-            Publish report
+            Publicar reporte
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            Select a company, add details, and upload the finished PDF, Excel,
-            or CSV. SinexIA processes the file automatically — no manual
-            accounting fields required.
+            Elige la empresa, agrega los datos y sube el PDF, Excel o CSV
+            terminado. SinexIA procesa el archivo automáticamente; no hace falta
+            llenar campos contables.
           </p>
           <div className="mt-6">
             <AdminReportForm
@@ -70,7 +70,7 @@ export default async function ReportsPage({
 
         <div className="space-y-4">
           <h2 className="text-base font-semibold tracking-tight">
-            All reports
+            Todos los reportes
           </h2>
           <AdminReportsList
             reports={reports}
@@ -107,9 +107,7 @@ export default async function ReportsPage({
         <ReportsViewHandler profileId={profile.id} />
       </Suspense>
       <header className="space-y-2">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Reportes
-        </h1>
+        <h1 className="text-xl font-semibold tracking-tight">Reportes</h1>
         <p className="text-muted-foreground text-sm leading-relaxed">
           Reportes publicados por Sinexia para su empresa. Consulte, descargue y
           pregunte a SinexIA cuando el análisis esté listo.

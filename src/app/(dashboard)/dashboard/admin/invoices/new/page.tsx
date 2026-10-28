@@ -23,7 +23,10 @@ export default async function NewInvoicePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Facturación"
+        breadcrumbs={[
+          { label: "Facturación", href: "/dashboard/admin/invoices" },
+          { label: "Nueva factura" },
+        ]}
         title="Nueva factura"
         description="El número oficial se asignará únicamente cuando emitas el borrador."
       />

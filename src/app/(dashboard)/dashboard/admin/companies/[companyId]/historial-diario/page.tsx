@@ -1,7 +1,5 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 
-import { Button } from "@/components/ui/button";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { formatDayLabel } from "@/lib/cutmeat-daily/dates";
 import { formatMoney } from "@/lib/cutmeat-daily/format";
@@ -28,12 +26,16 @@ export default async function CutMeatDailyHistoryPage({
   return (
     <div className="space-y-5">
       <header className="space-y-5">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href={`/dashboard/admin/companies/${company.id}`}>
-            <ArrowLeft className="size-4" />
-            Volver a {company.name}
-          </Link>
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Clientes", href: "/dashboard/admin/companies" },
+            {
+              label: company.name,
+              href: `/dashboard/admin/companies/${company.id}`,
+            },
+            { label: "Historial diario" },
+          ]}
+        />
         <div>
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             {company.name} · Historial diario
@@ -58,7 +60,9 @@ export default async function CutMeatDailyHistoryPage({
                 <th className="px-2 py-1">Fecha</th>
                 <th className="px-2 py-1 text-right">Statement</th>
                 <th className="px-2 py-1 text-right">Register</th>
-                <th className="px-2 py-1 text-right">Balance after Weekly (B)</th>
+                <th className="px-2 py-1 text-right">
+                  Balance after Weekly (B)
+                </th>
                 <th className="px-2 py-1 text-right">Balance GABRIEL</th>
                 <th className="px-2 py-1 text-right">Diferencia</th>
                 <th className="px-2 py-1 text-right">Aging Vendors</th>
@@ -69,23 +73,42 @@ export default async function CutMeatDailyHistoryPage({
             <tbody className="divide-border/60 divide-y">
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td className="px-2 py-1.5 whitespace-nowrap">{formatDayLabel(row.reportDate)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{formatMoney(row.statementBalance)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{formatMoney(row.registerBalance)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{formatMoney(row.balanceAfterWeekly)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{formatMoney(row.balanceGabriel)}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    {formatDayLabel(row.reportDate)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {formatMoney(row.statementBalance)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {formatMoney(row.registerBalance)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {formatMoney(row.balanceAfterWeekly)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {formatMoney(row.balanceGabriel)}
+                  </td>
                   <td
                     className={`px-2 py-1.5 text-right tabular-nums ${
-                      row.diffFromPriorBalance != null && Math.abs(row.diffFromPriorBalance) > 0.004
+                      row.diffFromPriorBalance != null &&
+                      Math.abs(row.diffFromPriorBalance) > 0.004
                         ? "font-medium text-red-700"
                         : "text-muted-foreground"
                     }`}
                   >
-                    {row.diffFromPriorBalance == null ? "—" : formatMoney(row.diffFromPriorBalance)}
+                    {row.diffFromPriorBalance == null
+                      ? "—"
+                      : formatMoney(row.diffFromPriorBalance)}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{formatMoney(row.agingVendorsTotal)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{formatMoney(row.agingCustomersTotal)}</td>
-                  <td className="px-2 py-1.5 text-muted-foreground text-xs">{row.source}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {formatMoney(row.agingVendorsTotal)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {formatMoney(row.agingCustomersTotal)}
+                  </td>
+                  <td className="text-muted-foreground px-2 py-1.5 text-xs">
+                    {row.source}
+                  </td>
                 </tr>
               ))}
             </tbody>

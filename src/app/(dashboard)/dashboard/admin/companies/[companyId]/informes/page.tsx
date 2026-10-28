@@ -1,8 +1,7 @@
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/auth/session";
 import { resolveCutMeatCompany } from "@/services/cutmeat-daily";
 
@@ -27,19 +26,21 @@ export default async function CutMeatInformesPage({
 
   return (
     <div className="space-y-5">
-      <Button asChild variant="ghost" className="-ml-3">
-        <Link href={`/dashboard/admin/companies/${company.id}`}>
-          <ArrowLeft className="size-4" />
-          Volver a {company.name}
-        </Link>
-      </Button>
+      <Breadcrumbs
+        items={[
+          { label: "Clientes", href: "/dashboard/admin/companies" },
+          {
+            label: company.name,
+            href: `/dashboard/admin/companies/${company.id}`,
+          },
+          { label: "Informes" },
+        ]}
+      />
       <div>
         <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
           {company.name}
         </p>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight">
-          Informes
-        </h1>
+        <h1 className="mt-2 text-xl font-semibold tracking-tight">Informes</h1>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {links.map((link) => (

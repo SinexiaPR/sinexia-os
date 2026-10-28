@@ -1,10 +1,11 @@
 "use client";
 
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
   ChevronDown,
   FileText,
   Plus,
@@ -121,12 +122,16 @@ export function PayrollWorkspace({
     <div className="space-y-5">
       <header className="space-y-4">
         {isAdmin ? (
-          <Button asChild variant="ghost" className="-ml-3">
-            <Link href={`/dashboard/admin/companies/${company.id}/payroll`}>
-              <ArrowLeft className="size-4" />
-              Volver a {company.name}
-            </Link>
-          </Button>
+          <Breadcrumbs
+            items={[
+              { label: "Clientes", href: "/dashboard/admin/companies" },
+              {
+                label: company.name,
+                href: `/dashboard/admin/companies/${company.id}/payroll`,
+              },
+              { label: "Nómina" },
+            ]}
+          />
         ) : null}
         <div>
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

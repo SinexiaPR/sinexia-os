@@ -39,7 +39,7 @@ function formatDateTime(date: string) {
 const baseQuickActions = [
   {
     label: "Subir documento",
-    description: "Enviar a Inbox",
+    description: "Enviar a Documentos",
     href: "/dashboard/inbox#upload",
     icon: Upload,
   },
