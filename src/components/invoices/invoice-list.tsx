@@ -75,9 +75,12 @@ const selectClassName =
 export function InvoiceList({
   invoices,
   initialStatus = "all",
+  emptyMessage,
 }: {
   invoices: Invoice[];
   initialStatus?: InvoiceStatusFilter;
+  /** Mensaje cuando no hay ninguna factura (sin filtros aplicados). */
+  emptyMessage?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -312,7 +315,11 @@ export function InvoiceList({
       {view.total === 0 ? (
         <EmptyState
           icon={FileText}
-          title="No hay facturas para estos filtros"
+          title={
+            emptyMessage && invoices.length === 0
+              ? emptyMessage
+              : "No hay facturas para estos filtros"
+          }
           description={
             filters.historical
               ? "No hay facturas históricas con estos criterios."

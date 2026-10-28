@@ -20,5 +20,10 @@ export default async function AdminCompanyInvoicesPage({
   ]);
   if (!workspace) notFound();
 
-  return <InvoiceList invoices={invoices} />;
+  return (
+    <InvoiceList
+      invoices={invoices}
+      emptyMessage="No hay facturas generadas para esta empresa."
+    />
+  );
 }
