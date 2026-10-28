@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { Eye, EyeOff, Loader2, TriangleAlert } from "lucide-react";
+import { useActionState, useState } from "react";
 
 import { signIn } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 const initialState = { error: "" };
 
 export function LoginForm() {
+  const [showPassword, setShowPassword] = useState(false);
   const [state, formAction, isPending] = useActionState(
     async (_prev: typeof initialState, formData: FormData) => {
       const result = await signIn(formData);
@@ -27,6 +29,17 @@ export function LoginForm() {
         </p>
       </div>
 
+      {state.error ? (
+        <div
+          id="login-error"
+          role="alert"
+          className="border-danger/30 bg-danger-soft text-danger flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm"
+        >
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+          <p>{state.error}</p>
+        </div>
+      ) : null}
+
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Correo electrónico</Label>
@@ -37,32 +50,62 @@ export function LoginForm() {
             autoComplete="email"
             placeholder="tu@empresa.com"
             required
+            autoFocus
             disabled={isPending}
+            aria-invalid={state.error ? true : undefined}
+            aria-describedby={state.error ? "login-error" : undefined}
+            className="h-11"
           />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="password">Contraseña</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            required
-            disabled={isPending}
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              required
+              disabled={isPending}
+              aria-invalid={state.error ? true : undefined}
+              aria-describedby={state.error ? "login-error" : undefined}
+              className="h-11 pr-12"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              aria-label={
+                showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+              }
+              aria-pressed={showPassword}
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute top-0 right-0 inline-flex size-11 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {showPassword ? (
+                <EyeOff aria-hidden className="size-4" />
+              ) : (
+                <Eye aria-hidden className="size-4" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
-      {state.error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      ) : null}
-
-      <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-        {isPending ? "Iniciando sesión…" : "Iniciar sesión"}
+      <Button
+        type="submit"
+        className="h-11 w-full text-base"
+        size="lg"
+        disabled={isPending}
+      >
+        {isPending ? (
+          <>
+            <Loader2 aria-hidden className="size-4 animate-spin" />
+            Iniciando sesión…
+          </>
+        ) : (
+          "Iniciar sesión"
+        )}
       </Button>
     </form>
   );

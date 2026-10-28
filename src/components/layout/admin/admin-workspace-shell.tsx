@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { AdminHeader } from "@/components/layout/admin/admin-header";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
 import { CommandPaletteProvider } from "@/components/layout/command-palette";
+import { SkipLink } from "@/components/layout/skip-link";
 import { WhatsAppSupportButton } from "@/components/support/whatsapp-support-button";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ export function AdminWorkspaceShell({
 
   return (
     <CommandPaletteProvider>
+      <SkipLink />
       <div className="bg-muted/30 flex min-h-svh">
         <div
           className={cn(

@@ -10,13 +10,11 @@ export function PortalFooter({ className }: PortalFooterProps) {
 
   return (
     <footer className={cn("w-full", className)}>
-      <div className="mx-auto flex max-w-5xl flex-col items-center gap-1 px-6 py-8 text-center">
-        <p className="text-xs text-muted-foreground">
-          © {year} {siteConfig.name}. Todos los derechos reservados.
+      <div className="text-muted-foreground mx-auto flex max-w-5xl flex-col items-center gap-1 px-6 py-8 text-center text-xs">
+        <p>
+          © {year} {siteConfig.firmName}. Todos los derechos reservados.
         </p>
-        <p className="text-xs text-muted-foreground/80">
-          Acceso seguro para clientes autorizados.
-        </p>
+        <p>Acceso seguro para clientes autorizados.</p>
       </div>
     </footer>
   );

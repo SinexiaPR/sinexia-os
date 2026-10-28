@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { ClientHeader } from "@/components/layout/client/client-header";
 import { ClientSidebar } from "@/components/layout/client/client-sidebar";
+import { SkipLink } from "@/components/layout/skip-link";
 import { WhatsAppSupportButton } from "@/components/support/whatsapp-support-button";
 import type { ClientReportNotifications } from "@/types/notifications";
 import type { Profile } from "@/types";
@@ -27,6 +28,7 @@ export function ClientWorkspaceShell({
 }: ClientWorkspaceShellProps) {
   return (
     <div className="bg-background flex min-h-svh flex-col">
+      <SkipLink />
       <ClientHeader
         profile={profile}
         companyName={companyName}
@@ -44,7 +46,9 @@ export function ClientWorkspaceShell({
           invoicesEnabled={invoicesEnabled}
         />
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <main id="contenido" className="min-w-0 flex-1">
+          {children}
+        </main>
       </div>
       <WhatsAppSupportButton />
     </div>
