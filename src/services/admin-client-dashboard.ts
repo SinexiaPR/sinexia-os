@@ -37,20 +37,37 @@ function tresbePayrollState(
   return { state: "done", label: "Al día", lastUpdated: row.updated_at };
 }
 
+// Sibarita paga su nómina con una semana de rezago (ver companies.notas):
+// la semana vigente de pago no es la que arranca hoy, sino la anterior.
+// Por eso "al día" se mide contra la última semana cargada, tolerando el
+// rezago normal, en vez de exigir que exista una fila para la semana exacta
+// de hoy (mismo umbral que la vista data_freshness: hasta 13 días de rezago).
+const WEEKLY_PAYROLL_LAG_TOLERANCE_DAYS = 13;
+
 function weeklyPayrollState(
-  row: { status: string; updated_at: string } | undefined,
+  row: { status: string; week_start: string; updated_at: string } | undefined,
+  today: string,
 ): { state: DashboardItemState; label: string; lastUpdated: string | null } {
   if (!row)
-    return { state: "pending", label: "Sin cargar esta semana", lastUpdated: null };
-  if (row.status === "draft")
-    return { state: "pending", label: "Borrador", lastUpdated: row.updated_at };
+    return { state: "pending", label: "Sin cargar ninguna semana", lastUpdated: null };
+  const weekLabel = `semana del ${formatIsoDate(row.week_start)}`;
   if (row.status === "submitted")
     return {
       state: "in_progress",
-      label: "Enviada, pendiente de aprobar",
+      label: `Enviada, pendiente de aprobar (${weekLabel})`,
       lastUpdated: row.updated_at,
     };
-  return { state: "done", label: "Al día", lastUpdated: row.updated_at };
+  const weekEnd = addDays(row.week_start, 6);
+  const daysSinceWeekEnd = daysBetween(weekEnd, today);
+  const withinLag = daysSinceWeekEnd <= WEEKLY_PAYROLL_LAG_TOLERANCE_DAYS;
+  if (row.status === "draft")
+    return {
+      state: "pending",
+      label: withinLag ? `Borrador (${weekLabel})` : `Atrasada: borrador desde la ${weekLabel}`,
+      lastUpdated: row.updated_at,
+    };
+  if (withinLag) return { state: "done", label: `Al día (${weekLabel})`, lastUpdated: row.updated_at };
+  return { state: "pending", label: `Atrasada desde la ${weekLabel}`, lastUpdated: row.updated_at };
 }
 
 function invoiceWeeklyState(
@@ -160,11 +177,12 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
   const currentWeekTresbe = (tresbePayrollsRes.data ?? []).filter(
     (r) => r.week_start === weekStart,
   );
-  const currentWeekWeekly = (weeklyPayrollsRes.data ?? []).filter(
-    (r) => r.week_start === weekStart,
-  );
   const tresbeByCompany = latestByCompany(currentWeekTresbe);
-  const weeklyByCompany = latestByCompany(currentWeekWeekly);
+  // weekly_payroll (Sibarita) no se filtra a la semana exacta de hoy: se
+  // paga con una semana de rezago, así que la fila relevante suele ser la
+  // anterior (ver weeklyPayrollState). weeklyPayrollsRes ya viene ordenada
+  // por week_start descendente, así que esto toma la más reciente por empresa.
+  const weeklyByCompany = latestByCompany(weeklyPayrollsRes.data ?? []);
 
   const invoicesByCompany = new Map<
     string,
@@ -196,7 +214,7 @@ export async function getAdminClientDashboard(): Promise<ClientDashboardCard[]> 
       case "tresbe_payroll":
         return tresbePayrollState(tresbeByCompany.get(companyId));
       case "weekly_payroll":
-        return weeklyPayrollState(weeklyByCompany.get(companyId));
+        return weeklyPayrollState(weeklyByCompany.get(companyId), today);
       case "invoice_weekly":
         return invoiceWeeklyState(invoicesByCompany.get(companyId) ?? []);
       case "tresbe_budget":
