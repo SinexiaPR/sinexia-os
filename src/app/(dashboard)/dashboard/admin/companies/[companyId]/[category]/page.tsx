@@ -1,4 +1,3 @@
-import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -70,16 +69,6 @@ export default async function AdminCompanyCategoryPage({
   return (
     <div className="space-y-5">
       <header className="space-y-4">
-        <Breadcrumbs
-          items={[
-            { label: "Clientes", href: "/dashboard/admin/companies" },
-            {
-              label: detail.company.name,
-              href: `/dashboard/admin/companies/${detail.company.id}`,
-            },
-            { label: detail.category.label },
-          ]}
-        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

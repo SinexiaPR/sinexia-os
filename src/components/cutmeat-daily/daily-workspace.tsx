@@ -1,7 +1,5 @@
 "use client";
 
-import { Breadcrumbs } from "@/components/layout/breadcrumbs";
-
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -128,16 +126,6 @@ export function CutMeatDailyWorkspace({
   if (!workspace.settings) {
     return (
       <div className="space-y-6">
-        <Breadcrumbs
-          items={[
-            { label: "Clientes", href: "/dashboard/admin/companies" },
-            {
-              label: company.name,
-              href: `/dashboard/admin/companies/${company.id}`,
-            },
-            { label: "Reportes diarios" },
-          ]}
-        />
         <SurfaceCard>
           <p className="text-sm">
             Esta empresa todavía no tiene la configuración inicial de
@@ -161,16 +149,6 @@ export function CutMeatDailyWorkspace({
   return (
     <div className="space-y-5">
       <header className="space-y-5">
-        <Breadcrumbs
-          items={[
-            { label: "Clientes", href: "/dashboard/admin/companies" },
-            {
-              label: company.name,
-              href: `/dashboard/admin/companies/${company.id}`,
-            },
-            { label: "Reportes diarios" },
-          ]}
-        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

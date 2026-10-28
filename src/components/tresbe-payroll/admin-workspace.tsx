@@ -1,7 +1,5 @@
 "use client";
 
-import { Breadcrumbs } from "@/components/layout/breadcrumbs";
-
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import {
@@ -312,16 +310,6 @@ export function TresbePayrollAdminWorkspace({
   return (
     <div className="space-y-5">
       <header className="space-y-4">
-        <Breadcrumbs
-          items={[
-            { label: "Clientes", href: "/dashboard/admin/companies" },
-            {
-              label: company.name,
-              href: `/dashboard/admin/companies/${company.id}`,
-            },
-            { label: "Nómina" },
-          ]}
-        />
         <div>
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             Administrador · Solo Tresbe

@@ -1,7 +1,5 @@
 "use client";
 
-import { Breadcrumbs } from "@/components/layout/breadcrumbs";
-
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
@@ -85,16 +83,6 @@ export function PackageWorkspace({
   return (
     <div className="space-y-5">
       <header className="space-y-5">
-        <Breadcrumbs
-          items={[
-            { label: "Clientes", href: "/dashboard/admin/companies" },
-            {
-              label: company.name,
-              href: `/dashboard/admin/companies/${company.id}`,
-            },
-            { label: "Paquete del dueño" },
-          ]}
-        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

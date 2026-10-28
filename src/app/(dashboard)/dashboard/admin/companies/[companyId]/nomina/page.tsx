@@ -1,4 +1,3 @@
-import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { notFound } from "next/navigation";
 
 import { SurfaceCard } from "@/components/ui/surface-card";
@@ -26,16 +25,6 @@ export default async function CutNominaPage({
 
   return (
     <div className="space-y-5">
-      <Breadcrumbs
-        items={[
-          { label: "Clientes", href: "/dashboard/admin/companies" },
-          {
-            label: company.name,
-            href: `/dashboard/admin/companies/${company.id}`,
-          },
-          { label: "Nómina" },
-        ]}
-      />
       <div>
         <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
           {company.name}

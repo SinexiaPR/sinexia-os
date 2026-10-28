@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { CompanyHeader } from "@/components/company/company-header";
 import { LeaveAccrualReport } from "@/components/leave-accrual/leave-accrual-report";
 import { PayrollWorkspace } from "@/components/payroll/payroll-workspace";
 import { TresbeClientPayrolls } from "@/components/tresbe-payroll/client-payrolls";
@@ -55,6 +56,7 @@ export default async function PayrollPage({
     : null;
   return (
     <div className="space-y-8">
+      {isAdmin ? <CompanyHeader company={company} /> : null}
       <PayrollWorkspace
         key={data.selected?.id}
         company={company}
