@@ -2,8 +2,6 @@
 
 import {
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   FileText,
   MoreHorizontal,
   Search,
@@ -30,6 +28,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import {
@@ -552,38 +551,7 @@ export function InvoiceList({
         </div>
       )}
 
-      {view.total > 0 ? (
-        <div className="border-border/70 flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
-          <p className="text-muted-foreground text-sm" aria-live="polite">
-            Mostrando {view.from}–{view.to} de {view.total}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-10"
-              disabled={view.page <= 1}
-              onClick={() => setPage(view.page - 1)}
-            >
-              <ChevronLeft className="size-4" />
-              Anterior
-            </Button>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {view.page} / {view.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-10"
-              disabled={view.page >= view.totalPages}
-              onClick={() => setPage(view.page + 1)}
-            >
-              Siguiente
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <PaginationBar view={view} onPageChange={setPage} />
     </SurfaceCard>
   );
 }

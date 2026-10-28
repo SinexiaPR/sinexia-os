@@ -1,7 +1,5 @@
 import type { Invoice } from "@/types/invoices";
 
-export const INVOICE_PAGE_SIZE = 25;
-
 export type InvoiceStatusFilter =
   "all" | "draft" | "open" | "overdue" | "paid" | "cancelled";
 
@@ -153,23 +151,7 @@ export function summarizeInvoices(
   return summary;
 }
 
-export function paginate<T>(
-  items: T[],
-  page: number,
-  pageSize = INVOICE_PAGE_SIZE,
-) {
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const current = Math.min(Math.max(1, page), totalPages);
-  const start = (current - 1) * pageSize;
-  return {
-    items: items.slice(start, start + pageSize),
-    page: current,
-    totalPages,
-    from: items.length ? start + 1 : 0,
-    to: Math.min(start + pageSize, items.length),
-    total: items.length,
-  };
-}
+export { paginate } from "@/lib/pagination";
 
 /** "$1,234.50", o varias monedas separadas por " · "; "$0.00" si no hay montos. */
 export function formatMoneyByCurrency(amounts: MoneyByCurrency): string {
