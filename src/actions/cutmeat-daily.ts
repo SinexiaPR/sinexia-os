@@ -19,7 +19,10 @@ import {
   buildConsolidatedPdf,
   buildReconciliationPdf,
 } from "@/lib/cutmeat-daily/pdf";
-import { getDailyReportWorkspace, resolveCutMeatCompany } from "@/services/cutmeat-daily";
+import {
+  getDailyReportWorkspace,
+  resolveCutMeatCompany,
+} from "@/services/cutmeat-daily";
 import { lastBusinessDayBefore, type IsoDate } from "@/lib/cutmeat-daily/dates";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -44,7 +47,9 @@ function refresh(companyId: string) {
 function failure(error: unknown) {
   return {
     error:
-      error instanceof Error ? error.message : "No se pudo completar la acción.",
+      error instanceof Error
+        ? error.message
+        : "No se pudo completar la acción.",
   };
 }
 
@@ -63,7 +68,8 @@ async function requireEditableReport(reportId: string) {
 
 async function logEvent(
   reportId: string,
-  eventType: "created" | "closed" | "reopened" | "pdf_generated" | "data_updated",
+  eventType:
+    "created" | "closed" | "reopened" | "pdf_generated" | "data_updated",
   createdBy: string,
   detail?: Record<string, unknown>,
 ) {
@@ -80,7 +86,10 @@ async function logEvent(
 // El día del informe: crear / cerrar / reabrir
 // ---------------------------------------------------------------------------
 
-export async function ensureDailyReport(input: { companyId: string; reportDate: string }) {
+export async function ensureDailyReport(input: {
+  companyId: string;
+  reportDate: string;
+}) {
   const parsed = z
     .object({ companyId: z.string().uuid(), reportDate: isoDate })
     .safeParse(input);
@@ -123,7 +132,10 @@ export async function ensureDailyReport(input: { companyId: string; reportDate: 
  * que puedan cambiar después. Se recalculan de nuevo la próxima vez que
  * se cierre (p.ej. tras reabrir y corregir algo).
  */
-export async function closeDailyReport(input: { companyId: string; reportId: string }) {
+export async function closeDailyReport(input: {
+  companyId: string;
+  reportId: string;
+}) {
   const parsed = z
     .object({ companyId: z.string().uuid(), reportId: z.string().uuid() })
     .safeParse(input);
@@ -180,7 +192,8 @@ export async function closeDailyReport(input: { companyId: string; reportId: str
         closed_at: new Date().toISOString(),
         closed_by: profile.id,
         updated_by: profile.id,
-        balance_after_weekly: workspace.weeklyPayments?.balanceAfterWeeklyPayments ?? null,
+        balance_after_weekly:
+          workspace.weeklyPayments?.balanceAfterWeeklyPayments ?? null,
         balance_gabriel: workspace.balanceGabriel ?? null,
         balance_with_not_entered: workspace.balanceWithNotEntered ?? null,
       })
@@ -202,7 +215,10 @@ export async function closeDailyReport(input: { companyId: string; reportId: str
  * se puede volver a editar la conciliación/recurrentes) marcado como
  * "congelado".
  */
-export async function reopenDailyReport(input: { companyId: string; reportId: string }) {
+export async function reopenDailyReport(input: {
+  companyId: string;
+  reportId: string;
+}) {
   const parsed = z
     .object({ companyId: z.string().uuid(), reportId: z.string().uuid() })
     .safeParse(input);
@@ -264,10 +280,12 @@ async function readUploadedPdf(companyId: string, formData: FormData) {
   const admin = createAdminClient();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const sourcePdfPath = `${companyId}/sources/${Date.now()}-${safeName}`;
-  const uploaded = await admin.storage.from("cutmeat-daily").upload(sourcePdfPath, bytes, {
-    contentType: "application/pdf",
-    upsert: false,
-  });
+  const uploaded = await admin.storage
+    .from("cutmeat-daily")
+    .upload(sourcePdfPath, bytes, {
+      contentType: "application/pdf",
+      upsert: false,
+    });
   if (uploaded.error) throw uploaded.error;
   return { text: extraction.text, sourcePdfPath };
 }
@@ -279,7 +297,8 @@ async function readUploadedPdf(companyId: string, formData: FormData) {
  */
 export async function extractReconciliationPdf(formData: FormData) {
   const companyId = String(formData.get("companyId") ?? "");
-  if (!z.string().uuid().safeParse(companyId).success) return { error: "Empresa inválida." };
+  if (!z.string().uuid().safeParse(companyId).success)
+    return { error: "Empresa inválida." };
   try {
     await authorize(companyId);
     const { text, sourcePdfPath } = await readUploadedPdf(companyId, formData);
@@ -293,7 +312,8 @@ export async function extractReconciliationPdf(formData: FormData) {
 /** @deprecated Ver extractReconciliationPdf más arriba. */
 export async function extractBankExportPdf(formData: FormData) {
   const companyId = String(formData.get("companyId") ?? "");
-  if (!z.string().uuid().safeParse(companyId).success) return { error: "Empresa inválida." };
+  if (!z.string().uuid().safeParse(companyId).success)
+    return { error: "Empresa inválida." };
   try {
     await authorize(companyId);
     const { text, sourcePdfPath } = await readUploadedPdf(companyId, formData);
@@ -307,7 +327,8 @@ export async function extractBankExportPdf(formData: FormData) {
 /** @deprecated Ver extractReconciliationPdf más arriba. */
 export async function extractAgingPdf(formData: FormData) {
   const companyId = String(formData.get("companyId") ?? "");
-  if (!z.string().uuid().safeParse(companyId).success) return { error: "Empresa inválida." };
+  if (!z.string().uuid().safeParse(companyId).success)
+    return { error: "Empresa inválida." };
   try {
     await authorize(companyId);
     const { text, sourcePdfPath } = await readUploadedPdf(companyId, formData);
@@ -352,7 +373,10 @@ export async function saveReconciliation(input: {
       items: z.array(reconciliationItemSchema).max(200),
       sourcePdfPath: z.string().max(500).nullable().optional(),
       reconciledOn: isoDate.nullable().optional(),
-      source: z.enum(["manual", "claude-controlado"]).optional().default("manual"),
+      source: z
+        .enum(["manual", "claude-controlado"])
+        .optional()
+        .default("manual"),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisá los datos de conciliación." };
@@ -383,14 +407,16 @@ export async function saveReconciliation(input: {
       .eq("report_id", data.reportId);
     if (deleted.error) throw deleted.error;
     if (data.items.length) {
-      const inserted = await supabase.from("cutmeat_daily_reconciliation_items").insert(
-        data.items.map((item) => ({
-          report_id: data.reportId,
-          item_type: item.itemType,
-          reference: item.reference,
-          amount: item.amount,
-        })),
-      );
+      const inserted = await supabase
+        .from("cutmeat_daily_reconciliation_items")
+        .insert(
+          data.items.map((item) => ({
+            report_id: data.reportId,
+            item_type: item.itemType,
+            reference: item.reference,
+            amount: item.amount,
+          })),
+        );
       if (inserted.error) throw inserted.error;
     }
     await logEvent(data.reportId, "data_updated", profile.id, {
@@ -418,6 +444,11 @@ const bankMovementSchema = z.object({
   reference: z.string().trim().max(200).nullable().optional(),
   additionalReference: z.string().trim().max(200).nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
+  /** Post Date y Calculated Balance de la fila, tal como aparecen en el
+   * export real del banco (Deposit Accounts Activity Summary) -- solo
+   * para ese PDF, no para la clasificación de Variación Diaria. */
+  postDate: isoDate.nullable().optional(),
+  calculatedBalance: money.nullable().optional(),
 });
 
 export async function saveBankExport(input: {
@@ -427,6 +458,10 @@ export async function saveBankExport(input: {
   movements: Array<z.infer<typeof bankMovementSchema>>;
   sourcePdfPath?: string | null;
   source?: "manual" | "claude-controlado";
+  /** "Report Created" real del archivo del banco (ISO datetime) -- si no
+   * se manda, se deja el valor que ya tenía el registro (o null en un
+   * alta nueva) en vez de pisarlo con la hora de este guardado. */
+  extractedAt?: string | null;
 }) {
   const parsed = z
     .object({
@@ -435,7 +470,11 @@ export async function saveBankExport(input: {
       closingBalance: money.nullable(),
       movements: z.array(bankMovementSchema).max(500),
       sourcePdfPath: z.string().max(500).nullable().optional(),
-      source: z.enum(["manual", "claude-controlado"]).optional().default("manual"),
+      source: z
+        .enum(["manual", "claude-controlado"])
+        .optional()
+        .default("manual"),
+      extractedAt: z.string().min(1).nullable().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisá el export del banco." };
@@ -449,7 +488,9 @@ export async function saveBankExport(input: {
         report_id: data.reportId,
         closing_balance: data.closingBalance,
         source_pdf_path: data.sourcePdfPath ?? null,
-        extracted_at: new Date().toISOString(),
+        ...(data.extractedAt !== undefined
+          ? { extracted_at: data.extractedAt }
+          : {}),
         updated_by: profile.id,
         source: data.source,
         loaded_by: profile.id,
@@ -464,24 +505,30 @@ export async function saveBankExport(input: {
       .eq("report_id", data.reportId);
     if (deleted.error) throw deleted.error;
     if (data.movements.length) {
-      const inserted = await supabase.from("cutmeat_daily_bank_movements").insert(
-        data.movements.map((movement) => ({
-          report_id: data.reportId,
-          description: movement.description,
-          amount: movement.amount,
-          direction: movement.direction,
-          linked_recurring_id: movement.linkedRecurringId ?? null,
-          is_not_entered_deposit: movement.isNotEnteredDeposit ?? false,
-          is_reconciled_cleared: movement.isReconciledCleared ?? false,
-          reference: movement.reference ?? null,
-          additional_reference: movement.additionalReference ?? null,
-          note: movement.note ?? null,
-          updated_by: profile.id,
-        })),
-      );
+      const inserted = await supabase
+        .from("cutmeat_daily_bank_movements")
+        .insert(
+          data.movements.map((movement) => ({
+            report_id: data.reportId,
+            description: movement.description,
+            amount: movement.amount,
+            direction: movement.direction,
+            linked_recurring_id: movement.linkedRecurringId ?? null,
+            is_not_entered_deposit: movement.isNotEnteredDeposit ?? false,
+            is_reconciled_cleared: movement.isReconciledCleared ?? false,
+            reference: movement.reference ?? null,
+            additional_reference: movement.additionalReference ?? null,
+            note: movement.note ?? null,
+            post_date: movement.postDate ?? null,
+            calculated_balance: movement.calculatedBalance ?? null,
+            updated_by: profile.id,
+          })),
+        );
       if (inserted.error) throw inserted.error;
     }
-    await logEvent(data.reportId, "data_updated", profile.id, { section: "bank_export" });
+    await logEvent(data.reportId, "data_updated", profile.id, {
+      section: "bank_export",
+    });
     refresh(data.companyId);
     return { success: true };
   } catch (error) {
@@ -529,14 +576,22 @@ async function saveAging(
       rawTotal: money,
       items: z.array(agingItemSchema).max(500),
       sourcePdfPath: z.string().max(500).nullable().optional(),
-      source: z.enum(["manual", "claude-controlado"]).optional().default("manual"),
+      source: z
+        .enum(["manual", "claude-controlado"])
+        .optional()
+        .default("manual"),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Revisá el aging." };
   const data = parsed.data;
-  const headTable = table === "vendors" ? "cutmeat_daily_aging_vendors" : "cutmeat_daily_aging_customers";
+  const headTable =
+    table === "vendors"
+      ? "cutmeat_daily_aging_vendors"
+      : "cutmeat_daily_aging_customers";
   const itemsTable =
-    table === "vendors" ? "cutmeat_daily_aging_vendor_items" : "cutmeat_daily_aging_customer_items";
+    table === "vendors"
+      ? "cutmeat_daily_aging_vendor_items"
+      : "cutmeat_daily_aging_customer_items";
   const nameColumn = table === "vendors" ? "vendor_name" : "customer_name";
   try {
     const { profile } = await authorize(data.companyId);
@@ -556,7 +611,10 @@ async function saveAging(
       { onConflict: "report_id" },
     );
     if (upserted.error) throw upserted.error;
-    const deleted = await supabase.from(itemsTable).delete().eq("report_id", data.reportId);
+    const deleted = await supabase
+      .from(itemsTable)
+      .delete()
+      .eq("report_id", data.reportId);
     if (deleted.error) throw deleted.error;
     if (data.items.length) {
       const inserted = await supabase.from(itemsTable).insert(
@@ -574,7 +632,9 @@ async function saveAging(
       );
       if (inserted.error) throw inserted.error;
     }
-    await logEvent(data.reportId, "data_updated", profile.id, { section: `aging_${table}` });
+    await logEvent(data.reportId, "data_updated", profile.id, {
+      section: `aging_${table}`,
+    });
     refresh(data.companyId);
     return { success: true };
   } catch (error) {
@@ -582,9 +642,7 @@ async function saveAging(
   }
 }
 
-export async function saveAgingVendors(
-  input: Parameters<typeof saveAging>[1],
-) {
+export async function saveAgingVendors(input: Parameters<typeof saveAging>[1]) {
   return saveAging("vendors", input);
 }
 
@@ -616,15 +674,17 @@ export async function saveIncomeProjection(input: {
   try {
     const { profile } = await authorize(data.companyId);
     const supabase = await createClient();
-    const { error } = await supabase.from("cutmeat_daily_income_projection").upsert(
-      data.days.map((day) => ({
-        company_id: data.companyId,
-        projection_date: day.date,
-        amount: day.amount,
-        updated_by: profile.id,
-      })),
-      { onConflict: "company_id,projection_date" },
-    );
+    const { error } = await supabase
+      .from("cutmeat_daily_income_projection")
+      .upsert(
+        data.days.map((day) => ({
+          company_id: data.companyId,
+          projection_date: day.date,
+          amount: day.amount,
+          updated_by: profile.id,
+        })),
+        { onConflict: "company_id,projection_date" },
+      );
     if (error) throw error;
     refresh(data.companyId);
     return { success: true };
@@ -671,7 +731,10 @@ export async function saveVendorConfig(input: {
   }
 }
 
-export async function deleteVendorConfig(input: { companyId: string; id: string }) {
+export async function deleteVendorConfig(input: {
+  companyId: string;
+  id: string;
+}) {
   const parsed = z
     .object({ companyId: z.string().uuid(), id: z.string().uuid() })
     .safeParse(input);
@@ -807,7 +870,9 @@ const varianceLineSchema = z.object({
   section: z.enum(["variance", "uncollected_deposit"]).default("variance"),
 });
 
-export async function saveVarianceLine(input: z.infer<typeof varianceLineSchema>) {
+export async function saveVarianceLine(
+  input: z.infer<typeof varianceLineSchema>,
+) {
   const parsed = varianceLineSchema.safeParse(input);
   if (!parsed.success) return { error: "Revisá la línea de Variación Diaria." };
   const data = parsed.data;
@@ -828,14 +893,16 @@ export async function saveVarianceLine(input: z.infer<typeof varianceLineSchema>
         .eq("report_id", data.reportId);
       if (error) throw error;
     } else {
-      const { error } = await supabase.from("cutmeat_daily_variance_lines").insert({
-        report_id: data.reportId,
-        concept: data.concept,
-        amount: data.amount,
-        section: data.section,
-        created_by: profile.id,
-        updated_by: profile.id,
-      });
+      const { error } = await supabase
+        .from("cutmeat_daily_variance_lines")
+        .insert({
+          report_id: data.reportId,
+          concept: data.concept,
+          amount: data.amount,
+          section: data.section,
+          created_by: profile.id,
+          updated_by: profile.id,
+        });
       if (error) throw error;
     }
     refresh(data.companyId);
@@ -896,20 +963,32 @@ const programmaticPayloadSchema = z.object({
       closingBalance: money.nullable(),
       movements: z.array(bankMovementSchema),
       sourcePdfPath: z.string().max(500).nullable().optional(),
+      /** "Report Created" real del archivo del banco (ISO datetime). */
+      extractedAt: z.string().min(1).nullable().optional(),
     })
     .optional(),
   agingVendors: z
-    .object({ rawTotal: money, items: z.array(agingItemSchema), sourcePdfPath: z.string().max(500).nullable().optional() })
+    .object({
+      rawTotal: money,
+      items: z.array(agingItemSchema),
+      sourcePdfPath: z.string().max(500).nullable().optional(),
+    })
     .optional(),
   agingCustomers: z
-    .object({ rawTotal: money, items: z.array(agingItemSchema), sourcePdfPath: z.string().max(500).nullable().optional() })
+    .object({
+      rawTotal: money,
+      items: z.array(agingItemSchema),
+      sourcePdfPath: z.string().max(500).nullable().optional(),
+    })
     .optional(),
   varianceLines: z
     .array(
       z.object({
         concept: z.string().trim().min(1).max(200),
         amount: money,
-        section: z.enum(["variance", "uncollected_deposit"]).default("variance"),
+        section: z
+          .enum(["variance", "uncollected_deposit"])
+          .default("variance"),
       }),
     )
     .optional(),
@@ -958,6 +1037,7 @@ export async function loadDailyReportData(
             closingBalance: data.bankExport.closingBalance,
             movements: data.bankExport.movements,
             sourcePdfPath: data.bankExport.sourcePdfPath,
+            extractedAt: data.bankExport.extractedAt,
             source: "claude-controlado",
           })
         : null,
@@ -982,8 +1062,8 @@ export async function loadDailyReportData(
           })
         : null,
     ]);
-    const errors = results.filter(
-      (result): result is { error: string } => Boolean(result && "error" in result),
+    const errors = results.filter((result): result is { error: string } =>
+      Boolean(result && "error" in result),
     );
     if (errors.length) return { error: errors.map((e) => e.error).join(" ") };
 
@@ -1002,7 +1082,8 @@ export async function loadDailyReportData(
       const varianceErrors = varianceResults.filter(
         (result): result is { error: string } => "error" in result,
       );
-      if (varianceErrors.length) return { error: varianceErrors.map((e) => e.error).join(" ") };
+      if (varianceErrors.length)
+        return { error: varianceErrors.map((e) => e.error).join(" ") };
     }
 
     return { success: true, reportId };
@@ -1017,13 +1098,12 @@ export async function loadDailyReportData(
 // ---------------------------------------------------------------------------
 
 export type CutMeatPdfDocType =
-  | "reconciliation"
-  | "bank"
-  | "consolidated"
-  | "vendors"
-  | "customers";
+  "reconciliation" | "bank" | "consolidated" | "vendors" | "customers";
 
-function buildPdfFilename(docType: CutMeatPdfDocType, reportDate: IsoDate): string {
+function buildPdfFilename(
+  docType: CutMeatPdfDocType,
+  reportDate: IsoDate,
+): string {
   const [year, month, day] = reportDate.split("-");
   switch (docType) {
     case "reconciliation":
@@ -1048,14 +1128,23 @@ export async function generateDailyPdf(input: {
     .object({
       companyId: z.string().uuid(),
       reportDate: isoDate,
-      docType: z.enum(["reconciliation", "bank", "consolidated", "vendors", "customers"]),
+      docType: z.enum([
+        "reconciliation",
+        "bank",
+        "consolidated",
+        "vendors",
+        "customers",
+      ]),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Solicitud de PDF inválida." };
   const data = parsed.data;
   try {
     const { profile } = await authorize(data.companyId);
-    const workspace = await getDailyReportWorkspace(data.companyId, data.reportDate as IsoDate);
+    const workspace = await getDailyReportWorkspace(
+      data.companyId,
+      data.reportDate as IsoDate,
+    );
     const report = workspace.report;
     if (!report) return { error: "Primero guardá algún dato para este día." };
     const reportDate = data.reportDate as IsoDate;
@@ -1065,7 +1154,9 @@ export async function generateDailyPdf(input: {
       case "reconciliation": {
         if (!workspace.reconciliation || !workspace.reconciliationControl)
           return { error: "Todavía no se cargó la conciliación de este día." };
-        const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
+        const holidaySet = new Set(
+          workspace.holidays.map((h) => h.holidayDate),
+        );
         const asDetailLine = (item: {
           reference: string;
           amount: number;
@@ -1080,27 +1171,46 @@ export async function generateDailyPdf(input: {
           payee: item.payee ?? item.reference,
           amount: Number(item.amount),
         });
-        const byTranche = <T extends { tranche: "as_of" | "after" | null }>(items: T[], tranche: "as_of" | "after") =>
-          items.filter((item) => (item.tranche ?? "as_of") === tranche);
+        const byTranche = <T extends { tranche: "as_of" | "after" | null }>(
+          items: T[],
+          tranche: "as_of" | "after",
+        ) => items.filter((item) => (item.tranche ?? "as_of") === tranche);
         bytes = await buildReconciliationPdf({
           reportDate,
           periodEnding:
-            workspace.reconciliation.asOfDate ?? lastBusinessDayBefore(reportDate, holidaySet),
+            workspace.reconciliation.asOfDate ??
+            lastBusinessDayBefore(reportDate, holidaySet),
           reconciledOn: workspace.reconciliation.reconciledOn,
           beginningBalance: workspace.reconciliation.beginningBalance ?? 0,
           control: workspace.reconciliationControl,
-          clearedChecks: workspace.reconciliation.clearedChecks.map(asDetailLine),
-          clearedDeposits: workspace.reconciliation.clearedDeposits.map(asDetailLine),
-          asOfChecks: byTranche(workspace.reconciliation.unclearedChecks, "as_of").map(asDetailLine),
-          asOfDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "as_of").map(asDetailLine),
-          afterChecks: byTranche(workspace.reconciliation.unclearedChecks, "after").map(asDetailLine),
-          afterDeposits: byTranche(workspace.reconciliation.unclearedDeposits, "after").map(asDetailLine),
+          clearedChecks:
+            workspace.reconciliation.clearedChecks.map(asDetailLine),
+          clearedDeposits:
+            workspace.reconciliation.clearedDeposits.map(asDetailLine),
+          asOfChecks: byTranche(
+            workspace.reconciliation.unclearedChecks,
+            "as_of",
+          ).map(asDetailLine),
+          asOfDeposits: byTranche(
+            workspace.reconciliation.unclearedDeposits,
+            "as_of",
+          ).map(asDetailLine),
+          afterChecks: byTranche(
+            workspace.reconciliation.unclearedChecks,
+            "after",
+          ).map(asDetailLine),
+          afterDeposits: byTranche(
+            workspace.reconciliation.unclearedDeposits,
+            "after",
+          ).map(asDetailLine),
         });
         break;
       }
       case "bank": {
         if (!workspace.bankExport)
-          return { error: "Todavía no se cargó el export del banco de este día." };
+          return {
+            error: "Todavía no se cargó el export del banco de este día.",
+          };
         bytes = await buildBankExportPdf({
           reportDate,
           dateRange: workspace.bankExport.dateRange ?? reportDate,
@@ -1111,17 +1221,23 @@ export async function generateDailyPdf(input: {
           // sección del Informe), no el Export banco -- ese replica
           // solo los movimientos propios del banco (p.ej. el ACH que ya
           // aparece como "Cleared" en el Reconciliation Report).
-          movements: workspace.bankMovements.filter((m) => !m.isNotEnteredDeposit),
+          movements: workspace.bankMovements.filter(
+            (m) => !m.isNotEnteredDeposit,
+          ),
           // "Report Created" replica la fecha/hora real en que el banco
           // generó ESTE export (extracted_at) -- no la hora en que se
           // regenera el PDF acá.
-          generatedAt: workspace.bankExport.extractedAt ? new Date(workspace.bankExport.extractedAt) : undefined,
+          generatedAt: workspace.bankExport.extractedAt
+            ? new Date(workspace.bankExport.extractedAt)
+            : undefined,
         });
         break;
       }
       case "vendors": {
         if (!workspace.vendorAging)
-          return { error: "Todavía no se cargó el aging de proveedores de este día." };
+          return {
+            error: "Todavía no se cargó el aging de proveedores de este día.",
+          };
         bytes = await buildAgingVendorsPdf({
           reportDate,
           items: workspace.vendorItems,
@@ -1132,7 +1248,9 @@ export async function generateDailyPdf(input: {
       }
       case "customers": {
         if (!workspace.customerAging)
-          return { error: "Todavía no se cargó el aging de clientes de este día." };
+          return {
+            error: "Todavía no se cargó el aging de clientes de este día.",
+          };
         bytes = await buildAgingCustomersPdf({
           reportDate,
           items: workspace.customerItems,
@@ -1142,11 +1260,14 @@ export async function generateDailyPdf(input: {
         break;
       }
       case "consolidated": {
-        const holidaySet = new Set(workspace.holidays.map((h) => h.holidayDate));
+        const holidaySet = new Set(
+          workspace.holidays.map((h) => h.holidayDate),
+        );
         bytes = await buildConsolidatedPdf({
           reportDate,
           periodEnding:
-            workspace.reconciliation?.asOfDate ?? lastBusinessDayBefore(reportDate, holidaySet),
+            workspace.reconciliation?.asOfDate ??
+            lastBusinessDayBefore(reportDate, holidaySet),
           control: workspace.reconciliationControl,
           financial: workspace.financial,
           recurring: workspace.recurring.map((item) => ({
@@ -1167,7 +1288,8 @@ export async function generateDailyPdf(input: {
           ),
           vendorAging: workspace.vendorAging,
           customerAgingRawTotal: workspace.customerAging?.rawTotal ?? null,
-          customerAgingConsolidated: workspace.customerAging?.consolidated ?? null,
+          customerAgingConsolidated:
+            workspace.customerAging?.consolidated ?? null,
           primeMeatsRecurring: workspace.settings.primeMeatsRecurring,
         });
         break;
@@ -1193,10 +1315,12 @@ export async function generateDailyPdf(input: {
     // anterior subió el archivo pero falló antes de insertarla) un
     // reintento recalcula la MISMA versión y pisa limpio ese archivo
     // huérfano en vez de chocar con un 409 "The resource already exists".
-    const uploaded = await admin.storage.from("cutmeat-daily").upload(storagePath, bytes, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
+    const uploaded = await admin.storage
+      .from("cutmeat-daily")
+      .upload(storagePath, bytes, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
     if (uploaded.error) throw uploaded.error;
     const inserted = await supabase
       .from("cutmeat_daily_generated_pdfs")
