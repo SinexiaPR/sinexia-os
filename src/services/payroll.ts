@@ -60,7 +60,10 @@ export async function resolveSibaritaCompany(companyId?: string | null) {
   return data;
 }
 
-export async function getPayrollWorkspace(companyId: string) {
+export async function getPayrollWorkspace(
+  companyId: string,
+  payrollId?: string,
+) {
   const supabase = await createClient();
   const [employeesRes, payrollsRes] = await Promise.all([
     supabase
@@ -74,13 +77,16 @@ export async function getPayrollWorkspace(companyId: string) {
       .select("*")
       .eq("company_id", companyId)
       .order("week_start", { ascending: false })
-      .limit(12),
+      .limit(60),
   ]);
   if (employeesRes.error) throw employeesRes.error;
   if (payrollsRes.error) throw payrollsRes.error;
   const payrolls = (payrollsRes.data ?? []) as WeeklyPayroll[];
   const selected =
-    payrolls.find((item) => item.status === "draft") ?? payrolls[0] ?? null;
+    payrolls.find((item) => item.id === payrollId) ??
+    payrolls.find((item) => item.status === "draft") ??
+    payrolls[0] ??
+    null;
   let entries: WeeklyPayrollEntry[] = [];
   if (selected) {
     const { data, error } = await supabase

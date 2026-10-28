@@ -40,9 +40,10 @@ export default async function PayrollPage({
     (profile.role === "client" && company.id !== profile.company_id)
   )
     notFound();
-  const data = await getPayrollWorkspace(company.id);
+  const data = await getPayrollWorkspace(company.id, params.payroll);
   return (
     <PayrollWorkspace
+      key={data.selected?.id}
       company={company}
       isAdmin={profile.role === "admin"}
       {...data}
