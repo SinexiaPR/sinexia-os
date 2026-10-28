@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import {
-  ArrowLeft,
   ChevronDown,
   FileText,
   Mail,
@@ -311,12 +310,6 @@ export function TresbePayrollAdminWorkspace({
   return (
     <div className="space-y-5">
       <header className="space-y-4">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href={`/dashboard/admin/companies/${company.id}`}>
-            <ArrowLeft className="size-4" />
-            Volver a {company.name}
-          </Link>
-        </Button>
         <div>
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             Administrador · Solo Tresbe
@@ -493,9 +486,7 @@ export function TresbePayrollAdminWorkspace({
 
           {selected && !editable ? (
             <SurfaceCard>
-              <p className="text-muted-foreground text-xs uppercase">
-                Periodo
-              </p>
+              <p className="text-muted-foreground text-xs uppercase">Periodo</p>
               <h2 className="mt-1 text-lg font-semibold">
                 {selected.week_start} — {selected.week_end}
               </h2>
@@ -613,9 +604,7 @@ export function TresbePayrollAdminWorkspace({
                         Nota interna
                         <textarea
                           value={adminNote}
-                          onChange={(event) =>
-                            setAdminNote(event.target.value)
-                          }
+                          onChange={(event) => setAdminNote(event.target.value)}
                           disabled={!editable}
                           maxLength={2000}
                           rows={3}
@@ -1257,9 +1246,7 @@ function CompactPayrollEntries({
                                 </span>
                               ) : null}
                               {result.serviceCheckAmount > 0 ? (
-                                <span className="text-red-700">
-                                  Servicios
-                                </span>
+                                <span className="text-red-700">Servicios</span>
                               ) : null}
                             </div>
                           </td>
@@ -1536,10 +1523,7 @@ function PayrollSummary({ entries }: { entries: TresbePayrollEntry[] }) {
                   result,
                 );
                 return (
-                  <div
-                    key={entry.id}
-                    className="rounded-lg border p-3 text-sm"
-                  >
+                  <div key={entry.id} className="rounded-lg border p-3 text-sm">
                     <div className="flex justify-between gap-3">
                       <strong>{entry.employee_name_snapshot}</strong>
                       <strong>{money.format(checkAmount)}</strong>

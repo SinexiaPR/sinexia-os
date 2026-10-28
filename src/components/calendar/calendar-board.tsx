@@ -9,7 +9,9 @@ import {
   ChevronRight,
   Clock,
   Plus,
+  Repeat,
   Search,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 
@@ -22,8 +24,16 @@ import {
 import { CalendarForm } from "@/components/calendar/calendar-form";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterPanel } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import {
+  AGENDA_DAYS,
+  RECURRENCE_LABELS,
+  buildAgenda,
+} from "@/lib/calendar/agenda";
 import { cn } from "@/lib/utils";
 import type {
   CalendarComment,
@@ -180,12 +190,38 @@ export function CalendarBoard({
       toDate,
     ],
   );
+  const activeFilterCount = [
+    company,
+    assignee,
+    status,
+    priority,
+    itemType,
+    fromDate,
+    toDate,
+  ].filter(Boolean).length;
+  function clearFilters() {
+    setCompany("");
+    setAssignee("");
+    setStatus("");
+    setPriority("");
+    setItemType("");
+    setFromDate("");
+    setToDate("");
+  }
+  // La agenda cubre los próximos 30 días y agrupa las series repetidas.
+  const agenda = useMemo(
+    () => buildAgenda(filtered, initialDate),
+    [filtered, initialDate],
+  );
   const selectableTasks = useMemo(
     () =>
-      filtered.filter(
-        (item) => item.itemType === "task" && item.status !== "completed",
-      ),
-    [filtered],
+      agenda
+        .filter((entry) => entry.kind === "single")
+        .map((entry) => entry.item)
+        .filter(
+          (item) => item.itemType === "task" && item.status !== "completed",
+        ),
+    [agenda],
   );
   const taskIndex = useMemo(
     () => new Map(selectableTasks.map((item, i) => [itemKey(item), i])),
@@ -272,7 +308,7 @@ export function CalendarBoard({
     return d;
   });
   const selectClass =
-    "h-9 rounded-md border border-input bg-background px-2 text-sm";
+    "h-10 w-full rounded-md border border-input bg-background px-2 text-sm";
   const changeMonth = (delta: number) =>
     setMonth(
       new Date(
@@ -298,7 +334,7 @@ export function CalendarBoard({
             <ChevronRight className="size-4" />
             <span className="sr-only">Mes siguiente</span>
           </Button>
-          <h2 className="ml-2 text-lg font-semibold capitalize">
+          <h2 className="ml-2 text-lg font-semibold first-letter:uppercase">
             {monthFormatter.format(month)}
           </h2>
         </div>
@@ -308,102 +344,161 @@ export function CalendarBoard({
         </Button>
       </div>
 
-      <SurfaceCard padding="sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_repeat(5,auto)]">
-          <label className="relative">
-            <Search className="text-muted-foreground absolute top-2.5 left-3 size-4" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar título, nota o empresa"
-              className="pl-9"
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="relative min-w-52 flex-1 sm:max-w-sm">
+          <Search
+            aria-hidden
+            className="text-muted-foreground absolute top-3 left-3 size-4"
+          />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar título, nota o empresa"
+            aria-label="Buscar en el calendario"
+            className="h-10 pl-9"
+          />
+        </label>
+        <FilterPanel
+          title="Filtros"
+          align="start"
+          trigger={
+            <Button variant="outline" className="h-10">
+              <SlidersHorizontal className="size-4" />
+              Filtros
+              {activeFilterCount > 0 ? (
+                <span className="bg-primary text-primary-foreground ml-1 flex size-5 items-center justify-center rounded-full text-[11px] tabular-nums">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </Button>
+          }
+        >
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Empresa</label>
+            <Combobox
+              aria-label="Empresa"
+              options={companies.map((o) => ({ value: o.id, label: o.name }))}
+              value={company}
+              onValueChange={setCompany}
+              allLabel="Todas las empresas"
+              placeholder="Todas las empresas"
+              searchPlaceholder="Buscar empresa…"
             />
-          </label>
-          <select
-            aria-label="Empresa"
-            className={selectClass}
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-          >
-            <option value="">Empresas</option>
-            {companies.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Asignado"
-            className={selectClass}
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-          >
-            <option value="">Equipo</option>
-            {admins.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Estado"
-            className={selectClass}
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">Estados</option>
-            {Object.entries(labels.status).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Prioridad"
-            className={selectClass}
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-          >
-            <option value="">Prioridades</option>
-            {Object.entries(labels.priority).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Tipo"
-            className={selectClass}
-            value={itemType}
-            onChange={(e) => setItemType(e.target.value)}
-          >
-            <option value="">Tipos</option>
-            {Object.entries(labels.type)
-              .filter(([v]) => v !== "task")
-              .map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cal-equipo" className="text-sm font-medium">
+              Equipo
+            </label>
+            <select
+              id="cal-equipo"
+              className={selectClass}
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+            >
+              <option value="">Todo el equipo</option>
+              {admins.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
                 </option>
               ))}
-          </select>
-          <label className="text-muted-foreground text-xs">
-            Desde
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-            />
-          </label>
-          <label className="text-muted-foreground text-xs">
-            Hasta
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-            />
-          </label>
-        </div>
-      </SurfaceCard>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <label htmlFor="cal-estado" className="text-sm font-medium">
+                Estado
+              </label>
+              <select
+                id="cal-estado"
+                className={selectClass}
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {Object.entries(labels.status).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="cal-prioridad" className="text-sm font-medium">
+                Prioridad
+              </label>
+              <select
+                id="cal-prioridad"
+                className={selectClass}
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              >
+                <option value="">Todas</option>
+                {Object.entries(labels.priority).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cal-tipo" className="text-sm font-medium">
+              Tipo
+            </label>
+            <select
+              id="cal-tipo"
+              className={selectClass}
+              value={itemType}
+              onChange={(e) => setItemType(e.target.value)}
+            >
+              <option value="">Todos los tipos</option>
+              {Object.entries(labels.type)
+                .filter(([v]) => v !== "task")
+                .map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <label htmlFor="cal-desde" className="text-sm font-medium">
+                Desde
+              </label>
+              <Input
+                id="cal-desde"
+                type="date"
+                className="h-10"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="cal-hasta" className="text-sm font-medium">
+                Hasta
+              </label>
+              <Input
+                id="cal-hasta"
+                type="date"
+                className="h-10"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+            </div>
+          </div>
+          {activeFilterCount > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+            >
+              Limpiar filtros
+            </Button>
+          ) : null}
+        </FilterPanel>
+      </div>
 
       <div className="bg-muted flex gap-1 rounded-lg p-1 md:w-fit">
         <Button
@@ -521,15 +616,31 @@ export function CalendarBoard({
 
       {view === "month" ? (
         <div className="space-y-3 md:hidden">
-          {filtered.length ? (
-            filtered.map((item) => (
-              <ItemCard key={itemKey(item)} item={item} />
+          <p className="text-muted-foreground text-sm">
+            Próximos {AGENDA_DAYS} días
+          </p>
+          {agenda.length ? (
+            agenda.map((entry) => (
+              <ItemCard
+                key={
+                  entry.kind === "series"
+                    ? `serie-${entry.item.id}`
+                    : itemKey(entry.item)
+                }
+                item={entry.item}
+              />
             ))
           ) : (
-            <SurfaceCard>
-              <p className="text-muted-foreground text-sm">
-                No hay actividades para estos filtros.
-              </p>
+            <SurfaceCard padding="sm" className="p-0">
+              <EmptyState
+                icon={CalendarDays}
+                title="No hay actividades en los próximos 30 días"
+                description={
+                  activeFilterCount > 0 || search
+                    ? "Prueba quitando los filtros."
+                    : undefined
+                }
+              />
             </SurfaceCard>
           )}
         </div>
@@ -550,21 +661,39 @@ export function CalendarBoard({
                   }
                   onClick={toggleSelectAll}
                 />
-                Seleccionar todas las tareas visibles (
-                {selectableTasks.length})
+                Seleccionar todas las tareas visibles ({selectableTasks.length})
               </label>
             </SurfaceCard>
           ) : null}
-          {filtered.length ? (
-            filtered.map((item) =>
-              item.itemType === "task" && item.status !== "completed" ? (
+          <p className="text-muted-foreground text-sm">
+            Próximos {AGENDA_DAYS} días
+          </p>
+          {agenda.length ? (
+            agenda.map((entry) => {
+              const { item } = entry;
+              if (entry.kind === "series") {
+                return (
+                  <div key={`serie-${item.id}`} className="space-y-1">
+                    <ItemCard item={item} />
+                    <p className="text-muted-foreground flex items-center gap-1.5 px-1 text-xs">
+                      <Repeat aria-hidden className="size-3.5" />
+                      {item.recurrenceRule
+                        ? RECURRENCE_LABELS[item.recurrenceRule.frequency]
+                        : "Se repite"}
+                      {" · "}
+                      {entry.count} {entry.count === 1 ? "vez" : "veces"} en los
+                      próximos {AGENDA_DAYS} días
+                    </p>
+                  </div>
+                );
+              }
+              return item.itemType === "task" && item.status !== "completed" ? (
                 <div key={itemKey(item)} className="flex items-start gap-3">
                   <Checkbox
                     className="mt-3"
+                    aria-label={`Seleccionar ${item.title}`}
                     checked={selected.has(itemKey(item))}
-                    onClick={(event) =>
-                      toggleSelection(item, event.shiftKey)
-                    }
+                    onClick={(event) => toggleSelection(item, event.shiftKey)}
                   />
                   <div className="flex-1">
                     <ItemCard item={item} />
@@ -572,13 +701,19 @@ export function CalendarBoard({
                 </div>
               ) : (
                 <ItemCard key={itemKey(item)} item={item} />
-              ),
-            )
+              );
+            })
           ) : (
-            <SurfaceCard>
-              <p className="text-muted-foreground text-sm">
-                No hay actividades para estos filtros.
-              </p>
+            <SurfaceCard padding="sm" className="p-0">
+              <EmptyState
+                icon={CalendarDays}
+                title="No hay actividades en los próximos 30 días"
+                description={
+                  activeFilterCount > 0 || search
+                    ? "Prueba quitando los filtros."
+                    : "Agrega una actividad con el botón de arriba."
+                }
+              />
             </SurfaceCard>
           )}
         </div>

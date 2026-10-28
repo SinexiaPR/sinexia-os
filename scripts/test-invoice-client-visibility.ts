@@ -11,10 +11,12 @@ const migration = read(
 const adminCompanyPage = read(
   "src/app/(dashboard)/dashboard/admin/companies/[companyId]/invoices/page.tsx",
 );
+const invoiceListComponent = read("src/components/invoices/invoice-list.tsx");
 const companyDashboard = read(
   "src/app/(dashboard)/dashboard/admin/companies/[companyId]/page.tsx",
 );
 const clientPage = read("src/app/(dashboard)/dashboard/invoices/page.tsx");
+const clientInvoiceList = read("src/components/invoices/client-invoice-list.tsx");
 const workspaceService = read("src/services/company-workspace.ts");
 const invoiceService = read("src/services/invoices.ts");
 const tracker = read("src/components/invoices/invoice-view-tracker.tsx");
@@ -53,9 +55,9 @@ assert.doesNotMatch(
 assert.match(adminCompanyPage, /requireAdmin\(\)/);
 assert.match(adminCompanyPage, /getInvoices\(companyId\)/);
 assert.match(adminCompanyPage, /No hay facturas generadas para esta empresa\./);
-assert.match(adminCompanyPage, /invoice\.viewed_at/);
-assert.match(adminCompanyPage, /Descargar PDF/);
-assert.match(companyDashboard, /summary\.invoice\.unpaidCount/);
+assert.match(invoiceListComponent, /invoice\.viewed_at/);
+assert.match(invoiceListComponent, /Descargar PDF/);
+assert.match(companyDashboard, /invoice\.unpaidCount/);
 assert.match(companyDashboard, /Ver facturas/);
 assert.match(workspaceService, /\.eq\("company_id", companyId\)/);
 
@@ -63,7 +65,7 @@ assert.match(clientPage, /requireClient\(\)/);
 assert.match(clientPage, /getInvoices\(profile\.company_id\)/);
 assert.match(clientPage, /const selectedId = invoiceId;/);
 assert.match(clientPage, /No tienes facturas disponibles\./);
-assert.match(clientPage, /Ver factura/);
+assert.match(clientInvoiceList, /Ver factura/);
 assert.doesNotMatch(clientPage, /internal_note/);
 assert.match(invoiceService, /shouldShowCompanyInvoices/);
 assert.match(invoiceService, /"issued",\s*"sent",\s*"viewed"/);

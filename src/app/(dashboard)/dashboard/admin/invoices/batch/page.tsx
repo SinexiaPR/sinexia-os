@@ -9,8 +9,12 @@ export default async function WeeklyInvoiceBatchPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        breadcrumbs={[
+          { label: "Facturación", href: "/dashboard/admin/invoices" },
+          { label: "Generar facturas de la semana" },
+        ]}
         title="Generar facturas de la semana"
-        description="Vista previa antes de crear nada. Cada cliente facturable activo entra en la lista; podés ajustar montos puntuales o excluir clientes antes de confirmar."
+        description="Vista previa antes de crear nada. Cada cliente facturable activo entra en la lista; puedes ajustar montos puntuales o excluir clientes antes de confirmar."
       />
       <WeeklyBatchGenerator />
     </div>

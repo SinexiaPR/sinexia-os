@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { CompanyHeader } from "@/components/company/company-header";
 import { LeaveAccrualReport } from "@/components/leave-accrual/leave-accrual-report";
 import { PayrollWorkspace } from "@/components/payroll/payroll-workspace";
 import { TresbeClientPayrolls } from "@/components/tresbe-payroll/client-payrolls";
@@ -54,33 +55,33 @@ export default async function PayrollPage({
       ])
     : null;
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {isAdmin ? <CompanyHeader company={company} /> : null}
       <PayrollWorkspace
         key={data.selected?.id}
         company={company}
         isAdmin={isAdmin}
         {...data}
+        leaveSlot={
+          leaveAccrual ? (
+            <>
+              <p className="text-muted-foreground text-sm">
+                Balance de acumulación para empleados W2 de {company.name}.
+              </p>
+              <LeaveAccrualReport
+                rows={leaveAccrual[0]}
+                companySettings={[
+                  {
+                    companyId: company.id,
+                    companyName: company.name,
+                    sickBalanceCapHours: leaveAccrual[1].sickBalanceCapHours,
+                  },
+                ]}
+              />
+            </>
+          ) : undefined
+        }
       />
-      {leaveAccrual ? (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Vacaciones y enfermedad</h2>
-            <p className="text-muted-foreground text-sm">
-              Balance de acumulación para empleados W2 de {company.name}.
-            </p>
-          </div>
-          <LeaveAccrualReport
-            rows={leaveAccrual[0]}
-            companySettings={[
-              {
-                companyId: company.id,
-                companyName: company.name,
-                sickBalanceCapHours: leaveAccrual[1].sickBalanceCapHours,
-              },
-            ]}
-          />
-        </section>
-      ) : null}
     </div>
   );
 }

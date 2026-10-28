@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Bell } from "lucide-react";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
 import {
@@ -9,31 +8,31 @@ import {
   markAllNotificationsRead,
   openNotification,
 } from "@/actions/notifications";
-import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { NavBadge } from "@/components/ui/nav-badge";
-import {
-  formatRelativeDateSpanish,
-} from "@/lib/date/format-relative";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { formatRelativeDateSpanish } from "@/lib/date/format-relative";
 import { cn } from "@/lib/utils";
 import type { PortalNotification } from "@/services/notifications";
 
-type NotificationBellProps = {
-  initialUnreadCount: number;
-  className?: string;
+type NotificationsPanelProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  unreadCount: number;
+  onUnreadCountChange: (count: number) => void;
 };
 
-export function NotificationBell({
-  initialUnreadCount,
-  className,
-}: NotificationBellProps) {
+export function NotificationsPanel({
+  open,
+  onOpenChange,
+  unreadCount,
+  onUnreadCountChange,
+}: NotificationsPanelProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [items, setItems] = useState<PortalNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,23 +44,20 @@ export function NotificationBell({
     try {
       const result = await fetchNotifications();
       setItems(result.notifications);
-      setUnreadCount(result.unreadCount);
+      onUnreadCountChange(result.unreadCount);
     } catch {
       setError("No se pudieron cargar las notificaciones.");
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    setUnreadCount(initialUnreadCount);
-  }, [initialUnreadCount]);
+  }, [onUnreadCountChange]);
 
   useEffect(() => {
     if (open) {
       void loadNotifications();
     }
-  }, [open, loadNotifications]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir
+  }, [open]);
 
   function handleNotificationClick(notification: PortalNotification) {
     const previousUnread = unreadCount;
@@ -69,7 +65,7 @@ export function NotificationBell({
 
     startTransition(async () => {
       if (!notification.read) {
-        setUnreadCount((count) => Math.max(0, count - 1));
+        onUnreadCountChange(Math.max(0, unreadCount - 1));
         setItems((prev) =>
           prev.map((item) =>
             item.id === notification.id ? { ...item, read: true } : item,
@@ -84,13 +80,13 @@ export function NotificationBell({
       });
 
       if (result.error) {
-        setUnreadCount(previousUnread);
+        onUnreadCountChange(previousUnread);
         setItems(previousItems);
         setError(result.error);
         return;
       }
 
-      setOpen(false);
+      onOpenChange(false);
       router.refresh();
       router.push(notification.href);
     });
@@ -101,12 +97,12 @@ export function NotificationBell({
     const previousItems = items;
 
     startTransition(async () => {
-      setUnreadCount(0);
+      onUnreadCountChange(0);
       setItems((prev) => prev.map((item) => ({ ...item, read: true })));
 
       const result = await markAllNotificationsRead();
       if (result.error) {
-        setUnreadCount(previousUnread);
+        onUnreadCountChange(previousUnread);
         setItems(previousItems);
         setError(result.error);
         return;
@@ -117,56 +113,47 @@ export function NotificationBell({
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("relative size-10 shrink-0", className)}
-          aria-label="Notificaciones"
-        >
-          <Bell className="size-4" />
-          {unreadCount > 0 ? (
-            <span className="absolute -top-0.5 -right-0.5">
-              <NavBadge count={unreadCount} />
-            </span>
-          ) : null}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        sideOffset={8}
-        className="z-50 w-[min(calc(100vw-2rem),22rem)] p-0"
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 p-0 sm:max-w-sm"
       >
-        <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">Notificaciones</p>
+        <SheetHeader className="border-border/70 flex-row items-center justify-between space-y-0 border-b px-4 py-3 pr-12">
+          <div>
+            <SheetTitle className="text-sm font-semibold">
+              Notificaciones
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              Actividad reciente de tu cuenta
+            </SheetDescription>
+          </div>
           {unreadCount > 0 ? (
             <button
               type="button"
               onClick={handleMarkAllRead}
               disabled={isPending}
-              className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+              className="text-primary text-xs font-medium hover:underline disabled:opacity-50"
             >
-              Marcar todas
+              Marcar todas como leídas
             </button>
           ) : null}
-        </div>
+        </SheetHeader>
 
-        <div className="max-h-[min(60vh,20rem)] overflow-y-auto overscroll-contain">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           {loading ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground px-4 py-8 text-center text-sm">
               Cargando…
             </p>
           ) : error ? (
-            <p className="px-4 py-8 text-center text-sm text-destructive">
+            <p className="text-destructive px-4 py-8 text-center text-sm">
               {error}
             </p>
           ) : items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground px-4 py-8 text-center text-sm">
               No tienes notificaciones nuevas.
             </p>
           ) : (
-            <ul className="divide-y divide-border/60">
+            <ul className="divide-border/60 divide-y">
               {items.map((item) => (
                 <li key={item.id}>
                   <button
@@ -174,7 +161,7 @@ export function NotificationBell({
                     onClick={() => handleNotificationClick(item)}
                     disabled={isPending}
                     className={cn(
-                      "flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-60",
+                      "hover:bg-muted/40 flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors disabled:opacity-60",
                       !item.read && "bg-primary/[0.03]",
                     )}
                   >
@@ -183,8 +170,8 @@ export function NotificationBell({
                         className={cn(
                           "text-sm leading-snug",
                           item.read
-                            ? "font-medium text-foreground/80"
-                            : "font-semibold text-foreground",
+                            ? "text-foreground/80 font-medium"
+                            : "text-foreground font-semibold",
                         )}
                       >
                         {item.title}
@@ -193,15 +180,15 @@ export function NotificationBell({
                         <span className="mt-1 size-2 shrink-0 rounded-full bg-red-500" />
                       ) : null}
                     </div>
-                    <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                    <p className="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
                       {item.description}
                     </p>
                     {item.companyName ? (
-                      <p className="text-[11px] font-medium text-muted-foreground/90">
+                      <p className="text-muted-foreground/90 text-[11px] font-medium">
                         {item.companyName}
                       </p>
                     ) : null}
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-muted-foreground text-[11px]">
                       {formatRelativeDateSpanish(item.createdAt)}
                     </p>
                   </button>
@@ -210,7 +197,7 @@ export function NotificationBell({
             </ul>
           )}
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </SheetContent>
+    </Sheet>
   );
 }

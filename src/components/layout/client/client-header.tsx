@@ -1,66 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { MenuIcon } from "lucide-react";
-import { useState } from "react";
+import { Sparkles } from "lucide-react";
 
-import { SignOutControl } from "@/components/auth/sign-out-control";
-import { ClientNav } from "@/components/layout/client/client-nav";
-import { NotificationBell } from "@/components/notifications/notification-bell";
-import { InstallMenuItem } from "@/components/pwa/install-menu-item";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { BrandMark } from "@/components/layout/brand-mark";
+import { UserMenu } from "@/components/layout/user-menu";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
-import type { ClientReportNotifications } from "@/types/notifications";
 import type { Profile } from "@/types";
 
 type ClientHeaderProps = {
   profile: Profile;
   companyName?: string | null;
-  companySlug?: string | null;
   notificationUnreadCount: number;
-  reportNotifications: ClientReportNotifications;
-  invoicesEnabled?: boolean;
   className?: string;
 };
 
-function getInitials(profile: Profile) {
-  const source = profile.full_name ?? profile.email;
-  return source
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
-
+/**
+ * Encabezado del cliente. En móvil los accesos viven en la barra inferior, así
+ * que aquí solo van la empresa, SinexIA y el menú del avatar.
+ */
 export function ClientHeader({
   profile,
   companyName,
-  companySlug,
   notificationUnreadCount,
-  reportNotifications,
-  invoicesEnabled = false,
   className,
 }: ClientHeaderProps) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
   return (
     <header
       className={cn(
@@ -69,75 +35,26 @@ export function ClientHeader({
       )}
     >
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-3 sm:px-6">
-        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden">
-              <MenuIcon className="size-4" />
-              <span className="sr-only">Abrir navegación</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="flex w-72 flex-col p-6">
-            <SheetHeader className="mb-6 px-0">
-              <SheetTitle className="text-left text-base font-semibold">
-                {siteConfig.name}
-              </SheetTitle>
-            </SheetHeader>
-            <ClientNav
-              companyName={companyName}
-              companySlug={companySlug}
-              reportNotifications={reportNotifications}
-              invoicesEnabled={invoicesEnabled}
-              onNavigate={() => setMobileNavOpen(false)}
-              className="flex-1"
-            />
-          </SheetContent>
-        </Sheet>
-
-        <div className="min-w-0 flex-1 md:hidden">
-          <p className="truncate text-sm font-semibold">{siteConfig.name}</p>
-        </div>
-
-        <div className="hidden min-w-0 flex-1 md:block">
-          <p className="text-muted-foreground truncate text-sm font-medium">
+        <BrandMark className="size-8 md:hidden" />
+        <div className="min-w-0 flex-1">
+          <p className="text-muted-foreground max-md:text-foreground truncate text-sm font-medium max-md:font-semibold">
             {companyName ?? siteConfig.name}
           </p>
         </div>
 
-        <NotificationBell initialUnreadCount={notificationUnreadCount} />
+        <Button asChild variant="outline" className="h-10 gap-2">
+          <Link href="/dashboard/sia">
+            <Sparkles className="size-4" />
+            <span className="hidden sm:inline">Preguntar a SinexIA</span>
+            <span className="sr-only sm:hidden">SinexIA</span>
+          </Link>
+        </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="relative size-10 rounded-full p-0"
-            >
-              <Avatar className="size-9">
-                <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
-                  {getInitials(profile)}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  {profile.full_name ?? profile.email}
-                </p>
-                {companyName ? (
-                  <p className="text-muted-foreground text-xs">{companyName}</p>
-                ) : null}
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile">Perfil</Link>
-            </DropdownMenuItem>
-            <InstallMenuItem />
-            <DropdownMenuSeparator />
-            <SignOutControl />
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserMenu
+          profile={profile}
+          subtitle={companyName}
+          notificationUnreadCount={notificationUnreadCount}
+        />
       </div>
     </header>
   );

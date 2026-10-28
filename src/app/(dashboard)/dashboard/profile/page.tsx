@@ -11,7 +11,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { getCompanyById } from "@/services/documents";
 
 export const metadata: Metadata = {
-  title: "Profile",
+  title: "Perfil",
 };
 
 export default async function ProfilePage() {
@@ -29,34 +29,27 @@ export default async function ProfilePage() {
       {isClient ? (
         <header className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">Perfil</h1>
-          <p className="text-base text-muted-foreground">
+          <p className="text-muted-foreground text-base">
             Su cuenta, empresa y contacto con Sinexia.
           </p>
         </header>
       ) : (
-        <PageHeader
-          title="Profile"
-          description="Your account details."
-        />
+        <PageHeader title="Perfil" description="Los datos de tu cuenta." />
       )}
 
-      <div
-        className={`grid gap-6 ${isClient ? "max-w-xl" : "lg:grid-cols-2"}`}
-      >
+      <div className={`grid gap-6 ${isClient ? "max-w-xl" : "lg:grid-cols-2"}`}>
         <SurfaceCard padding="lg">
           <h2 className="text-base font-semibold tracking-tight">
-            {isClient ? "Información personal" : "Personal information"}
+            Información personal
           </h2>
           <form action={updateProfile} className="mt-6 space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="full_name">
-                {isClient ? "Nombre completo" : "Full name"}
-              </Label>
+              <Label htmlFor="full_name">Nombre completo</Label>
               <Input
                 id="full_name"
                 name="full_name"
                 defaultValue={profile.full_name ?? ""}
-                placeholder={isClient ? "Su nombre" : "Your name"}
+                placeholder={isClient ? "Su nombre" : "Tu nombre"}
               />
             </div>
 
@@ -71,37 +64,33 @@ export default async function ProfilePage() {
               />
             </div>
 
-            <Button type="submit">
-              {isClient ? "Guardar cambios" : "Save changes"}
-            </Button>
+            <Button type="submit">Guardar cambios</Button>
           </form>
         </SurfaceCard>
 
         <SurfaceCard padding="lg">
           <h2 className="text-base font-semibold tracking-tight">
-            {isClient ? "Empresa" : "Workspace"}
+            {isClient ? "Empresa" : "Espacio de trabajo"}
           </h2>
           <dl className="mt-6 space-y-5">
             {!isClient ? (
               <div>
-                <dt className="text-sm text-muted-foreground">Role</dt>
-                <dd className="mt-1 font-medium capitalize">{profile.role}</dd>
+                <dt className="text-muted-foreground text-sm">Rol</dt>
+                <dd className="mt-1 font-medium">Administrador</dd>
               </div>
             ) : null}
             {company ? (
               <div>
-                <dt className="text-sm text-muted-foreground">
-                  {isClient ? "Empresa" : "Company"}
-                </dt>
+                <dt className="text-muted-foreground text-sm">Empresa</dt>
                 <dd className="mt-1 font-medium">{company.name}</dd>
               </div>
             ) : null}
             <div>
-              <dt className="text-sm text-muted-foreground">
-                {isClient ? "Cliente desde" : "Member since"}
+              <dt className="text-muted-foreground text-sm">
+                {isClient ? "Cliente desde" : "Miembro desde"}
               </dt>
               <dd className="mt-1 font-medium">
-                {new Intl.DateTimeFormat(isClient ? "es" : "en-US", {
+                {new Intl.DateTimeFormat("es", {
                   month: "long",
                   day: "numeric",
                   year: "numeric",

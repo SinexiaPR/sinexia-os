@@ -5,6 +5,13 @@ import {
   ReportNewBadge,
 } from "@/components/reports/client-report-actions";
 import { ReportCategoryDisplay } from "@/components/reports/report-category-display";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { STATUS_LABELS } from "@/lib/intelligence/constants";
 import type { DocumentProfileRow } from "@/lib/intelligence/profiles/types";
@@ -15,7 +22,6 @@ import type {
 } from "@/lib/intelligence/types";
 import { getSignedReportFileUrl } from "@/services/reports";
 import type { ReportWithCompany } from "@/types";
-import { cn } from "@/lib/utils";
 
 type ClientProcessingInfo = {
   status: DocumentProcessingStatus;
@@ -41,7 +47,9 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-function arSuggestions(reportId: string): Array<{ label: string; href: string }> {
+function arSuggestions(
+  reportId: string,
+): Array<{ label: string; href: string }> {
   const q = (text: string) =>
     `/dashboard/sia?reportId=${reportId}&q=${encodeURIComponent(text)}`;
   return [
@@ -73,7 +81,7 @@ export async function ClientReportCard({
   const statusLabel = status ? (STATUS_LABELS[status] ?? status) : null;
   const brief =
     status === "completed"
-      ? profile?.summary ?? processing?.structured_summary?.briefSummary
+      ? (profile?.summary ?? processing?.structured_summary?.briefSummary)
       : null;
   const isAR =
     profile?.document_type === "accounts_receivable" ||
@@ -82,78 +90,45 @@ export async function ClientReportCard({
   const suggestions =
     status === "completed" && isAR ? arSuggestions(report.id) : [];
 
+  const hasDetails = Boolean(
+    brief || suggestions.length || statusLabel || status === "requires_ocr",
+  );
+  const statusTone =
+    status === "completed"
+      ? "success"
+      : status === "failed"
+        ? "danger"
+        : status === "requires_ocr"
+          ? "warning"
+          : "neutral";
+
   return (
-    <div id={`report-${report.id}`}>
-      <SurfaceCard padding="lg">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-2">
+    <div id={`report-${report.id}`} className="scroll-mt-20">
+      <SurfaceCard padding="md" className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <ReportCategoryDisplay category={report.category} variant="client" />
+            <ReportCategoryDisplay
+              category={report.category}
+              variant="client"
+            />
             <ReportNewBadge show={isUnread} />
           </div>
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            {report.title}
-          </h2>
-          <p className="text-sm text-muted-foreground">Periodo: {report.period}</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Publicado el {formatDate(report.created_at)}
           </p>
+        </div>
+
+        <div className="space-y-1">
+          <h2 className="text-foreground text-lg font-semibold tracking-tight">
+            {report.title}
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Periodo: {report.period}
+          </p>
           {report.notes ? (
-            <p className="border-t border-border/60 pt-3 text-sm leading-relaxed text-muted-foreground">
+            <p className="text-muted-foreground pt-1 text-sm leading-relaxed">
               {report.notes}
             </p>
-          ) : null}
-
-          {statusLabel ? (
-            <p className="pt-2 text-sm text-muted-foreground">
-              SinexIA:{" "}
-              <span
-                className={cn(
-                  "font-medium",
-                  status === "completed" && "text-emerald-700",
-                  status === "failed" && "text-red-700",
-                  status === "requires_ocr" && "text-amber-700",
-                )}
-              >
-                {statusLabel}
-              </span>
-            </p>
-          ) : null}
-
-          {status === "requires_ocr" ? (
-            <p className="text-sm text-amber-800">
-              Este documento requiere OCR para ser analizado por SinexIA.
-            </p>
-          ) : null}
-
-          {brief ? (
-            <div className="space-y-1 pt-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Resumen
-              </p>
-              <p className="text-sm leading-relaxed text-foreground/90">
-                {brief}
-              </p>
-            </div>
-          ) : null}
-
-          {suggestions.length ? (
-            <div className="space-y-2 pt-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Preguntas sugeridas
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((s) => (
-                  <Link
-                    key={s.label}
-                    href={s.href}
-                    className="rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-                  >
-                    {s.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
           ) : null}
         </div>
 
@@ -163,7 +138,60 @@ export async function ClientReportCard({
           signedUrl={signedUrl}
           isUnread={isUnread}
         />
-      </div>
+
+        {hasDetails ? (
+          <Accordion
+            type="single"
+            collapsible
+            className="border-border/70 rounded-md border"
+          >
+            <AccordionItem value="detalle" className="border-b-0">
+              <AccordionTrigger className="min-h-11 px-4 text-sm">
+                <span className="flex flex-1 flex-wrap items-center gap-2">
+                  Análisis de SinexIA
+                  {statusLabel ? (
+                    <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
+                  ) : null}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 px-4">
+                {status === "requires_ocr" ? (
+                  <p className="text-warning text-sm">
+                    Este documento requiere OCR para ser analizado por SinexIA.
+                  </p>
+                ) : null}
+                {brief ? (
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                      Resumen
+                    </p>
+                    <p className="text-foreground/90 text-sm leading-relaxed">
+                      {brief}
+                    </p>
+                  </div>
+                ) : null}
+                {suggestions.length ? (
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                      Preguntas sugeridas
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestions.map((suggestion) => (
+                        <Link
+                          key={suggestion.label}
+                          href={suggestion.href}
+                          className="border-border/80 bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground focus-visible:ring-ring inline-flex min-h-10 items-center rounded-full border px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                          {suggestion.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        ) : null}
       </SurfaceCard>
     </div>
   );

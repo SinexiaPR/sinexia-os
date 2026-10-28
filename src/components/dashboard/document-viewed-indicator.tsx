@@ -18,7 +18,10 @@ export function DocumentViewedIndicator({
       )}
     >
       {!isViewed ? (
-        <span className="size-1.5 shrink-0 rounded-full bg-red-500/90" aria-hidden />
+        <span
+          className="size-1.5 shrink-0 rounded-full bg-red-500/90"
+          aria-hidden
+        />
       ) : null}
       <span>{isViewed ? "Visto" : "No visto"}</span>
     </span>

@@ -19,7 +19,10 @@ export default async function BillingSettingsPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Facturación"
+        breadcrumbs={[
+          { label: "Facturación", href: "/dashboard/admin/invoices" },
+          { label: "Configuración" },
+        ]}
         title="Configuración de facturación"
         description="Administra el emisor, información de pago y perfiles de clientes sin hardcodear datos en la interfaz."
       />

@@ -22,7 +22,16 @@ export default async function InvoicePreviewPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Facturación"
+        breadcrumbs={[
+          { label: "Facturación", href: "/dashboard/admin/invoices" },
+          {
+            label: invoice.invoice_number
+              ? `Factura #${invoice.invoice_number}`
+              : "Borrador de factura",
+            href: `/dashboard/admin/invoices/${invoice.id}`,
+          },
+          { label: "Vista previa" },
+        ]}
         title="Vista previa"
         description="Representación visual antes de descargar el PDF final."
       />

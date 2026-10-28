@@ -28,14 +28,13 @@ for (const [input, expected] of cases)
 assert.equal(getCompanyCategory("payroll")?.label, "Nómina");
 assert.equal(getCompanyCategory("not-valid"), null);
 
-const adminCompanyPage = readFileSync(
-  "src/app/(dashboard)/dashboard/admin/companies/[companyId]/page.tsx",
-  "utf8",
-);
-assert.match(adminCompanyPage, /company\.slug === "sibarita"/);
+// La pestaña Nómina de Sibarita sigue apuntando a su nómina semanal aunque no
+// haya un documento de nómina cargado (ahora vive en la lógica de pestañas).
+const companyTabs = readFileSync("src/lib/companies/tabs.ts", "utf8");
+assert.match(companyTabs, /slug === "sibarita"/);
 assert.match(
-  adminCompanyPage,
-  /href=\{`\/dashboard\/payroll\?company=\$\{company\.id\}`\}/,
+  companyTabs,
+  /href: `\/dashboard\/payroll\?company=\$\{id\}`/,
   "Sibarita payroll remains accessible without an uploaded payroll document",
 );
 

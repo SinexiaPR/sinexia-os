@@ -69,7 +69,9 @@ export function AdminReportIntelligence({
   const [isPending, startTransition] = useTransition();
 
   const status = processing?.status ?? null;
-  const statusLabel = status ? (STATUS_LABELS[status] ?? status) : "Sin iniciar";
+  const statusLabel = status
+    ? (STATUS_LABELS[status] ?? status)
+    : "Sin iniciar";
   const summaryText =
     profile?.summary ?? processing?.structured_summary?.briefSummary ?? null;
   const confidence =
@@ -78,8 +80,8 @@ export function AdminReportIntelligence({
     null;
 
   return (
-    <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+    <div className="border-border/60 mt-3 space-y-3 border-t pt-3">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         <span>
           SinexIA:{" "}
           <span
@@ -105,9 +107,7 @@ export function AdminReportIntelligence({
           <span>Periodo detectado: {processing.detected_period}</span>
         ) : null}
         {confidence != null ? (
-          <span>
-            Confianza: {Math.round(confidence * 100)}%
-          </span>
+          <span>Confianza: {Math.round(confidence * 100)}%</span>
         ) : null}
       </div>
 
@@ -152,14 +152,14 @@ export function AdminReportIntelligence({
         </Button>
         <Link
           href={`/api/reports/${reportId}/download`}
-          className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-medium text-primary hover:bg-muted/50"
+          className="border-border text-primary hover:bg-muted/50 inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium"
         >
           Archivo fuente
         </Link>
       </div>
 
       {showAnalysis ? (
-        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
+        <div className="border-border/70 bg-muted/30 space-y-3 rounded-lg border p-3 text-sm">
           <p className="text-muted-foreground">
             {summaryText ?? "Sin resumen automático todavía."}
           </p>
@@ -167,7 +167,7 @@ export function AdminReportIntelligence({
           {profile?.structured_data &&
           Object.keys(profile.structured_data).length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-foreground">
+              <p className="text-foreground text-xs font-medium">
                 Extracted profile
               </p>
               <dl className="grid gap-1 text-xs sm:grid-cols-2">
@@ -185,7 +185,7 @@ export function AdminReportIntelligence({
                   .map(([key, value]) => (
                     <div key={key} className="flex gap-2">
                       <dt className="text-muted-foreground">{key}:</dt>
-                      <dd className="font-medium text-foreground">
+                      <dd className="text-foreground font-medium">
                         {value == null
                           ? "—"
                           : Array.isArray(value)
@@ -198,10 +198,10 @@ export function AdminReportIntelligence({
               {Array.isArray(profile.structured_data.customers) &&
               (profile.structured_data.customers as unknown[]).length > 0 ? (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-foreground">
+                  <p className="text-foreground text-xs font-medium">
                     Top customers
                   </p>
-                  <ul className="space-y-0.5 text-xs text-muted-foreground">
+                  <ul className="text-muted-foreground space-y-0.5 text-xs">
                     {(
                       profile.structured_data.customers as Array<{
                         name?: string;
@@ -226,19 +226,19 @@ export function AdminReportIntelligence({
               ) : null}
               {profile.structured_data.extraction_diagnostics ||
               profile.structured_data.source_format ? (
-                <div className="space-y-1 rounded-md border border-border/60 bg-background/80 p-2">
-                  <p className="text-xs font-medium text-foreground">
-                    Payroll extraction diagnostics
+                <div className="border-border/60 bg-background/80 space-y-1 rounded-md border p-2">
+                  <p className="text-foreground text-xs font-medium">
+                    Diagnóstico de extracción de nómina
                   </p>
                   <dl className="grid gap-1 text-xs sm:grid-cols-2">
                     {(
                       [
-                        ["source_format", "Source format"],
-                        ["employee_count", "Employees"],
-                        ["total_hours", "Total hours"],
-                        ["overtime_hours", "Overtime"],
-                        ["total_tips", "Total tips"],
-                        ["total_payroll", "Payroll total"],
+                        ["source_format", "Formato de origen"],
+                        ["employee_count", "Empleados"],
+                        ["total_hours", "Horas totales"],
+                        ["overtime_hours", "Horas extra"],
+                        ["total_tips", "Propinas totales"],
+                        ["total_payroll", "Total de nómina"],
                       ] as const
                     ).map(([key, label]) => {
                       const value = profile.structured_data[key];
@@ -246,7 +246,7 @@ export function AdminReportIntelligence({
                       return (
                         <div key={key} className="flex gap-2">
                           <dt className="text-muted-foreground">{label}:</dt>
-                          <dd className="font-medium text-foreground">
+                          <dd className="text-foreground font-medium">
                             {String(value)}
                           </dd>
                         </div>
@@ -263,13 +263,14 @@ export function AdminReportIntelligence({
                       ] as const
                     ).map(([key, label]) => {
                       const diagnostics = profile.structured_data
-                        .extraction_diagnostics as Record<string, unknown> | undefined;
+                        .extraction_diagnostics as
+                        Record<string, unknown> | undefined;
                       const value = diagnostics?.[key];
                       if (value == null || value === "") return null;
                       return (
                         <div key={key} className="flex gap-2">
                           <dt className="text-muted-foreground">{label}:</dt>
-                          <dd className="font-medium text-foreground">
+                          <dd className="text-foreground font-medium">
                             {Array.isArray(value)
                               ? value.join(", ")
                               : String(value)}
@@ -294,7 +295,7 @@ export function AdminReportIntelligence({
           </Button>
 
           {showJson && profile?.structured_data ? (
-            <pre className="max-h-48 overflow-auto rounded-md border border-border bg-background p-2 text-[11px] leading-relaxed text-foreground">
+            <pre className="border-border bg-background text-foreground max-h-48 overflow-auto rounded-md border p-2 text-[11px] leading-relaxed">
               {JSON.stringify(profile.structured_data, null, 2)}
             </pre>
           ) : null}
@@ -313,7 +314,7 @@ export function AdminReportIntelligence({
                 Corregir tipo (solo clasificación)
               </span>
               <select
-                className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                className="border-border bg-background h-9 w-full rounded-md border px-2 text-sm"
                 value={docType}
                 onChange={(e) =>
                   setDocType(e.target.value as DetectedDocumentType)
@@ -351,9 +352,7 @@ export function AdminReportIntelligence({
                   detectedPeriod: period,
                 });
                 setMessage(
-                  result.error
-                    ? result.error
-                    : "Clasificación actualizada.",
+                  result.error ? result.error : "Clasificación actualizada.",
                 );
               });
             }}
@@ -364,7 +363,7 @@ export function AdminReportIntelligence({
       ) : null}
 
       {message ? (
-        <p className="text-xs text-muted-foreground">{message}</p>
+        <p className="text-muted-foreground text-xs">{message}</p>
       ) : null}
     </div>
   );

@@ -7,7 +7,11 @@ import { saveIncomeProjection } from "@/actions/cutmeat-daily";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
-import { formatDayLabel, weekDatesSundayToSaturday, type IsoDate } from "@/lib/cutmeat-daily/dates";
+import {
+  formatDayLabel,
+  weekDatesSundayToSaturday,
+  type IsoDate,
+} from "@/lib/cutmeat-daily/dates";
 
 /**
  * Proyección de ingresos THIS WEEK (domingo a sábado). El lunes se
@@ -29,7 +33,10 @@ export function IncomeTab({
   const byDate = new Map(incomeDays.map((d) => [d.date, d.amount]));
   const [amounts, setAmounts] = useState<Record<IsoDate, string>>(
     Object.fromEntries(
-      dates.map((date) => [date, String(byDate.get(date) ?? defaultDailyIncome)]),
+      dates.map((date) => [
+        date,
+        String(byDate.get(date) ?? defaultDailyIncome),
+      ]),
     ),
   );
   const [message, setMessage] = useState<string | null>(null);
@@ -40,7 +47,10 @@ export function IncomeTab({
     startTransition(async () => {
       const result = await saveIncomeProjection({
         companyId,
-        days: dates.map((date) => ({ date, amount: Number(amounts[date]) || 0 })),
+        days: dates.map((date) => ({
+          date,
+          amount: Number(amounts[date]) || 0,
+        })),
       });
       setMessage("error" in result ? result.error : "Proyección guardada.");
       if (!("error" in result)) router.refresh();
@@ -49,10 +59,12 @@ export function IncomeTab({
 
   return (
     <SurfaceCard>
-      <h2 className="text-base font-semibold">THIS WEEK -- Ingresos proyectados</h2>
+      <h2 className="text-base font-semibold">
+        ESTA SEMANA -- Ingresos proyectados
+      </h2>
       <p className="text-muted-foreground text-sm">
-        Domingo a sábado. El lunes queda excluido del Financial Report (ya
-        está reflejado por otro lado), pero se puede editar igual.
+        Domingo a sábado. El lunes queda excluido del Financial Report (ya está
+        reflejado por otro lado), pero se puede editar igual.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-4 lg:grid-cols-7">
         {dates.map((date, index) => (
@@ -65,7 +77,10 @@ export function IncomeTab({
               inputMode="decimal"
               value={amounts[date]}
               onChange={(event) =>
-                setAmounts((current) => ({ ...current, [date]: event.target.value }))
+                setAmounts((current) => ({
+                  ...current,
+                  [date]: event.target.value,
+                }))
               }
             />
           </label>
@@ -75,7 +90,9 @@ export function IncomeTab({
         <Button onClick={save} disabled={pending}>
           Guardar proyección
         </Button>
-        {message ? <span className="text-muted-foreground text-sm">{message}</span> : null}
+        {message ? (
+          <span className="text-muted-foreground text-sm">{message}</span>
+        ) : null}
       </div>
     </SurfaceCard>
   );

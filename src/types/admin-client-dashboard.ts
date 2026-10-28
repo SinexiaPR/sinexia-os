@@ -25,6 +25,7 @@ export type DashboardConfigItem = {
 export type DashboardItem = {
   id: string;
   key: string;
+  actionType: DashboardActionType;
   label: string;
   state: DashboardItemState;
   stateLabel: string;

@@ -9,7 +9,17 @@ import {
   getSinexIASuggestions,
   getSinexIADocumentHistory,
 } from "@/actions/sinexia-chat";
+import { Sparkles, SlidersHorizontal } from "lucide-react";
+
 import { assistantConfig } from "@/config/assistant";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { FilterPanel } from "@/components/ui/filter-panel";
+import { getReportCategoryMeta } from "@/lib/constants/reports";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
@@ -132,26 +142,38 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ask once from deep link
   }, [initialQuestion, autoAsked]);
 
-  return (
-    <div className="space-y-6">
-      <SurfaceCard padding="lg" className="space-y-6">
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-wide text-primary uppercase">
-            {assistantConfig.name}
-          </p>
-          <p className="text-sm font-medium text-foreground">
-            {assistantConfig.tagline}
-          </p>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {assistantConfig.description}
-          </p>
-        </div>
+  const activeFilters = [reportId, category, period].filter(Boolean).length;
+  const selectClass =
+    "h-11 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground";
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className="space-y-1 text-xs text-muted-foreground">
-            Documento
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterPanel
+          title="Filtros"
+          align="start"
+          trigger={
+            <Button variant="outline" className="h-10">
+              <SlidersHorizontal className="size-4" />
+              Filtros
+              {activeFilters > 0 ? (
+                <span className="bg-primary text-primary-foreground ml-1 flex size-5 items-center justify-center rounded-full text-[11px] tabular-nums">
+                  {activeFilters}
+                </span>
+              ) : null}
+            </Button>
+          }
+        >
+          <p className="text-muted-foreground text-sm">
+            Limite las respuestas a un documento, categoría o periodo.
+          </p>
+          <div className="space-y-1.5">
+            <label htmlFor="sia-documento" className="text-sm font-medium">
+              Documento
+            </label>
             <select
-              className="h-10 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+              id="sia-documento"
+              className={selectClass}
               value={reportId}
               onChange={(e) => setReportId(e.target.value)}
             >
@@ -162,26 +184,32 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                 </option>
               ))}
             </select>
-          </label>
-          <label className="space-y-1 text-xs text-muted-foreground">
-            Categoría
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="sia-categoria" className="text-sm font-medium">
+              Categoría
+            </label>
             <select
-              className="h-10 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+              id="sia-categoria"
+              className={selectClass}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
               <option value="">Todas</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {getReportCategoryMeta(c)?.clientLabel ?? c}
                 </option>
               ))}
             </select>
-          </label>
-          <label className="space-y-1 text-xs text-muted-foreground">
-            Periodo
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="sia-periodo" className="text-sm font-medium">
+              Periodo
+            </label>
             <select
-              className="h-10 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+              id="sia-periodo"
+              className={selectClass}
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
             >
@@ -192,87 +220,70 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                 </option>
               ))}
             </select>
-          </label>
-        </div>
-
-        {history.length > 0 ? (
-          <div className="space-y-2 border-t border-border/60 pt-4">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Document History
-            </p>
-            <ul className="space-y-2">
-              {history.map((item) => (
-                <li
-                  key={item.id}
-                  className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">
-                      {item.title}
-                    </span>
-                    {item.period ? (
-                      <span className="text-xs text-muted-foreground">
-                        {item.period}
-                      </span>
-                    ) : null}
-                  </div>
-                  {item.summary ? (
-                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                      {item.summary}
-                    </p>
-                  ) : null}
-                  {item.reportId ? (
-                    <button
-                      type="button"
-                      className="mt-2 text-xs text-primary hover:underline"
-                      onClick={() => {
-                        setReportId(item.reportId!);
-                        if (item.period) setPeriod(item.period);
-                      }}
-                    >
-                      Preguntar sobre este documento
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
           </div>
-        ) : null}
-
-        <div className="flex flex-wrap gap-2">
-          {suggestions.map((prompt) => (
-            <button
-              key={prompt}
+          {activeFilters > 0 ? (
+            <Button
               type="button"
-              disabled={isPending}
-              onClick={() => submitQuestion(prompt)}
-              className="rounded-full border border-border/80 bg-background px-3.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setReportId("");
+                setCategory("");
+                setPeriod("");
+              }}
             >
-              {prompt}
-            </button>
-          ))}
-        </div>
+              Limpiar filtros
+            </Button>
+          ) : null}
+        </FilterPanel>
+        {activeFilters > 0 ? (
+          <p className="text-muted-foreground text-sm">
+            Las respuestas se limitan a la selección.
+          </p>
+        ) : null}
+      </div>
 
-        {entries.length > 0 ? (
-          <div className="space-y-5 border-t border-border/60 pt-6">
+      {entries.length === 0 ? (
+        <SurfaceCard padding="md" className="space-y-3">
+          <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+            <Sparkles aria-hidden className="text-primary size-4" />
+            Preguntas para empezar
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                disabled={isPending}
+                onClick={() => submitQuestion(prompt)}
+                className="border-border/80 bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground focus-visible:ring-ring min-h-11 rounded-full border px-4 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </SurfaceCard>
+      ) : (
+        <SurfaceCard padding="md" className="space-y-5">
+          <div role="log" aria-live="polite" className="space-y-5">
             {entries.map((entry, index) => (
               <div
                 key={`${entry.role}-${index}`}
                 className={cn(
                   "max-w-[92%] text-sm leading-relaxed",
                   entry.role === "user"
-                    ? "ml-auto rounded-lg bg-muted px-4 py-3 text-foreground"
+                    ? "bg-muted text-foreground ml-auto rounded-lg px-4 py-3"
                     : "space-y-3",
                 )}
               >
                 {entry.role === "assistant" ? (
                   <>
-                    <p className="whitespace-pre-wrap text-foreground">
+                    <p className="text-foreground whitespace-pre-wrap">
                       {entry.content}
                     </p>
                     {entry.sources?.length ? (
-                      <div className="space-y-1 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                        <p className="font-medium text-foreground">Fuentes</p>
+                      <div className="border-border/70 bg-muted/40 text-muted-foreground space-y-1 rounded-md border px-3 py-2 text-xs">
+                        <p className="text-foreground font-medium">Fuentes</p>
                         {entry.sources.map((source, i) => (
                           <div
                             key={`${source.reportId ?? source.title}-${i}`}
@@ -280,9 +291,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                           >
                             <span>
                               {source.title}
-                              {source.period
-                                ? ` · ${source.period}`
-                                : ""}
+                              {source.period ? ` · ${source.period}` : ""}
                               {source.pageNumber != null
                                 ? ` · pág. ${source.pageNumber}`
                                 : ""}
@@ -303,7 +312,7 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
                       </div>
                     ) : null}
                     {entry.disclaimer ? (
-                      <p className="rounded-md border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                      <p className="border-warning/30 bg-warning-soft text-warning rounded-md border px-3 py-2 text-xs leading-relaxed">
                         {entry.disclaimer}
                       </p>
                     ) : null}
@@ -314,33 +323,119 @@ export function SinexIAPanel({ reports }: SinexIAPanelProps) {
               </div>
             ))}
           </div>
-        ) : null}
+          {isPending ? (
+            <p className="text-muted-foreground text-sm" role="status">
+              SinexIA está respondiendo…
+            </p>
+          ) : null}
+          <div className="border-border/60 border-t pt-4">
+            <p className="text-muted-foreground mb-2 text-xs font-medium">
+              Otras preguntas
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.slice(0, 4).map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => submitQuestion(prompt)}
+                  className="border-border/80 bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground focus-visible:ring-ring min-h-10 rounded-full border px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        </SurfaceCard>
+      )}
 
-        {error ? (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        ) : null}
+      {history.length > 0 ? (
+        <SurfaceCard padding="sm" className="p-0">
+          <Accordion type="single" collapsible>
+            <AccordionItem value="historial" className="border-b-0">
+              <AccordionTrigger>
+                <span className="flex-1">
+                  Documentos analizados recientes ({history.length})
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <ul className="space-y-2">
+                  {history.map((item) => (
+                    <li
+                      key={item.id}
+                      className="border-border/70 bg-muted/30 rounded-lg border px-3 py-2 text-sm"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-foreground font-medium">
+                          {item.title}
+                        </span>
+                        {item.period ? (
+                          <span className="text-muted-foreground text-xs">
+                            {item.period}
+                          </span>
+                        ) : null}
+                      </div>
+                      {item.summary ? (
+                        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed">
+                          {item.summary}
+                        </p>
+                      ) : null}
+                      {item.reportId ? (
+                        <button
+                          type="button"
+                          className="text-primary mt-2 inline-flex min-h-10 items-center text-sm hover:underline"
+                          onClick={() => {
+                            setReportId(item.reportId!);
+                            if (item.period) setPeriod(item.period);
+                          }}
+                        >
+                          Preguntar sobre este documento
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </SurfaceCard>
+      ) : null}
 
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitQuestion(input);
-          }}
-          className="flex gap-2 border-t border-border/60 pt-6"
+      {error ? (
+        <p
+          role="alert"
+          className="bg-danger-soft text-danger rounded-md px-3 py-2 text-sm"
         >
-          <Input
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Ask anything about your business…"
-            disabled={isPending}
-            className="h-11"
-          />
-          <Button type="submit" disabled={isPending || !input.trim()}>
-            {isPending ? "…" : "Enviar"}
-          </Button>
-        </form>
-      </SurfaceCard>
+          {error}
+        </p>
+      ) : null}
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitQuestion(input);
+        }}
+        className="bg-background/95 sticky bottom-16 z-20 -mx-4 flex gap-2 border-t px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6 md:bottom-0"
+      >
+        <label htmlFor="sia-pregunta" className="sr-only">
+          Su pregunta
+        </label>
+        <Input
+          id="sia-pregunta"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="Escriba su pregunta…"
+          disabled={isPending}
+          className="h-11"
+        />
+        <Button
+          type="submit"
+          className="h-11 px-5"
+          disabled={isPending || !input.trim()}
+        >
+          {isPending ? "…" : "Enviar"}
+        </Button>
+      </form>
     </div>
   );
 }

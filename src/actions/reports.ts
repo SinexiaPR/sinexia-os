@@ -8,10 +8,7 @@ import {
   resolveUploadContentType,
   UPLOAD_MAX_BYTES,
 } from "@/lib/constants/upload";
-import {
-  isReportCategory,
-  REPORTS_BUCKET,
-} from "@/lib/constants/reports";
+import { isReportCategory, REPORTS_BUCKET } from "@/lib/constants/reports";
 import { logServerError } from "@/lib/errors/action-error";
 import {
   reportError,
@@ -40,36 +37,36 @@ export async function createReport(
     const file = formData.get("file");
 
     if (!companyId) {
-      return validationError("Missing company_id.");
+      return validationError("Selecciona una empresa.");
     }
 
     if (!title) {
-      return validationError("Missing title.");
+      return validationError("Falta el título del reporte.");
     }
 
     if (!category) {
-      return validationError("Missing category.");
+      return validationError("Selecciona una categoría.");
     }
 
     if (!period) {
-      return validationError("Missing period.");
+      return validationError("Falta el período.");
     }
 
     if (!isReportCategory(category)) {
-      return validationError(`Invalid report category: ${category}`);
+      return validationError(`Categoría de reporte no válida: ${category}`);
     }
 
     if (!(file instanceof File) || file.size === 0) {
-      return validationError("A report file is required.");
+      return validationError("Adjunta el archivo del reporte.");
     }
 
     if (file.size > UPLOAD_MAX_BYTES) {
-      return validationError("File exceeds the 50 MB limit.");
+      return validationError("El archivo supera el límite de 50 MB.");
     }
 
     if (!isAllowedUploadFile(file)) {
       return validationError(
-        "Unsupported file type. Use PDF, Excel, CSV, Word, or image.",
+        "Tipo de archivo no admitido. Usa PDF, Excel, CSV, Word o imagen.",
       );
     }
 
@@ -113,11 +110,15 @@ export async function createReport(
         .remove([storagePath]);
 
       if (cleanupError) {
-        logServerError("Report storage cleanup after insert failure", cleanupError, {
-          bucket: REPORTS_BUCKET,
-          storagePath,
-          reportId,
-        });
+        logServerError(
+          "Report storage cleanup after insert failure",
+          cleanupError,
+          {
+            bucket: REPORTS_BUCKET,
+            storagePath,
+            reportId,
+          },
+        );
       }
 
       return reportError(insertError, "Database insert failed", {
@@ -167,7 +168,7 @@ export async function deleteReport(reportId: string) {
     .maybeSingle();
 
   if (fetchError || !report) {
-    return { error: "Report not found." };
+    return { error: "Reporte no encontrado." };
   }
 
   const { error: deleteError } = await supabase
@@ -176,7 +177,7 @@ export async function deleteReport(reportId: string) {
     .eq("id", reportId);
 
   if (deleteError) {
-    return { error: "Failed to delete report." };
+    return { error: "No se pudo eliminar el reporte." };
   }
 
   await supabase.storage.from(REPORTS_BUCKET).remove([report.file_url]);

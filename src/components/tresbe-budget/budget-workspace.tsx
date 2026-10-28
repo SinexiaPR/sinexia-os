@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import {
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  FileDown,
-  RefreshCw,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, FileDown, RefreshCw } from "lucide-react";
 
 import { generateWeeklyBudget } from "@/actions/tresbe-budget";
 import { AssumptionsTab } from "@/components/tresbe-budget/assumptions-tab";
@@ -102,12 +96,6 @@ export function TresbeBudgetWorkspace({
   return (
     <div className="space-y-5">
       <header className="space-y-5">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link href={`/dashboard/admin/companies/${company.id}`}>
-            <ArrowLeft className="size-4" />
-            Volver a {company.name}
-          </Link>
-        </Button>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

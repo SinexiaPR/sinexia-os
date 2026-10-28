@@ -7,6 +7,8 @@ import { getDocumentDisplayType } from "@/lib/documents/upload-metadata";
 export type ClientDashboardStats = {
   publishedReports: number;
   pendingDocuments: number;
+  /** Documentos marcados "Falta información": requieren una acción del cliente. */
+  needsInfoDocuments: number;
   analyzedDocuments: number;
   lastReport: {
     id: string;
@@ -40,6 +42,18 @@ async function countPublishedReports(companyId: string): Promise<number> {
     .from("reports")
     .select("*", { count: "exact", head: true })
     .eq("company_id", companyId);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function countNeedsInfoDocuments(companyId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("documents")
+    .select("*", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("status", "rejected");
 
   if (error) throw error;
   return count ?? 0;
@@ -167,12 +181,14 @@ export async function getClientDashboardStats(
   const [
     publishedReports,
     pendingDocuments,
+    needsInfoDocuments,
     analyzedDocuments,
     lastReport,
     lastUpdate,
   ] = await Promise.all([
     countPublishedReports(companyId),
     countPendingDocumentsForCompany(companyId),
+    countNeedsInfoDocuments(companyId),
     countAnalyzedDocuments(companyId),
     getLatestReport(companyId),
     resolveLastUpdate(companyId),
@@ -181,6 +197,7 @@ export async function getClientDashboardStats(
   return {
     publishedReports,
     pendingDocuments,
+    needsInfoDocuments,
     analyzedDocuments,
     lastReport,
     lastUpdate,

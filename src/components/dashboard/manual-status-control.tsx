@@ -19,7 +19,7 @@ export function ManualStatusControl({ item }: { item: DashboardItem }) {
   return (
     <select
       aria-label={`Estado manual de ${item.label}`}
-      className="h-6 shrink-0 rounded-[4px] border border-input bg-background px-1.5 text-[11px]"
+      className="border-input bg-background h-6 shrink-0 rounded-[4px] border px-1.5 text-[11px]"
       value={item.state}
       disabled={pending}
       onChange={(event) => {

@@ -2,10 +2,12 @@
 
 import type { ReactNode } from "react";
 
+import { ToastProvider } from "@/components/ui/toast";
+
 type AppProvidersProps = {
   children: ReactNode;
 };
 
 export function AppProviders({ children }: AppProvidersProps) {
-  return children;
+  return <ToastProvider>{children}</ToastProvider>;
 }
