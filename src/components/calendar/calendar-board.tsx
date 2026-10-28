@@ -26,11 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Combobox } from "@/components/ui/combobox";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { FilterPanel } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import {
@@ -362,8 +358,10 @@ export function CalendarBoard({
             className="h-10 pl-9"
           />
         </label>
-        <Popover>
-          <PopoverTrigger asChild>
+        <FilterPanel
+          title="Filtros"
+          align="start"
+          trigger={
             <Button variant="outline" className="h-10">
               <SlidersHorizontal className="size-4" />
               Filtros
@@ -373,134 +371,133 @@ export function CalendarBoard({
                 </span>
               ) : null}
             </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-80 space-y-3">
+          }
+        >
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Empresa</label>
+            <Combobox
+              aria-label="Empresa"
+              options={companies.map((o) => ({ value: o.id, label: o.name }))}
+              value={company}
+              onValueChange={setCompany}
+              allLabel="Todas las empresas"
+              placeholder="Todas las empresas"
+              searchPlaceholder="Buscar empresa…"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cal-equipo" className="text-sm font-medium">
+              Equipo
+            </label>
+            <select
+              id="cal-equipo"
+              className={selectClass}
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+            >
+              <option value="">Todo el equipo</option>
+              {admins.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Empresa</label>
-              <Combobox
-                aria-label="Empresa"
-                options={companies.map((o) => ({ value: o.id, label: o.name }))}
-                value={company}
-                onValueChange={setCompany}
-                allLabel="Todas las empresas"
-                placeholder="Todas las empresas"
-                searchPlaceholder="Buscar empresa…"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="cal-equipo" className="text-sm font-medium">
-                Equipo
+              <label htmlFor="cal-estado" className="text-sm font-medium">
+                Estado
               </label>
               <select
-                id="cal-equipo"
+                id="cal-estado"
                 className={selectClass}
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
               >
-                <option value="">Todo el equipo</option>
-                {admins.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
+                <option value="">Todos</option>
+                {Object.entries(labels.status).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <label htmlFor="cal-estado" className="text-sm font-medium">
-                  Estado
-                </label>
-                <select
-                  id="cal-estado"
-                  className={selectClass}
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  {Object.entries(labels.status).map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="cal-prioridad" className="text-sm font-medium">
-                  Prioridad
-                </label>
-                <select
-                  id="cal-prioridad"
-                  className={selectClass}
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                >
-                  <option value="">Todas</option>
-                  {Object.entries(labels.priority).map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
             <div className="space-y-1.5">
-              <label htmlFor="cal-tipo" className="text-sm font-medium">
-                Tipo
+              <label htmlFor="cal-prioridad" className="text-sm font-medium">
+                Prioridad
               </label>
               <select
-                id="cal-tipo"
+                id="cal-prioridad"
                 className={selectClass}
-                value={itemType}
-                onChange={(e) => setItemType(e.target.value)}
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
               >
-                <option value="">Todos los tipos</option>
-                {Object.entries(labels.type)
-                  .filter(([v]) => v !== "task")
-                  .map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
+                <option value="">Todas</option>
+                {Object.entries(labels.priority).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <label htmlFor="cal-desde" className="text-sm font-medium">
-                  Desde
-                </label>
-                <Input
-                  id="cal-desde"
-                  type="date"
-                  className="h-10"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="cal-hasta" className="text-sm font-medium">
-                  Hasta
-                </label>
-                <Input
-                  id="cal-hasta"
-                  type="date"
-                  className="h-10"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                />
-              </div>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cal-tipo" className="text-sm font-medium">
+              Tipo
+            </label>
+            <select
+              id="cal-tipo"
+              className={selectClass}
+              value={itemType}
+              onChange={(e) => setItemType(e.target.value)}
+            >
+              <option value="">Todos los tipos</option>
+              {Object.entries(labels.type)
+                .filter(([v]) => v !== "task")
+                .map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <label htmlFor="cal-desde" className="text-sm font-medium">
+                Desde
+              </label>
+              <Input
+                id="cal-desde"
+                type="date"
+                className="h-10"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
             </div>
-            {activeFilterCount > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-              >
-                Limpiar filtros
-              </Button>
-            ) : null}
-          </PopoverContent>
-        </Popover>
+            <div className="space-y-1.5">
+              <label htmlFor="cal-hasta" className="text-sm font-medium">
+                Hasta
+              </label>
+              <Input
+                id="cal-hasta"
+                type="date"
+                className="h-10"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+            </div>
+          </div>
+          {activeFilterCount > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+            >
+              Limpiar filtros
+            </Button>
+          ) : null}
+        </FilterPanel>
       </div>
 
       <div className="bg-muted flex gap-1 rounded-lg p-1 md:w-fit">
