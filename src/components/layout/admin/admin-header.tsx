@@ -78,9 +78,6 @@ export function AdminHeader({
             onNavigate={() => setMobileNavOpen(false)}
             className="flex-1"
           />
-          <div className="border-t border-sidebar-border p-3">
-            <SignOutControl variant="nav" />
-          </div>
         </SheetContent>
       </Sheet>
 
@@ -115,6 +112,8 @@ export function AdminHeader({
             <Link href="/dashboard/profile">Perfil</Link>
           </DropdownMenuItem>
           <InstallMenuItem />
+          <DropdownMenuSeparator />
+          <SignOutControl />
         </DropdownMenuContent>
       </DropdownMenu>
     </header>

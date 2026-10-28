@@ -378,11 +378,13 @@ export function CalendarBoard({
             onChange={(e) => setItemType(e.target.value)}
           >
             <option value="">Tipos</option>
-            {Object.entries(labels.type).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
+            {Object.entries(labels.type)
+              .filter(([v]) => v !== "task")
+              .map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
           </select>
           <label className="text-muted-foreground text-xs">
             Desde

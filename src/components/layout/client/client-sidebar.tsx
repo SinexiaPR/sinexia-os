@@ -1,6 +1,5 @@
 "use client";
 
-import { SignOutControl } from "@/components/auth/sign-out-control";
 import { ClientNav } from "@/components/layout/client/client-nav";
 import { siteConfig } from "@/config/site";
 import type { ClientReportNotifications } from "@/types/notifications";
@@ -30,7 +29,6 @@ export function ClientSidebar({
           reportNotifications={reportNotifications}
           invoicesEnabled={invoicesEnabled}
         />
-        <SignOutControl variant="nav" />
       </div>
     </aside>
   );
