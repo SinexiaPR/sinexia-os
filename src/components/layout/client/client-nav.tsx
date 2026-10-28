@@ -1,13 +1,7 @@
 "use client";
 
 import { ClientNavLinks } from "@/components/layout/nav-link-with-badge";
-import {
-  clientDocumentsNavItem,
-  clientHomeNavItem,
-  clientInvoicesNavItem,
-  clientReportsNavItem,
-  tresbePayrollNavItem,
-} from "@/config/navigation";
+import { getClientNavItems } from "@/config/navigation";
 import type { ClientReportNotifications } from "@/types/notifications";
 
 type ClientNavProps = {
@@ -29,13 +23,7 @@ export function ClientNav({
 }: ClientNavProps) {
   return (
     <ClientNavLinks
-      items={[
-        clientHomeNavItem,
-        clientDocumentsNavItem,
-        clientReportsNavItem,
-        ...(companySlug === "tresbe" ? [tresbePayrollNavItem] : []),
-        ...(invoicesEnabled ? [clientInvoicesNavItem] : []),
-      ]}
+      items={getClientNavItems({ companySlug, invoicesEnabled })}
       reportNotifications={reportNotifications}
       companyName={companyName}
       className={className}

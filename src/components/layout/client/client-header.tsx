@@ -1,46 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { MenuIcon, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Sparkles } from "lucide-react";
 
-import { ClientNav } from "@/components/layout/client/client-nav";
+import { BrandMark } from "@/components/layout/brand-mark";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
-import type { ClientReportNotifications } from "@/types/notifications";
 import type { Profile } from "@/types";
 
 type ClientHeaderProps = {
   profile: Profile;
   companyName?: string | null;
-  companySlug?: string | null;
   notificationUnreadCount: number;
-  reportNotifications: ClientReportNotifications;
-  invoicesEnabled?: boolean;
   className?: string;
 };
 
+/**
+ * Encabezado del cliente. En móvil los accesos viven en la barra inferior, así
+ * que aquí solo van la empresa, SinexIA y el menú del avatar.
+ */
 export function ClientHeader({
   profile,
   companyName,
-  companySlug,
   notificationUnreadCount,
-  reportNotifications,
-  invoicesEnabled = false,
   className,
 }: ClientHeaderProps) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
   return (
     <header
       className={cn(
@@ -49,43 +35,9 @@ export function ClientHeader({
       )}
     >
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-3 sm:px-6">
-        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-11 md:hidden"
-              aria-label="Abrir menú de navegación"
-            >
-              <MenuIcon className="size-4" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="flex w-72 flex-col p-6">
-            <SheetHeader className="mb-6 px-0">
-              <SheetTitle className="text-left text-base font-semibold">
-                {siteConfig.name}
-              </SheetTitle>
-              <SheetDescription className="sr-only">
-                Secciones de tu portal
-              </SheetDescription>
-            </SheetHeader>
-            <ClientNav
-              companyName={companyName}
-              companySlug={companySlug}
-              reportNotifications={reportNotifications}
-              invoicesEnabled={invoicesEnabled}
-              onNavigate={() => setMobileNavOpen(false)}
-              className="flex-1"
-            />
-          </SheetContent>
-        </Sheet>
-
-        <div className="min-w-0 flex-1 md:hidden">
-          <p className="truncate text-sm font-semibold">{siteConfig.name}</p>
-        </div>
-
-        <div className="hidden min-w-0 flex-1 md:block">
-          <p className="text-muted-foreground truncate text-sm font-medium">
+        <BrandMark className="size-8 md:hidden" />
+        <div className="min-w-0 flex-1">
+          <p className="text-muted-foreground max-md:text-foreground truncate text-sm font-medium max-md:font-semibold">
             {companyName ?? siteConfig.name}
           </p>
         </div>

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ClientBottomNav } from "@/components/layout/client/client-bottom-nav";
 import { ClientHeader } from "@/components/layout/client/client-header";
 import { ClientSidebar } from "@/components/layout/client/client-sidebar";
 import { SkipLink } from "@/components/layout/skip-link";
@@ -32,13 +33,10 @@ export function ClientWorkspaceShell({
       <ClientHeader
         profile={profile}
         companyName={companyName}
-        companySlug={companySlug}
         notificationUnreadCount={notificationUnreadCount}
-        reportNotifications={reportNotifications}
-        invoicesEnabled={invoicesEnabled}
       />
 
-      <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 py-5 sm:px-6 sm:py-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 gap-10 px-4 pt-5 pb-28 sm:px-6 sm:pt-6 md:pb-6">
         <ClientSidebar
           companyName={companyName}
           companySlug={companySlug}
@@ -50,6 +48,11 @@ export function ClientWorkspaceShell({
           {children}
         </main>
       </div>
+      <ClientBottomNav
+        companySlug={companySlug}
+        invoicesEnabled={invoicesEnabled}
+        reportNotifications={reportNotifications}
+      />
       <WhatsAppSupportButton />
     </div>
   );

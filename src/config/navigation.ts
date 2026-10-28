@@ -64,6 +64,25 @@ export const clientInvoicesNavItem: NavItem = {
   icon: Receipt,
 };
 
+export const CLIENT_NAV_MAX_ITEMS = 5;
+
+/** Menú del cliente: solo los módulos activos de su empresa (máximo 5). */
+export function getClientNavItems({
+  companySlug,
+  invoicesEnabled = false,
+}: {
+  companySlug?: string | null;
+  invoicesEnabled?: boolean;
+}): NavItem[] {
+  return [
+    clientHomeNavItem,
+    clientDocumentsNavItem,
+    clientReportsNavItem,
+    ...(companySlug === "tresbe" ? [tresbePayrollNavItem] : []),
+    ...(invoicesEnabled ? [clientInvoicesNavItem] : []),
+  ];
+}
+
 // Admin: máximo 6 ítems. Nómina y Vacaciones y enfermedad viven dentro de la
 // ficha de cada cliente.
 export const adminNavItems: NavItem[] = [
