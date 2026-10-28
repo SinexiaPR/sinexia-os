@@ -1,5 +1,7 @@
 export const siteConfig = {
   name: "SINEXIA",
+  firmName: "Sinexia PR",
+  firmTagline: "Administración",
   description:
     "Portal de clientes para cargar documentos, consultar reportes y comunicarse con Sinexia.",
   portalTitle: "Portal de Clientes",

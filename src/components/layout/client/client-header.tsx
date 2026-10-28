@@ -1,26 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { MenuIcon } from "lucide-react";
+import { MenuIcon, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-import { SignOutControl } from "@/components/auth/sign-out-control";
 import { ClientNav } from "@/components/layout/client/client-nav";
-import { NotificationBell } from "@/components/notifications/notification-bell";
-import { InstallMenuItem } from "@/components/pwa/install-menu-item";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserMenu } from "@/components/layout/user-menu";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -39,16 +29,6 @@ type ClientHeaderProps = {
   invoicesEnabled?: boolean;
   className?: string;
 };
-
-function getInitials(profile: Profile) {
-  const source = profile.full_name ?? profile.email;
-  return source
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
 
 export function ClientHeader({
   profile,
@@ -71,9 +51,13 @@ export function ClientHeader({
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-3 sm:px-6">
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-11 md:hidden"
+              aria-label="Abrir menú de navegación"
+            >
               <MenuIcon className="size-4" />
-              <span className="sr-only">Abrir navegación</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex w-72 flex-col p-6">
@@ -81,6 +65,9 @@ export function ClientHeader({
               <SheetTitle className="text-left text-base font-semibold">
                 {siteConfig.name}
               </SheetTitle>
+              <SheetDescription className="sr-only">
+                Secciones de tu portal
+              </SheetDescription>
             </SheetHeader>
             <ClientNav
               companyName={companyName}
@@ -103,41 +90,19 @@ export function ClientHeader({
           </p>
         </div>
 
-        <NotificationBell initialUnreadCount={notificationUnreadCount} />
+        <Button asChild variant="outline" className="h-10 gap-2">
+          <Link href="/dashboard/sia">
+            <Sparkles className="size-4" />
+            <span className="hidden sm:inline">Preguntar a SinexIA</span>
+            <span className="sr-only sm:hidden">SinexIA</span>
+          </Link>
+        </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="relative size-10 rounded-full p-0"
-            >
-              <Avatar className="size-9">
-                <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
-                  {getInitials(profile)}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  {profile.full_name ?? profile.email}
-                </p>
-                {companyName ? (
-                  <p className="text-muted-foreground text-xs">{companyName}</p>
-                ) : null}
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile">Perfil</Link>
-            </DropdownMenuItem>
-            <InstallMenuItem />
-            <DropdownMenuSeparator />
-            <SignOutControl />
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserMenu
+          profile={profile}
+          subtitle={companyName}
+          notificationUnreadCount={notificationUnreadCount}
+        />
       </div>
     </header>
   );

@@ -1,8 +1,13 @@
+"use client";
+
 import type { ReactNode } from "react";
 
 import { AdminHeader } from "@/components/layout/admin/admin-header";
 import { AdminSidebar } from "@/components/layout/admin/admin-sidebar";
+import { CommandPaletteProvider } from "@/components/layout/command-palette";
 import { WhatsAppSupportButton } from "@/components/support/whatsapp-support-button";
+import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
+import { cn } from "@/lib/utils";
 import type { NavBadgeCounts } from "@/types/notifications";
 import type { Profile } from "@/types";
 
@@ -19,27 +24,41 @@ export function AdminWorkspaceShell({
   badgeCounts,
   notificationUnreadCount,
 }: AdminWorkspaceShellProps) {
-  return (
-    <div className="flex min-h-svh bg-muted/30">
-      <div className="hidden w-56 shrink-0 border-r border-border/80 md:block">
-        <div className="sticky top-0 flex h-svh flex-col">
-          <AdminSidebar badgeCounts={badgeCounts} className="flex-1" />
-        </div>
-      </div>
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <AdminHeader
-          profile={profile}
-          badgeCounts={badgeCounts}
-          notificationUnreadCount={notificationUnreadCount}
-        />
-        <main className="flex-1">
-          <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6">
-            {children}
+  return (
+    <CommandPaletteProvider>
+      <div className="bg-muted/30 flex min-h-svh">
+        <div
+          className={cn(
+            "border-border/80 hidden shrink-0 border-r transition-[width] duration-200 md:block",
+            collapsed ? "w-16" : "w-56",
+          )}
+        >
+          <div className="sticky top-0 flex h-svh flex-col">
+            <AdminSidebar
+              badgeCounts={badgeCounts}
+              collapsed={collapsed}
+              onToggleCollapsed={() => setCollapsed(!collapsed)}
+              className="flex-1"
+            />
           </div>
-        </main>
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <AdminHeader
+            profile={profile}
+            badgeCounts={badgeCounts}
+            notificationUnreadCount={notificationUnreadCount}
+          />
+          <main id="contenido" className="flex-1">
+            <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6">
+              {children}
+            </div>
+          </main>
+        </div>
+        <WhatsAppSupportButton />
       </div>
-      <WhatsAppSupportButton />
-    </div>
+    </CommandPaletteProvider>
   );
 }

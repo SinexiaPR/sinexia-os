@@ -1,13 +1,13 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3,
   Banknote,
+  BarChart3,
+  Building2,
   CalendarDays,
   FileText,
-  Inbox,
-  LayoutDashboard,
-  Sparkles,
-  User,
+  Folder,
+  Home,
+  Receipt,
 } from "lucide-react";
 
 export type NavBadgeKey = "inbox" | "reports";
@@ -17,25 +17,40 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   badgeKey?: NavBadgeKey;
+  /** Rutas adicionales que mantienen activo este ítem (además de `href`). */
+  matchPrefixes?: string[];
 };
 
-export const clientNavItems: NavItem[] = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  {
-    title: "Inbox",
-    href: "/dashboard/inbox",
-    icon: Inbox,
-    badgeKey: "inbox",
-  },
-  {
-    title: "Reports",
-    href: "/dashboard/reports",
-    icon: BarChart3,
-    badgeKey: "reports",
-  },
-  { title: "SinexIA", href: "/dashboard/sia", icon: Sparkles },
-  { title: "Profile", href: "/dashboard/profile", icon: User },
-];
+/** Ítem activo si la ruta coincide con `href` o con alguno de `matchPrefixes`. */
+export function isNavItemActive(item: NavItem, pathname: string): boolean {
+  if (pathname === item.href) return true;
+  const prefixes = [item.href, ...(item.matchPrefixes ?? [])];
+  return prefixes.some(
+    (prefix) => prefix !== "/dashboard" && pathname.startsWith(prefix),
+  );
+}
+
+// Cliente: máximo 5 ítems, solo los módulos activos de su empresa.
+// SinexIA y Perfil viven en el encabezado / menú del avatar.
+export const clientHomeNavItem: NavItem = {
+  title: "Inicio",
+  href: "/dashboard",
+  icon: Home,
+};
+
+export const clientDocumentsNavItem: NavItem = {
+  title: "Documentos",
+  href: "/dashboard/inbox",
+  icon: Folder,
+  badgeKey: "inbox",
+};
+
+export const clientReportsNavItem: NavItem = {
+  title: "Reportes",
+  href: "/dashboard/reports",
+  icon: BarChart3,
+  badgeKey: "reports",
+};
 
 export const tresbePayrollNavItem: NavItem = {
   title: "Nóminas",
@@ -46,23 +61,31 @@ export const tresbePayrollNavItem: NavItem = {
 export const clientInvoicesNavItem: NavItem = {
   title: "Facturas",
   href: "/dashboard/invoices",
-  icon: FileText,
+  icon: Receipt,
 };
 
+// Admin: máximo 6 ítems. Nómina y Vacaciones y enfermedad viven dentro de la
+// ficha de cada cliente.
 export const adminNavItems: NavItem[] = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Calendario", href: "/dashboard/calendar", icon: CalendarDays },
+  { title: "Inicio", href: "/dashboard", icon: Home },
+  {
+    title: "Clientes",
+    href: "/dashboard/admin/companies",
+    icon: Building2,
+    matchPrefixes: ["/dashboard/payroll", "/dashboard/admin/leave-accrual"],
+  },
   {
     title: "Facturación",
     href: "/dashboard/admin/invoices",
     icon: FileText,
+    matchPrefixes: ["/dashboard/admin/settings/billing"],
   },
   {
-    title: "Inbox",
+    title: "Documentos",
     href: "/dashboard/inbox",
-    icon: Inbox,
+    icon: Folder,
     badgeKey: "inbox",
   },
-  { title: "Reports", href: "/dashboard/reports", icon: BarChart3 },
-  { title: "Profile", href: "/dashboard/profile", icon: User },
+  { title: "Reportes", href: "/dashboard/reports", icon: BarChart3 },
+  { title: "Calendario", href: "/dashboard/calendar", icon: CalendarDays },
 ];

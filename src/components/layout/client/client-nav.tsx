@@ -2,8 +2,10 @@
 
 import { ClientNavLinks } from "@/components/layout/nav-link-with-badge";
 import {
+  clientDocumentsNavItem,
+  clientHomeNavItem,
   clientInvoicesNavItem,
-  clientNavItems,
+  clientReportsNavItem,
   tresbePayrollNavItem,
 } from "@/config/navigation";
 import type { ClientReportNotifications } from "@/types/notifications";
@@ -28,10 +30,11 @@ export function ClientNav({
   return (
     <ClientNavLinks
       items={[
-        clientNavItems[0],
+        clientHomeNavItem,
+        clientDocumentsNavItem,
+        clientReportsNavItem,
         ...(companySlug === "tresbe" ? [tresbePayrollNavItem] : []),
         ...(invoicesEnabled ? [clientInvoicesNavItem] : []),
-        ...clientNavItems.slice(1),
       ]}
       reportNotifications={reportNotifications}
       companyName={companyName}
