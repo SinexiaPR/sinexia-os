@@ -65,6 +65,8 @@ npx supabase db push
 
 For production, apply migrations **before** deploying application code that depends on new schema.
 
+Migrations are for schema, policies and functions only. Operational data loads are not migrations: see [DATA_LOADS.md](./DATA_LOADS.md).
+
 ### Storage buckets
 
 | Bucket | Access |
@@ -155,6 +157,7 @@ Do not push secrets. Use `.env.local` locally and Vercel env vars in deployed en
 - [ ] Supabase Auth redirect URLs include production domain
 - [ ] Storage buckets and RLS verified
 - [ ] `npm run build` passes on the release branch
+- [ ] `npm run test:isolation` passes (clientes no ven datos de otras empresas ni ejecutan RPC de admin)
 
 ### Deploy
 
