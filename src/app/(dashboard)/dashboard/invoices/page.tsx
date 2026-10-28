@@ -1,30 +1,37 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Receipt } from "lucide-react";
 
+import { ClientInvoiceList } from "@/components/invoices/client-invoice-list";
 import { InvoicePreview } from "@/components/invoices/invoice-preview";
 import { InvoiceViewTracker } from "@/components/invoices/invoice-view-tracker";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { requireClient } from "@/lib/auth/session";
+import { formatMoneyByCurrency, summarizeInvoices } from "@/lib/invoices/list";
 import {
   getBillingSettings,
   getInvoice,
   getInvoices,
   shouldShowCompanyInvoices,
 } from "@/services/invoices";
-import type { InvoiceStatus } from "@/types/invoices";
+
+export const metadata: Metadata = {
+  title: "Facturas",
+};
 
 export const dynamic = "force-dynamic";
 
-const statusLabels: Record<InvoiceStatus, string> = {
-  draft: "Borrador",
-  issued: "Pendiente de pago",
-  sent: "Pendiente de pago",
-  viewed: "Pendiente de pago",
-  paid: "Pagada",
-  overdue: "Vencida",
-  cancelled: "Cancelada",
-};
+function todayInPuertoRico() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Puerto_Rico",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 export default async function ClientInvoicesPage({
   searchParams,
@@ -42,71 +49,48 @@ export default async function ClientInvoicesPage({
   const selectedId = invoiceId;
   const selected = selectedId ? await getInvoice(selectedId) : null;
   const settings = selected?.invoice ? await getBillingSettings() : null;
+  const summary = summarizeInvoices(invoices, todayInPuertoRico());
+  const pendingCount = invoices.filter((invoice) =>
+    ["issued", "sent", "viewed", "overdue"].includes(invoice.status),
+  ).length;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
-        eyebrow="Portal del cliente"
         title="Facturas"
-        description="Consulta y descarga las facturas publicadas para tu compañía."
+        description="Consulte y descargue las facturas que Sinexia le ha emitido."
       />
-      <SurfaceCard padding="sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="text-muted-foreground border-b text-xs uppercase">
-              <tr>
-                <th className="px-3 py-3">Factura</th>
-                <th>Fecha</th>
-                <th>Vence</th>
-                <th>Total</th>
-                <th>Estado</th>
-                <th className="text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((invoice) => (
-                <tr key={invoice.id} className="border-b last:border-0">
-                  <td className="px-3 py-4 font-medium">
-                    #{invoice.invoice_number}
-                  </td>
-                  <td>{invoice.invoice_date ?? "—"}</td>
-                  <td>{invoice.due_date ?? "—"}</td>
-                  <td className="font-medium">
-                    {new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: invoice.currency,
-                    }).format(Number(invoice.total))}
-                  </td>
-                  <td>{statusLabels[invoice.status]}</td>
-                  <td className="space-x-2 text-right">
-                    <Button asChild size="sm" variant="outline">
-                      <a href={`/dashboard/invoices?invoiceId=${invoice.id}`}>
-                        Ver factura
-                      </a>
-                    </Button>
-                    {invoice.pdf_storage_path ? (
-                      <Button asChild size="sm" variant="outline">
-                        <a href={`/api/invoices/${invoice.id}/download`}>
-                          Descargar PDF
-                        </a>
-                      </Button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!invoices.length ? (
-            <p className="text-muted-foreground py-10 text-center text-sm">
-              No tienes facturas disponibles.
+
+      {invoices.length ? (
+        <>
+          <SurfaceCard padding="sm">
+            <p className="text-muted-foreground text-xs font-medium">
+              Pendiente de pago
             </p>
-          ) : null}
-        </div>
-      </SurfaceCard>
+            <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
+              {formatMoneyByCurrency(summary.pending)}
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {pendingCount} {pendingCount === 1 ? "factura" : "facturas"}
+            </p>
+          </SurfaceCard>
+          <ClientInvoiceList invoices={invoices} selectedId={selectedId} />
+        </>
+      ) : (
+        <SurfaceCard padding="sm" className="p-0">
+          <EmptyState
+            icon={Receipt}
+            title="No tienes facturas disponibles."
+            description="Cuando Sinexia emita una factura para su empresa, aparecerá aquí."
+          />
+        </SurfaceCard>
+      )}
+
       {selected?.invoice ? (
-        <div className="space-y-4">
+        <section id="factura" className="scroll-mt-20 space-y-4">
           <InvoiceViewTracker invoiceId={selected.invoice.id} />
           {selected.invoice.pdf_storage_path ? (
-            <Button asChild>
+            <Button asChild className="h-11">
               <a href={`/api/invoices/${selected.invoice.id}/download`}>
                 Descargar PDF
               </a>
@@ -117,7 +101,7 @@ export default async function ClientInvoicesPage({
             items={selected.items}
             settings={settings}
           />
-        </div>
+        </section>
       ) : null}
     </div>
   );

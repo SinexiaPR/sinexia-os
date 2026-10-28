@@ -38,6 +38,7 @@ import { SurfaceCard } from "@/components/ui/surface-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { paginate } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
 import { calculatePayrollEntry } from "@/lib/payroll/calculations";
 import {
   type PayrollEmployee,
@@ -529,7 +530,13 @@ export function PayrollWorkspace({
           ) : null}
 
           {selected ? (
-            <div className="bg-background/95 sticky bottom-0 z-20 -mx-4 border-t px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+            <div
+              className={cn(
+                "bg-background/95 sticky z-20 -mx-4 border-t px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6",
+                // En el cliente la barra inferior de navegación ocupa 4 rem en móvil.
+                isAdmin ? "bottom-0" : "bottom-16 md:bottom-0",
+              )}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3 pr-16">
                 <p className="text-sm">
                   <span className="text-muted-foreground">

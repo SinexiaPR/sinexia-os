@@ -7,6 +7,15 @@ import { AdminDocumentFilters } from "@/components/dashboard/admin-document-filt
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/ui/surface-card";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import {
+  CLIENT_DOCUMENT_FILTERS,
+  countClientDocuments,
+  filterClientDocuments,
+  parseClientDocumentFilter,
+} from "@/lib/documents/client-list";
+import { paginate } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
 import { requireAuth } from "@/lib/auth/session";
 import {
   getAllDocuments,
@@ -19,6 +28,8 @@ import { getViewedDocumentIds } from "@/services/notifications";
 export const metadata: Metadata = {
   title: "Documentos",
 };
+
+const DOCUMENTS_PAGE_SIZE = 15;
 
 export default async function InboxPage({
   searchParams,
@@ -37,7 +48,7 @@ export default async function InboxPage({
     uploadDate: value("uploadDate"),
   };
 
-  const items =
+  const allItems =
     profile.role === "admin"
       ? await getAllDocuments(filters)
       : profile.company_id
@@ -47,7 +58,26 @@ export default async function InboxPage({
   const viewedDocumentIds = await getViewedDocumentIds(profile.id);
 
   const isClient = profile.role === "client";
-  const hasFilters = Object.values(filters).some(Boolean);
+  const clientFilter = parseClientDocumentFilter(filters.status);
+  const clientCounts = countClientDocuments(allItems);
+  // El cliente filtra por grupos de estado; el admin ya filtró en la consulta.
+  const items = isClient
+    ? filterClientDocuments(allItems, clientFilter)
+    : allItems;
+  const hasFilters = isClient
+    ? clientFilter !== "all"
+    : Object.values(filters).some(Boolean);
+  const pageNumber = Number(value("page")) || 1;
+  const view = paginate(items, pageNumber, DOCUMENTS_PAGE_SIZE);
+  const hrefForPage = (nextPage: number) => {
+    const query = new URLSearchParams();
+    for (const [key, current] of Object.entries(filters)) {
+      if (current) query.set(key, current);
+    }
+    if (nextPage > 1) query.set("page", String(nextPage));
+    const text = query.toString();
+    return text ? `/dashboard/inbox?${text}` : "/dashboard/inbox";
+  };
   const companies = profile.role === "admin" ? await getCompanies() : [];
 
   return (
@@ -88,8 +118,41 @@ export default async function InboxPage({
         <AdminDocumentFilters companies={companies} filters={filters} />
       ) : null}
 
+      {isClient ? (
+        <nav
+          aria-label="Estado de los documentos"
+          className="flex flex-wrap gap-1.5"
+        >
+          {CLIENT_DOCUMENT_FILTERS.map((chip) => {
+            const active = clientFilter === chip.value;
+            return (
+              <Link
+                key={chip.value}
+                href={
+                  chip.value === "all"
+                    ? "/dashboard/inbox"
+                    : `/dashboard/inbox?status=${chip.value}`
+                }
+                aria-current={active ? "true" : undefined}
+                className={cn(
+                  "focus-visible:ring-ring inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-background hover:bg-muted",
+                )}
+              >
+                {chip.label}
+                <span className="tabular-nums opacity-80">
+                  {clientCounts[chip.value]}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
+
       <DocumentList
-        documents={items}
+        documents={view.items}
         title={isClient ? "Sus documentos" : "Todos los documentos"}
         showCompany={profile.role === "admin"}
         viewedDocumentIds={viewedDocumentIds}
@@ -97,26 +160,32 @@ export default async function InboxPage({
         isAdmin={profile.role === "admin"}
         emptyMessage={
           isClient
-            ? "Aún no tiene documentos"
+            ? hasFilters
+              ? "No hay documentos en este estado"
+              : "Aún no tiene documentos"
             : hasFilters
               ? "No hay documentos con estos filtros"
               : "Todavía no hay documentos"
         }
         emptyDescription={
           isClient
-            ? "Envíe el primero con el formulario de arriba y Sinexia lo recibirá de inmediato."
+            ? hasFilters
+              ? "Pruebe con otro estado."
+              : "Envíe el primero con el formulario de arriba y Sinexia lo recibirá de inmediato."
             : hasFilters
               ? "Prueba con otro estado o quita los filtros."
               : "Cuando una empresa envíe un archivo, aparecerá aquí para que lo revises."
         }
         emptyAction={
-          !isClient && hasFilters ? (
+          hasFilters ? (
             <Button asChild variant="outline">
               <Link href="/dashboard/inbox">Quitar filtros</Link>
             </Button>
           ) : undefined
         }
       />
+
+      <PaginationLinks view={view} hrefForPage={hrefForPage} />
     </div>
   );
 }

@@ -20,6 +20,15 @@ Además: sidebar colapsable (estado en `localStorage`), paleta `Ctrl/Cmd + K`, m
 - **Reportes:** lista como vista principal; «Publicar reporte» abre un panel lateral. «Diagnóstico SinexIA» pasó a **Configuración › Herramientas técnicas** (colapsada).
 - **Calendario:** filtros dentro de un popover con contador; agenda limitada a 30 días con las series repetidas (p. ej. NÓMINA SIBARITA) como una sola entrada.
 - **Nómina (Sibarita):** pestañas Semana actual · Empleados y tarifas · Historial · Vacaciones y enfermedad; alerta destacada de «tarifa por revisar»; empleados sin horas en acordeón; barra de total fija abajo; historial paginado; Vacaciones y enfermedad en 6 columnas con detalle expandible y un único aviso por fechas de contratación faltantes.
+- **Vistas del cliente:**
+  - **Navegación:** en móvil, barra inferior con sus accesos (máx. 5) en lugar de hamburguesa; encabezado con empresa, "Preguntar a SinexIA" y avatar.
+  - **Inicio:** saludo, botón principal "Subir documento", aviso si hay documentos con "Falta información", resumen de 3 cifras, último reporte y actividad. Se quitaron los accesos rápidos que repetían el menú.
+  - **Documentos:** chips por estado con conteo (Todos, Pendientes, Procesados, Falta información) y paginación de 15 (antes se firmaban las URLs de todos los archivos a la vez).
+  - **Reportes:** tarjetas más ligeras con "Ver reporte" como acción principal, análisis de SinexIA en un acordeón, filtro por tipo y paginación.
+  - **Nóminas (Tresbe):** resumen de la semana arriba, detalle por empleado en 3 a 5 columnas con fila expandible, total fijo abajo y semanas anteriores paginadas.
+  - **Facturas:** resumen "Pendiente de pago", tabla de 3 columnas en móvil y paginación.
+  - **SinexIA:** todo en español (preguntas sugeridas incluidas), filtros en un panel, historial en acordeón y campo de pregunta fijo abajo.
+- **Logo:** el logo de Sinexia (infinito con flechas, fondo azul) reemplaza la "S" en la portada, el login y los menús. Se quitó "Iniciar sesión" de la esquina superior derecha de la portada; queda el botón principal.
 - **Portada y login:** marca, propuesta de valor, tres beneficios, enlace a sinexiapr.com; login centrado con error y estado de carga claros.
 - **Transversal:** español en toda la interfaz visible, sistema de diseño (tokens, Table, Tabs, Accordion, Drawer, Modal, Combobox, FilterPanel, Toast, EmptyState, Skeleton), filtros en hoja inferior en móvil, foco visible, enlace «Saltar al contenido», objetivos táctiles de 44 px, modo oscuro preparado (no activado).
 
@@ -42,7 +51,8 @@ Además: sidebar colapsable (estado en `localStorage`), paleta `Ctrl/Cmd + K`, m
 
 - **Capturas con sesión real y prueba de aislamiento admin/cliente:** necesitan un Supabase de pruebas con un usuario admin y uno cliente. No se verificó en este entorno; los cambios nuevos de datos son de solo lectura, exigen `requireAdmin` y respetan RLS, pero la prueba real queda por hacer.
 - **Nómina de Tresbe** (`tresbe-payroll/admin-workspace.tsx`, ~1.800 líneas): solo recibió el encabezado y pestañas de la ficha; su interior (cálculo de propinas y turnos) no se reorganizó para no arriesgar los cuadres.
-- **Vistas de cliente** (Inicio, Documentos, Reportes, Nóminas, Facturas): solo cambió la navegación, el idioma y los componentes compartidos; falta un rediseño propio.
+- **Reportes del cliente y nómina semanal de Sibarita (vista del cliente):** rediseñados pero sin captura ni prueba con datos reales.
+- **Logo:** se redibujó como SVG (`public/logo-sinexia.svg`) a partir de la imagen enviada, porque el archivo original no llegó al servidor. Para usar el original, reemplace ese archivo (mismo nombre). Los íconos de la app instalada (`public/icons/*.png`) siguen con la "S".
 - **Cut Meat:** textos que son nombres de reportes bancarios o de QuickBooks (p. ej. «Deposit Accounts Activity Summary», «Tr Type») siguen en inglés a propósito.
 - Orden por «Fecha de contratación» y por «Años de servicio» ya no está en la tabla de Vacaciones y enfermedad (esos datos están en el detalle de cada fila).
 - Vista previa de Vercel: se publica con cada commit del PR #122.

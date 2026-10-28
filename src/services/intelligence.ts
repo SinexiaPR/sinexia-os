@@ -1,3 +1,4 @@
+import { buildSuggestedQuestionsFromProfiles } from "@/lib/intelligence/suggestions";
 import type {
   DetectedDocumentType,
   DocumentProcessingStatus,
@@ -124,9 +125,8 @@ export async function getCompletedProcessingForCompany(companyId: string) {
 }
 
 export async function getProfilesForCompanySuggestions(companyId: string) {
-  const { getCompletedProcessingIds } = await import(
-    "@/lib/intelligence/profiles/store"
-  );
+  const { getCompletedProcessingIds } =
+    await import("@/lib/intelligence/profiles/store");
   const processingIds = await getCompletedProcessingIds(companyId);
   if (!processingIds.length) {
     return [];
@@ -144,100 +144,14 @@ export async function getProfilesForCompanySuggestions(companyId: string) {
     .limit(12);
 
   if (error) {
-    console.error("[intelligence] getProfilesForCompanySuggestions", error.message);
+    console.error(
+      "[intelligence] getProfilesForCompanySuggestions",
+      error.message,
+    );
     return [];
   }
 
   return data ?? [];
-}
-
-export function buildSuggestedQuestionsFromProfiles(
-  profiles: Array<{
-    document_type: DetectedDocumentType | null;
-    period?: string | null;
-    structured_data?: Record<string, unknown> | null;
-  }>,
-): string[] {
-  if (!profiles.length) {
-    return [
-      "¿Qué documentos tengo analizados?",
-      "Resumime el último reporte disponible.",
-    ];
-  }
-
-  const types = new Set(
-    profiles.map((p) => p.document_type).filter(Boolean),
-  );
-  const suggestions: string[] = [];
-
-  if (types.has("payroll") || types.has("homebase_export")) {
-    suggestions.push(
-      "What is the payroll total?",
-      "How many employees?",
-      "How many overtime hours?",
-      "Compare payroll with previous week.",
-    );
-  }
-
-  if (types.has("accounts_receivable") || types.has("custom_aging")) {
-    suggestions.push(
-      "What is my total receivable?",
-      "Who owes the most?",
-      "How many invoices exist?",
-      "How many customers exist?",
-      "Compare with previous report.",
-    );
-  }
-
-  if (types.has("accounts_payable")) {
-    suggestions.push(
-      "Total payables",
-      "How many vendors?",
-      "Compare this AP aging with the previous report.",
-    );
-  }
-
-  if (types.has("profit_and_loss") || types.has("quickbooks_report")) {
-    suggestions.push(
-      "What is revenue?",
-      "What are expenses?",
-      "What is net income?",
-      "Summarize this financial report.",
-    );
-  }
-
-  if (types.has("balance_sheet")) {
-    suggestions.push(
-      "What are total assets?",
-      "What are liabilities?",
-      "What is equity?",
-    );
-  }
-
-  if (types.has("bank_reconciliation")) {
-    suggestions.push(
-      "What is the reconciliation difference?",
-      "Compare with previous reconciliation.",
-    );
-  }
-
-  if (types.has("bank_statement") || types.has("statement")) {
-    suggestions.push(
-      "What is the closing balance?",
-      "Compare with previous statement.",
-    );
-  }
-
-  if (profiles.length >= 2) {
-    suggestions.push(
-      "What changed since the previous upload?",
-      "Compare the last two reports.",
-    );
-  }
-
-  suggestions.push("Summarize this report.");
-
-  return [...new Set(suggestions)].slice(0, 10);
 }
 
 /** @deprecated Use buildSuggestedQuestionsFromProfiles */
@@ -257,3 +171,5 @@ export function buildSuggestedQuestions(
     })),
   );
 }
+
+export { buildSuggestedQuestionsFromProfiles };

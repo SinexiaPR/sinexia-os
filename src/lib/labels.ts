@@ -12,6 +12,17 @@ export const INVOICE_STATUS_LABELS = {
   cancelled: "Cancelada",
 } as const;
 
+/** Estados de factura tal como los ve el cliente (emitida/enviada/vista = por pagar). */
+export const CLIENT_INVOICE_STATUS_LABELS = {
+  draft: "Borrador",
+  issued: "Pendiente de pago",
+  sent: "Pendiente de pago",
+  viewed: "Pendiente de pago",
+  paid: "Pagada",
+  overdue: "Vencida",
+  cancelled: "Cancelada",
+} as const;
+
 export type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
 /** Color semántico de cada estado de factura. */
@@ -23,6 +34,19 @@ export const INVOICE_STATUS_TONES: Record<
   issued: "info",
   sent: "info",
   viewed: "info",
+  paid: "success",
+  overdue: "danger",
+  cancelled: "neutral",
+};
+
+export const CLIENT_INVOICE_STATUS_TONES: Record<
+  keyof typeof CLIENT_INVOICE_STATUS_LABELS,
+  Tone
+> = {
+  draft: "neutral",
+  issued: "warning",
+  sent: "warning",
+  viewed: "warning",
   paid: "success",
   overdue: "danger",
   cancelled: "neutral",

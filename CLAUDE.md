@@ -31,7 +31,8 @@ Portal interno de Sinexia (firma de servicios administrativos, Puerto Rico): cli
 - Sistema de diseño y reglas de uso: `docs/redesign/DESIGN_SYSTEM.md`. Componentes en `src/components/ui/`.
 - Etiquetas legibles de valores internos (estados, prioridades, tipos): `src/lib/labels.ts`; no mostrar enums crudos.
 - Navegación en `src/config/navigation.ts` (admin: 6 ítems; cliente: máx. 5). La ficha de empresa tiene pestañas por módulo en `src/lib/companies/tabs.ts`.
-- Lógica pura de pantallas con test: `test:admin-home`, `test:company-tabs`, `test:invoice-list`, `test:calendar-agenda`.
+- Lógica pura de pantallas con test: `test:admin-home`, `test:company-tabs`, `test:invoice-list`, `test:calendar-agenda`, `test:navigation`, `test:client-documents`, `test:sinexia-suggestions`.
+- Las preguntas sugeridas de SinexIA están en español; `test:sinexia-suggestions` comprueba que cada una active la misma intención que su original en inglés (`src/lib/intelligence/intents.ts`).
 - Varios tests (`test:invoice-visibility`, `test:billing-batch`, `test:company-workspace`) leen el código fuente de componentes: si mueves un texto o un enlace de lugar, actualiza el test.
 
 ## Documentación por tema (lee solo la que toque)

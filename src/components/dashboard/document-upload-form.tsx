@@ -258,19 +258,19 @@ export function DocumentUploadForm() {
       </div>
 
       {localError ? (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-md bg-danger-soft text-danger px-4 py-3 text-sm">
           {localError}
         </p>
       ) : null}
 
       {state.error ? (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-md bg-danger-soft text-danger px-4 py-3 text-sm">
           {state.error}
         </p>
       ) : null}
 
       {state.success ? (
-        <p className="rounded-md bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+        <p className="rounded-md bg-success-soft text-success px-4 py-3 text-sm font-medium">
           Documento recibido por Sinexia.
         </p>
       ) : null}
