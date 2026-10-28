@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BrandMark } from "@/components/layout/brand-mark";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 
@@ -10,18 +11,13 @@ type PortalHeaderProps = {
 export function PortalHeader({ className }: PortalHeaderProps) {
   return (
     <header className={cn("w-full", className)}>
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-5xl items-center px-6">
         <Link
           href="/"
-          className="text-xs font-semibold tracking-[0.18em] text-foreground uppercase"
+          className="focus-visible:ring-ring flex items-center gap-2.5 rounded-md text-sm font-semibold focus-visible:ring-2 focus-visible:outline-none"
         >
-          {siteConfig.name}
-        </Link>
-        <Link
-          href="/login"
-          className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
-        >
-          Iniciar sesión
+          <BrandMark className="size-9" />
+          {siteConfig.firmName}
         </Link>
       </div>
     </header>

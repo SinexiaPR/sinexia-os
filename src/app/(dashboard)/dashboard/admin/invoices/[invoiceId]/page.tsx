@@ -1,3 +1,4 @@
+import { INVOICE_STATUS_LABELS, labelFor } from "@/lib/labels";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -40,7 +41,11 @@ export default async function InvoiceDetailPage({
     return (
       <div className="space-y-6">
         <PageHeader
-          eyebrow="Facturación"
+          breadcrumbs={[
+            { label: "Facturación", href: "/dashboard/admin/invoices" },
+            { label: title, href: `/dashboard/admin/invoices/${invoice.id}` },
+            { label: "Editar" },
+          ]}
           title={`Editar ${title.toLowerCase()}`}
         />
         <InvoiceEditor
@@ -55,9 +60,12 @@ export default async function InvoiceDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Facturación"
+        breadcrumbs={[
+          { label: "Facturación", href: "/dashboard/admin/invoices" },
+          { label: title },
+        ]}
         title={title}
-        description={`${invoice.billing_name_snapshot ?? invoice.companies?.name ?? "Cliente"} · ${invoice.status}`}
+        description={`${invoice.billing_name_snapshot ?? invoice.companies?.name ?? "Cliente"} · ${labelFor(INVOICE_STATUS_LABELS, invoice.status)}`}
         action={
           <Button asChild variant="outline">
             <Link href={`/dashboard/admin/invoices/${invoice.id}/preview`}>

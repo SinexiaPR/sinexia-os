@@ -18,10 +18,17 @@ export default async function BillingBatchClientsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        breadcrumbs={[
+          { label: "Facturación", href: "/dashboard/admin/invoices" },
+          { label: "Clientes facturables" },
+        ]}
         title="Clientes facturables"
         description='Quiénes entran en "Generar facturas de la semana", con qué monto (fijo o del sistema) y qué descripción de línea. Desactivar en vez de borrar -- nunca se pierde el historial.'
       />
-      <BillingClientsEditor clients={clients} companies={companiesRes.data ?? []} />
+      <BillingClientsEditor
+        clients={clients}
+        companies={companiesRes.data ?? []}
+      />
     </div>
   );
 }

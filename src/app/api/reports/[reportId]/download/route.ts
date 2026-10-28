@@ -27,10 +27,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (
-    profile.role === "client" &&
-    profile.company_id !== report.company_id
-  ) {
+  if (profile.role === "client" && profile.company_id !== report.company_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -40,7 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   if (signError || !signed?.signedUrl) {
     return NextResponse.json(
-      { error: "Unable to create download link" },
+      { error: "No se pudo crear el enlace de descarga" },
       { status: 500 },
     );
   }

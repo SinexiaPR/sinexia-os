@@ -28,50 +28,51 @@ export type ReportCategoryMeta = {
   icon: LucideIcon;
 };
 
-export const REPORT_CATEGORY_META: Record<ReportCategory, ReportCategoryMeta> = {
-  Aging: {
-    label: "Aging",
-    clientLabel: "Antigüedad de saldos",
-    adminOptionLabel: "Aging",
-    icon: Clock3,
-  },
-  "Profit & Loss": {
-    label: "Profit & Loss",
-    clientLabel: "Estado de resultados",
-    adminOptionLabel: "Profit & Loss",
-    icon: TrendingUp,
-  },
-  "Balance Sheet": {
-    label: "Balance Sheet",
-    clientLabel: "Balance general",
-    adminOptionLabel: "Balance Sheet",
-    icon: FileSpreadsheet,
-  },
-  "Bank Reconciliation": {
-    label: "Bank Reconciliation",
-    clientLabel: "Conciliación Bancaria",
-    adminOptionLabel: "Bank Reconciliation (Conciliación Bancaria)",
-    icon: ArrowLeftRight,
-  },
-  Payroll: {
-    label: "Payroll",
-    clientLabel: "Nómina",
-    adminOptionLabel: "Payroll",
-    icon: Users,
-  },
-  Statement: {
-    label: "Statement",
-    clientLabel: "Estado de cuenta",
-    adminOptionLabel: "Statement",
-    icon: FileText,
-  },
-  "Custom Report": {
-    label: "Custom Report",
-    clientLabel: "Reporte personalizado",
-    adminOptionLabel: "Custom Report",
-    icon: FileBarChart2,
-  },
-};
+export const REPORT_CATEGORY_META: Record<ReportCategory, ReportCategoryMeta> =
+  {
+    Aging: {
+      label: "Antigüedad de saldos",
+      clientLabel: "Antigüedad de saldos",
+      adminOptionLabel: "Antigüedad de saldos",
+      icon: Clock3,
+    },
+    "Profit & Loss": {
+      label: "Estado de resultados",
+      clientLabel: "Estado de resultados",
+      adminOptionLabel: "Estado de resultados",
+      icon: TrendingUp,
+    },
+    "Balance Sheet": {
+      label: "Balance general",
+      clientLabel: "Balance general",
+      adminOptionLabel: "Balance general",
+      icon: FileSpreadsheet,
+    },
+    "Bank Reconciliation": {
+      label: "Conciliación Bancaria",
+      clientLabel: "Conciliación Bancaria",
+      adminOptionLabel: "Conciliación Bancaria",
+      icon: ArrowLeftRight,
+    },
+    Payroll: {
+      label: "Nómina",
+      clientLabel: "Nómina",
+      adminOptionLabel: "Nómina",
+      icon: Users,
+    },
+    Statement: {
+      label: "Estado de cuenta",
+      clientLabel: "Estado de cuenta",
+      adminOptionLabel: "Estado de cuenta",
+      icon: FileText,
+    },
+    "Custom Report": {
+      label: "Reporte personalizado",
+      clientLabel: "Reporte personalizado",
+      adminOptionLabel: "Reporte personalizado",
+      icon: FileBarChart2,
+    },
+  };
 
 const LEGACY_CATEGORY_ALIASES: Record<string, ReportCategory> = {
   "Bank Statement": "Statement",
@@ -89,7 +90,9 @@ export function resolveReportCategory(value: string): ReportCategory | null {
   return LEGACY_CATEGORY_ALIASES[value] ?? null;
 }
 
-export function getReportCategoryMeta(value: string): ReportCategoryMeta | null {
+export function getReportCategoryMeta(
+  value: string,
+): ReportCategoryMeta | null {
   const category = resolveReportCategory(value);
 
   if (!category) {

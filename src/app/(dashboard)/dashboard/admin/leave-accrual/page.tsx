@@ -2,7 +2,10 @@ import { LeaveAccrualReport } from "@/components/leave-accrual/leave-accrual-rep
 import { PageHeader } from "@/components/layout/page-header";
 import { requireAdmin } from "@/lib/auth/session";
 import { resolveSibaritaCompany } from "@/services/payroll";
-import { getLeaveAccrualReport, getLeaveAccrualSettings } from "@/services/leave-accrual";
+import {
+  getLeaveAccrualReport,
+  getLeaveAccrualSettings,
+} from "@/services/leave-accrual";
 import { resolveTresbeCompany } from "@/services/tresbe-payroll";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +21,9 @@ export default async function LeaveAccrualPage() {
 
   const companySettings = await Promise.all(
     [sibaritaCompany, tresbeCompany]
-      .filter((company): company is NonNullable<typeof company> => company != null)
+      .filter(
+        (company): company is NonNullable<typeof company> => company != null,
+      )
       .map(async (company) => ({
         companyId: company.id,
         companyName: company.name,
@@ -30,6 +35,10 @@ export default async function LeaveAccrualPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        breadcrumbs={[
+          { label: "Clientes", href: "/dashboard/admin/companies" },
+          { label: "Vacaciones y enfermedad" },
+        ]}
         title="Vacaciones y enfermedad"
         description="Balance de acumulación de vacaciones y enfermedad para empleados W2 de nómina, calculado automáticamente desde las nóminas semanales de Sibarita y Tresbe."
       />

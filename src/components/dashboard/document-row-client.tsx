@@ -10,6 +10,8 @@ import { DocumentStatusSelect } from "@/components/dashboard/document-status-sel
 import { DocumentViewLink } from "@/components/dashboard/document-view-link";
 import { DocumentViewedIndicator } from "@/components/dashboard/document-viewed-indicator";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { DOCUMENT_PRIORITY_LABELS, labelFor } from "@/lib/labels";
 import {
   addLocalViewedDocument,
   useIsDocumentViewed,
@@ -58,7 +60,7 @@ export function DocumentRowClient({
     addLocalViewedDocument(profileId, document.id);
   }
 
-  const fileName = document.file_url.split("/").pop() ?? "Document";
+  const fileName = document.file_url.split("/").pop() ?? "Documento";
   const displayType = getDocumentDisplayType(document);
 
   return (
@@ -73,15 +75,12 @@ export function DocumentRowClient({
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-foreground font-medium">{displayType}</p>
-          {document.priority === "urgent" ? (
-            <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-600/15 ring-inset">
-              {isAdmin ? "Urgente" : "Urgent"}
-            </span>
-          ) : (
-            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium">
-              {isAdmin ? "Rutina" : "Routine"}
-            </span>
-          )}
+          <StatusBadge
+            tone={document.priority === "urgent" ? "danger" : "neutral"}
+            dot={document.priority === "urgent"}
+          >
+            {labelFor(DOCUMENT_PRIORITY_LABELS, document.priority)}
+          </StatusBadge>
           <DocumentStatusBadge status={document.status} />
           <DocumentViewedIndicator isViewed={isViewed} />
         </div>

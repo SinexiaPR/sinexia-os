@@ -31,9 +31,11 @@ const action = read("src/actions/billing-batch.ts");
 const service = read("src/services/billing-batch.ts");
 const generator = read("src/components/invoices/weekly-batch-generator.tsx");
 const editor = read("src/components/invoices/billing-clients-editor.tsx");
-const invoicesPage = read(
-  "src/app/(dashboard)/dashboard/admin/invoices/page.tsx",
-);
+// Los accesos secundarios (lote semanal, clientes facturables) viven en el
+// menú "Más acciones" de la pantalla de Facturación.
+const invoicesPage =
+  read("src/app/(dashboard)/dashboard/admin/invoices/page.tsx") +
+  read("src/components/invoices/invoice-more-actions.tsx");
 const zipRoute = read("src/app/api/invoices/batch-download/route.ts");
 
 // ---------------------------------------------------------------------

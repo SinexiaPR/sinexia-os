@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
+  CalendarPlus,
   ChevronDown,
   FileText,
+  History,
   Plus,
   RotateCcw,
   Save,
@@ -22,11 +23,22 @@ import {
   submitWeeklyPayroll,
   type PayrollEmployeeInput,
 } from "@/actions/payroll";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { PayrollStatusHeader } from "@/components/payroll/payroll-status-header";
+import { PaginationBar } from "@/components/ui/pagination-bar";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
-import { UnderlineTabs } from "@/components/ui/underline-tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/toast";
+import { paginate } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
 import { calculatePayrollEntry } from "@/lib/payroll/calculations";
 import {
   type PayrollEmployee,
@@ -46,6 +58,15 @@ const statusLabel: Record<WeeklyPayroll["status"], string> = {
   submitted: "Enviada",
   approved: "Aprobada",
 };
+const statusTone: Record<
+  WeeklyPayroll["status"],
+  "warning" | "info" | "success"
+> = {
+  draft: "warning",
+  submitted: "info",
+  approved: "success",
+};
+type PayrollTab = "weekly" | "employees" | "history" | "leave";
 
 export function PayrollWorkspace({
   company,
@@ -54,6 +75,7 @@ export function PayrollWorkspace({
   payrolls,
   selected,
   entries,
+  leaveSlot,
 }: {
   company: Company;
   isAdmin: boolean;
@@ -61,8 +83,11 @@ export function PayrollWorkspace({
   payrolls: WeeklyPayroll[];
   selected: WeeklyPayroll | null;
   entries: WeeklyPayrollEntry[];
+  /** Solo admin: contenido de la pestaña "Vacaciones y enfermedad". */
+  leaveSlot?: ReactNode;
 }) {
-  const [tab, setTab] = useState<"weekly" | "employees">("weekly");
+  const [tab, setTab] = useState<PayrollTab>("weekly");
+  const [historyPage, setHistoryPage] = useState(1);
   const [entryState, setEntryState] = useState(entries);
   const [employeeForm, setEmployeeForm] = useState<
     PayrollEmployee | "new" | null
@@ -77,6 +102,7 @@ export function PayrollWorkspace({
       else next.add(id);
       return next;
     });
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const total = useMemo(
     () =>
@@ -113,497 +139,582 @@ export function PayrollWorkspace({
     startTransition(async () => {
       setMessage(null);
       const result = await operation();
-      setMessage(result.error ?? "Guardado correctamente.");
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+      toast({ title: "Guardado correctamente", tone: "success" });
       if (result.success) window.location.reload();
     });
 
+  const payloadFromState = () =>
+    entryState.map((item) => ({
+      id: item.id,
+      regularHours: Number(item.regular_hours),
+      trainingHours: Number(item.training_hours),
+      otherPayments: Number(item.other_payments),
+      vacationPaidHours: Number(item.vacation_paid_hours),
+      sickPaidHours: Number(item.sick_paid_hours),
+      holidayPaidHours: Number(item.holiday_paid_hours),
+      juryDutyHours: Number(item.jury_duty_hours),
+      bereavementHours: Number(item.bereavement_hours),
+      comment: item.comment,
+    }));
+  // La agrupación se calcula con los datos guardados, no con lo que se está
+  // escribiendo, para que una fila no salte de lugar mientras se edita.
+  const zeroIds = useMemo(
+    () =>
+      new Set(
+        entries
+          .filter((entry) => calculatePayrollEntry(entry) === 0)
+          .map((entry) => entry.id),
+      ),
+    [entries],
+  );
+  const reviewEntries = entryState.filter(
+    (entry) => entry.requires_review_snapshot,
+  );
+  const withHours = entryState.filter((entry) => !zeroIds.has(entry.id));
+  const withoutHours = entryState.filter((entry) => zeroIds.has(entry.id));
+  const history = paginate(payrolls, historyPage, 10);
+
+  const renderEntry = (entry: WeeklyPayrollEntry) => {
+    if (!selected) return null;
+    const isFixed = entry.compensation_type_snapshot === "fixed_weekly";
+    const isOpen = expanded.has(entry.id);
+    return (
+      <div key={entry.id} className="px-2 py-1">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-1 md:grid-cols-[1fr_90px_90px_100px_100px_40px] md:gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">
+              {entry.employee_name_snapshot}
+            </p>
+            {entry.requires_review_snapshot ? (
+              <p className="text-warning flex items-center gap-1 text-[11px] font-medium">
+                <AlertTriangle className="size-3" />
+                Revisar tarifa
+              </p>
+            ) : null}
+          </div>
+          <div className="text-muted-foreground order-3 text-xs md:order-none md:text-right">
+            <span className="md:hidden">Tarifa: </span>
+            {isFixed
+              ? `Fijo ${money.format(entry.fixed_salary_snapshot ?? 0)}`
+              : entry.regular_rate_snapshot == null
+                ? "—"
+                : `${money.format(entry.regular_rate_snapshot)}/h`}
+          </div>
+          <div className="order-4 col-span-2 grid grid-cols-2 gap-2 md:contents">
+            <label className="text-muted-foreground text-xs md:contents">
+              <span className="md:sr-only">Horas</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                aria-label={`Horas de ${entry.employee_name_snapshot}`}
+                value={entry.regular_hours}
+                disabled={selected.status !== "draft" || isFixed}
+                onChange={(e) =>
+                  updateEntry(entry.id, "regular_hours", e.target.value)
+                }
+                className="mt-1 h-9 text-right text-sm md:mt-0 md:h-8"
+              />
+            </label>
+            <label className="text-muted-foreground text-xs md:contents">
+              <span className="md:sr-only">Tips</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                aria-label={`Tips de ${entry.employee_name_snapshot}`}
+                value={entry.other_payments}
+                disabled={selected.status !== "draft"}
+                onChange={(e) =>
+                  updateEntry(entry.id, "other_payments", e.target.value)
+                }
+                className="mt-1 h-9 text-right text-sm md:mt-0 md:h-8"
+              />
+            </label>
+          </div>
+          <p className="order-2 text-right text-sm font-semibold tabular-nums md:order-none">
+            {money.format(calculatePayrollEntry(entry))}
+          </p>
+          <button
+            type="button"
+            onClick={() => toggleExpanded(entry.id)}
+            aria-expanded={isOpen}
+            aria-label={`${isOpen ? "Ocultar" : "Ver"} más campos de ${entry.employee_name_snapshot}`}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted order-5 col-span-2 flex h-10 items-center justify-center rounded-md md:order-none md:col-span-1 md:size-10"
+          >
+            <ChevronDown
+              className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        </div>
+        {isOpen ? (
+          <div className="mt-1 grid gap-2 border-t pt-2 text-xs sm:grid-cols-5">
+            <label className="text-muted-foreground">
+              Horas entrenamiento
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={entry.training_hours}
+                disabled={selected.status !== "draft"}
+                onChange={(e) =>
+                  updateEntry(entry.id, "training_hours", e.target.value)
+                }
+                className="mt-1 h-7"
+              />
+            </label>
+            <label className="text-muted-foreground">
+              Vacaciones
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={entry.vacation_paid_hours}
+                disabled={selected.status !== "draft"}
+                onChange={(e) =>
+                  updateEntry(entry.id, "vacation_paid_hours", e.target.value)
+                }
+                className="mt-1 h-7"
+              />
+            </label>
+            <label className="text-muted-foreground">
+              Enfermedad
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={entry.sick_paid_hours}
+                disabled={selected.status !== "draft"}
+                onChange={(e) =>
+                  updateEntry(entry.id, "sick_paid_hours", e.target.value)
+                }
+                className="mt-1 h-7"
+              />
+            </label>
+            <label className="text-muted-foreground">
+              Feriado / Jurado / Duelo
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={entry.holiday_paid_hours}
+                disabled={selected.status !== "draft"}
+                onChange={(e) =>
+                  updateEntry(entry.id, "holiday_paid_hours", e.target.value)
+                }
+                className="mt-1 h-7"
+              />
+            </label>
+            <label className="text-muted-foreground">
+              Comentario
+              <Input
+                value={entry.comment ?? ""}
+                maxLength={500}
+                disabled={selected.status !== "draft"}
+                onChange={(e) =>
+                  updateEntry(entry.id, "comment", e.target.value)
+                }
+                className="mt-1 h-7"
+              />
+            </label>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5">
-      <header className="space-y-4">
-        {isAdmin ? (
-          <Button asChild variant="ghost" className="-ml-3">
-            <Link href={`/dashboard/admin/companies/${company.id}/payroll`}>
-              <ArrowLeft className="size-4" />
-              Volver a {company.name}
-            </Link>
-          </Button>
-        ) : null}
-        <div>
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            {company.name}
-          </p>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight">
-            Nómina semanal
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Los empleados y tarifas se cargan automáticamente. Ingresa
-            únicamente los datos variables de la semana.
-          </p>
-        </div>
+      <header className="space-y-1">
+        <h1 className="text-xl font-semibold tracking-tight">Nómina semanal</h1>
+        <p className="text-muted-foreground text-sm">
+          Los empleados y tarifas se cargan automáticamente. Ingresa únicamente
+          los datos variables de la semana.
+        </p>
       </header>
-      {selected ? (
-        <PayrollStatusHeader
-          weekLabel={`Semana ${selected.week_start} — ${selected.week_end}`}
-          statusLabel={statusLabel[selected.status]}
-          total={total}
-          tabs={[
-            {
-              label: "Nóminas semanales",
-              active: tab === "weekly",
-              onSelect: () => setTab("weekly"),
-            },
-            {
-              label: "Empleados y tarifas",
-              active: tab === "employees",
-              onSelect: () => setTab("employees"),
-            },
-          ]}
-        />
-      ) : (
-        <UnderlineTabs
-          tabs={[
-            {
-              label: "Nóminas semanales",
-              active: tab === "weekly",
-              onSelect: () => setTab("weekly"),
-            },
-            {
-              label: "Empleados y tarifas",
-              active: tab === "employees",
-              onSelect: () => setTab("employees"),
-            },
-          ]}
-        />
-      )}
+
       {message ? (
         <p
-          className={`rounded-lg px-4 py-3 text-sm ${message.includes("correctamente") ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}
+          role="alert"
+          className="bg-danger-soft text-danger rounded-lg px-4 py-3 text-sm"
         >
           {message}
         </p>
       ) : null}
 
-      {tab === "weekly" ? (
-        <div className="space-y-6">
-          {!selected || selected.status !== "draft" ? (
-            <SurfaceCard padding="sm">
-              <h2 className="text-sm font-semibold">Crear nómina semanal</h2>
-              <form
-                className="mt-2 flex flex-wrap items-end gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const value =
-                    new FormData(event.currentTarget)
-                      .get("weekStart")
-                      ?.toString() ?? "";
-                  run(() => createWeeklyPayroll(company.id, value));
-                }}
-              >
-                <label className="text-xs">
-                  Inicio de semana
-                  <Input
-                    name="weekStart"
-                    type="date"
-                    required
-                    className="mt-1 h-8"
-                  />
-                </label>
-                <Button type="submit" size="sm" disabled={pending}>
-                  Crear borrador
-                </Button>
-              </form>
-            </SurfaceCard>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as PayrollTab)}>
+        <TabsList>
+          <TabsTrigger value="weekly">Semana actual</TabsTrigger>
+          <TabsTrigger value="employees">Empleados y tarifas</TabsTrigger>
+          <TabsTrigger value="history">Historial</TabsTrigger>
+          {leaveSlot ? (
+            <TabsTrigger value="leave">Vacaciones y enfermedad</TabsTrigger>
           ) : null}
+        </TabsList>
+
+        <TabsContent value="weekly" className="space-y-5">
+          {reviewEntries.length ? (
+            <div
+              role="alert"
+              className="border-warning/30 bg-warning-soft text-warning flex flex-wrap items-start gap-3 rounded-lg border px-4 py-3 text-sm"
+            >
+              <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
+              <p className="min-w-0 flex-1">
+                <strong className="font-semibold">
+                  {reviewEntries.length === 1
+                    ? "1 empleado con tarifa por revisar:"
+                    : `${reviewEntries.length} empleados con tarifa por revisar:`}
+                </strong>{" "}
+                {reviewEntries
+                  .map((entry) => entry.employee_name_snapshot)
+                  .join(", ")}
+                .
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="bg-background text-foreground h-9"
+                onClick={() => setTab("employees")}
+              >
+                Revisar tarifas
+              </Button>
+            </div>
+          ) : null}
+
           {selected ? (
-            <>
-              <SurfaceCard padding="sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="font-semibold">
+            <SurfaceCard padding="sm">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-semibold">
                       Semana {selected.week_start} — {selected.week_end}
                     </h2>
-                    <p className="text-muted-foreground text-sm">
-                      Estado: {statusLabel[selected.status]}
-                    </p>
+                    <StatusBadge tone={statusTone[selected.status]}>
+                      {statusLabel[selected.status]}
+                    </StatusBadge>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <p className="text-xl font-semibold">
-                      {money.format(total)}
-                    </p>
-                    {selected.status !== "draft" ? (
-                      <Button asChild size="sm" variant="outline">
-                        <a
-                          href={`/api/payroll/${selected.id}/pdf`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <FileText className="size-4" />
-                          Ver e imprimir PDF
-                        </a>
-                      </Button>
-                    ) : null}
-                  </div>
+                  <p className="text-2xl font-semibold tracking-tight tabular-nums">
+                    {money.format(total)}
+                  </p>
                 </div>
-              </SurfaceCard>
-              <SurfaceCard padding="sm">
-                <div className="text-muted-foreground grid grid-cols-[1fr_90px_90px_100px_100px_28px] gap-2 border-b px-2 py-1.5 text-[11px] font-semibold tracking-wide uppercase">
-                  <div>Empleado</div>
-                  <div className="text-right">Rate</div>
-                  <div className="text-right">Horas</div>
-                  <div className="text-right">Tips</div>
-                  <div className="text-right">Total</div>
-                  <div />
-                </div>
-                <div className="divide-y">
-                  {entryState.map((entry) => {
-                    const isFixed =
-                      entry.compensation_type_snapshot === "fixed_weekly";
-                    const isOpen = expanded.has(entry.id);
-                    return (
-                      <div key={entry.id} className="px-2 py-1">
-                        <div className="grid grid-cols-[1fr_90px_90px_100px_100px_28px] items-center gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">
-                              {entry.employee_name_snapshot}
-                            </p>
-                            {entry.requires_review_snapshot ? (
-                              <p className="flex items-center gap-1 text-[11px] font-medium text-amber-700">
-                                <AlertTriangle className="size-3" />
-                                Revisar tarifa
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="text-muted-foreground text-right text-xs">
-                            {isFixed
-                              ? `Fijo ${money.format(entry.fixed_salary_snapshot ?? 0)}`
-                              : entry.regular_rate_snapshot == null
-                                ? "—"
-                                : `${money.format(entry.regular_rate_snapshot)}/h`}
-                          </div>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={entry.regular_hours}
-                            disabled={selected.status !== "draft" || isFixed}
-                            onChange={(e) =>
-                              updateEntry(
-                                entry.id,
-                                "regular_hours",
-                                e.target.value,
-                              )
-                            }
-                            className="h-7 text-right text-sm"
-                          />
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={entry.other_payments}
-                            disabled={selected.status !== "draft"}
-                            onChange={(e) =>
-                              updateEntry(
-                                entry.id,
-                                "other_payments",
-                                e.target.value,
-                              )
-                            }
-                            className="h-7 text-right text-sm"
-                          />
-                          <p className="text-right text-sm font-semibold">
-                            {money.format(calculatePayrollEntry(entry))}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => toggleExpanded(entry.id)}
-                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-7 items-center justify-center rounded-md"
-                          >
-                            <ChevronDown
-                              className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                            />
-                          </button>
-                        </div>
-                        {isOpen ? (
-                          <div className="mt-1 grid gap-2 border-t pt-2 text-xs sm:grid-cols-5">
-                            <label className="text-muted-foreground">
-                              Horas entrenamiento
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={entry.training_hours}
-                                disabled={selected.status !== "draft"}
-                                onChange={(e) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "training_hours",
-                                    e.target.value,
-                                  )
-                                }
-                                className="mt-1 h-7"
-                              />
-                            </label>
-                            <label className="text-muted-foreground">
-                              Vacaciones
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={entry.vacation_paid_hours}
-                                disabled={selected.status !== "draft"}
-                                onChange={(e) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "vacation_paid_hours",
-                                    e.target.value,
-                                  )
-                                }
-                                className="mt-1 h-7"
-                              />
-                            </label>
-                            <label className="text-muted-foreground">
-                              Enfermedad
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={entry.sick_paid_hours}
-                                disabled={selected.status !== "draft"}
-                                onChange={(e) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "sick_paid_hours",
-                                    e.target.value,
-                                  )
-                                }
-                                className="mt-1 h-7"
-                              />
-                            </label>
-                            <label className="text-muted-foreground">
-                              Feriado / Jurado / Duelo
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={entry.holiday_paid_hours}
-                                disabled={selected.status !== "draft"}
-                                onChange={(e) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "holiday_paid_hours",
-                                    e.target.value,
-                                  )
-                                }
-                                className="mt-1 h-7"
-                              />
-                            </label>
-                            <label className="text-muted-foreground">
-                              Comentario
-                              <Input
-                                value={entry.comment ?? ""}
-                                maxLength={500}
-                                disabled={selected.status !== "draft"}
-                                onChange={(e) =>
-                                  updateEntry(
-                                    entry.id,
-                                    "comment",
-                                    e.target.value,
-                                  )
-                                }
-                                className="mt-1 h-7"
-                              />
-                            </label>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </SurfaceCard>
-              {selected.status === "draft" ? (
-                <div className="flex flex-wrap justify-end gap-3">
-                  <Button
-                    variant="outline"
-                    disabled={pending}
-                    onClick={() =>
-                      run(() =>
-                        saveWeeklyPayrollEntries(
-                          company.id,
-                          selected.id,
-                          entryState.map((item) => ({
-                            id: item.id,
-                            regularHours: Number(item.regular_hours),
-                            trainingHours: Number(item.training_hours),
-                            otherPayments: Number(item.other_payments),
-                            vacationPaidHours: Number(item.vacation_paid_hours),
-                            sickPaidHours: Number(item.sick_paid_hours),
-                            holidayPaidHours: Number(item.holiday_paid_hours),
-                            juryDutyHours: Number(item.jury_duty_hours),
-                            bereavementHours: Number(item.bereavement_hours),
-                            comment: item.comment,
-                          })),
-                        ),
-                      )
-                    }
-                  >
-                    <Save className="size-4" />
-                    Guardar borrador
-                  </Button>
-                  <Button
-                    disabled={pending}
-                    onClick={() =>
-                      run(async () => {
-                        const saved = await saveWeeklyPayrollEntries(
-                          company.id,
-                          selected.id,
-                          entryState.map((item) => ({
-                            id: item.id,
-                            regularHours: Number(item.regular_hours),
-                            trainingHours: Number(item.training_hours),
-                            otherPayments: Number(item.other_payments),
-                            vacationPaidHours: Number(item.vacation_paid_hours),
-                            sickPaidHours: Number(item.sick_paid_hours),
-                            holidayPaidHours: Number(item.holiday_paid_hours),
-                            juryDutyHours: Number(item.jury_duty_hours),
-                            bereavementHours: Number(item.bereavement_hours),
-                            comment: item.comment,
-                          })),
-                        );
-                        return saved.error
-                          ? saved
-                          : submitWeeklyPayroll(company.id, selected.id);
-                      })
-                    }
-                  >
-                    Enviar nómina
-                  </Button>
-                </div>
-              ) : null}
-              {isAdmin && selected.status === "submitted" ? (
-                <div className="flex justify-end">
-                  <Button
-                    disabled={pending}
-                    onClick={() =>
-                      run(() => approveWeeklyPayroll(company.id, selected.id))
-                    }
-                  >
-                    Aprobar nómina
-                  </Button>
-                </div>
-              ) : null}
-              {isAdmin && selected.status !== "draft" ? (
-                <div className="flex justify-end">
-                  <Button
-                    variant="outline"
-                    disabled={pending}
-                    onClick={() => setShowReopenDialog(true)}
-                  >
-                    <RotateCcw className="size-4" />
-                    Reabrir nómina
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-          {payrolls.length > 1 ? (
-            <SurfaceCard>
-              <h2 className="font-semibold">Historial</h2>
-              <div className="mt-3 space-y-2">
-                {payrolls.map((payroll) => (
-                  <p key={payroll.id} className="text-sm">
-                    <Link
-                      href={`/dashboard/payroll?company=${company.id}&payroll=${payroll.id}`}
-                      className={
-                        payroll.id === selected?.id
-                          ? "font-semibold"
-                          : "underline-offset-4 hover:underline"
+                <div className="flex flex-wrap items-center gap-2">
+                  {isAdmin && selected.status === "submitted" ? (
+                    <Button
+                      className="h-10"
+                      disabled={pending}
+                      onClick={() =>
+                        run(() => approveWeeklyPayroll(company.id, selected.id))
                       }
                     >
-                      {payroll.week_start} — {payroll.week_end} ·{" "}
-                      {statusLabel[payroll.status]}
-                    </Link>
-                  </p>
-                ))}
-              </div>
-            </SurfaceCard>
-          ) : null}
-        </div>
-      ) : (
-        <div className="space-y-5">
-          <div className="flex justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Directorio de empleados</h2>
-              <p className="text-muted-foreground text-sm">
-                Los cambios aplican a borradores actuales y nóminas futuras; las
-                enviadas no cambian.
-              </p>
-            </div>
-            <Button onClick={() => setEmployeeForm("new")}>
-              <Plus className="size-4" />
-              Agregar empleado
-            </Button>
-          </div>
-          {employees.map((employee) => (
-            <SurfaceCard key={employee.id} padding="sm">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-medium">
-                    {employee.first_name} {employee.last_name}
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    {employee.section} ·{" "}
-                    {employee.compensation_type ?? "Sin configurar"}
-                  </p>
-                  <p className="text-muted-foreground text-xs">
-                    Regular{" "}
-                    {employee.regular_hourly_rate == null
-                      ? "—"
-                      : money.format(employee.regular_hourly_rate)}{" "}
-                    · Entrenamiento{" "}
-                    {employee.training_hourly_rate == null
-                      ? "—"
-                      : money.format(employee.training_hourly_rate)}{" "}
-                    · Semanal{" "}
-                    {employee.fixed_weekly_salary == null
-                      ? "—"
-                      : money.format(employee.fixed_weekly_salary)}
-                  </p>
-                  {employee.requires_compensation_review ? (
-                    <p className="mt-1 text-xs font-medium text-amber-700">
-                      Requiere revisión
-                    </p>
+                      Aprobar nómina
+                    </Button>
+                  ) : null}
+                  {selected.status !== "draft" ? (
+                    <Button asChild variant="outline" className="h-10">
+                      <a
+                        href={`/api/payroll/${selected.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <FileText className="size-4" />
+                        Ver e imprimir PDF
+                      </a>
+                    </Button>
+                  ) : null}
+                  {isAdmin && selected.status !== "draft" ? (
+                    <Button
+                      variant="outline"
+                      className="h-10"
+                      disabled={pending}
+                      onClick={() => setShowReopenDialog(true)}
+                    >
+                      <RotateCcw className="size-4" />
+                      Reabrir nómina
+                    </Button>
                   ) : null}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setEmployeeForm(employee)}
-                  >
-                    Editar tarifas
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={pending}
-                    onClick={() =>
-                      run(() =>
-                        setPayrollEmployeeActive(
-                          company.id,
-                          employee.id,
-                          !employee.active,
-                        ),
-                      )
-                    }
-                  >
-                    {employee.active ? "Desactivar" : "Reactivar"}
-                  </Button>
-                </div>
               </div>
             </SurfaceCard>
-          ))}
-        </div>
-      )}
+          ) : (
+            <SurfaceCard padding="sm" className="p-0">
+              <EmptyState
+                icon={CalendarPlus}
+                title="Todavía no hay una nómina semanal"
+                description="Crea el borrador de la semana para empezar a cargar horas."
+              />
+            </SurfaceCard>
+          )}
+
+          {!selected || selected.status !== "draft" ? (
+            <SurfaceCard padding="sm" className="p-0">
+              <Accordion
+                type="single"
+                collapsible
+                defaultValue={selected ? undefined : "crear"}
+              >
+                <AccordionItem value="crear">
+                  <AccordionTrigger>
+                    <span className="flex-1">Crear nómina semanal</span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <form
+                      className="flex flex-wrap items-end gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const value =
+                          new FormData(event.currentTarget)
+                            .get("weekStart")
+                            ?.toString() ?? "";
+                        run(() => createWeeklyPayroll(company.id, value));
+                      }}
+                    >
+                      <label className="text-sm">
+                        Inicio de semana
+                        <Input
+                          name="weekStart"
+                          type="date"
+                          required
+                          className="mt-1 h-10"
+                        />
+                      </label>
+                      <Button type="submit" className="h-10" disabled={pending}>
+                        Crear borrador
+                      </Button>
+                    </form>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </SurfaceCard>
+          ) : null}
+
+          {selected ? (
+            <SurfaceCard padding="sm" className="p-0">
+              <div className="text-muted-foreground grid grid-cols-[1fr_90px_90px_100px_100px_40px] gap-2 border-b px-4 py-2 text-[11px] font-semibold tracking-wide uppercase max-md:hidden">
+                <div>Empleado</div>
+                <div className="text-right">Rate</div>
+                <div className="text-right">Horas</div>
+                <div className="text-right">Tips</div>
+                <div className="text-right">Total</div>
+                <div />
+              </div>
+              <div className="divide-y px-2">{withHours.map(renderEntry)}</div>
+              {withoutHours.length ? (
+                <Accordion
+                  type="single"
+                  collapsible
+                  defaultValue={
+                    selected.status === "draft" ? "sin-horas" : undefined
+                  }
+                  className="border-t"
+                >
+                  <AccordionItem value="sin-horas" className="border-b-0">
+                    <AccordionTrigger>
+                      <span className="flex-1">
+                        Sin horas esta semana ({withoutHours.length})
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-2 pb-2">
+                      <div className="divide-y">
+                        {withoutHours.map(renderEntry)}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              ) : null}
+            </SurfaceCard>
+          ) : null}
+
+          {selected ? (
+            <div
+              className={cn(
+                "bg-background/95 sticky z-20 -mx-4 border-t px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6",
+                // En el cliente la barra inferior de navegación ocupa 4 rem en móvil.
+                isAdmin ? "bottom-0" : "bottom-16 md:bottom-0",
+              )}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 pr-16">
+                <p className="text-sm">
+                  <span className="text-muted-foreground">
+                    Total de la semana · {entryState.length}{" "}
+                    {entryState.length === 1 ? "empleado" : "empleados"}
+                  </span>{" "}
+                  <span className="text-lg font-semibold tabular-nums">
+                    {money.format(total)}
+                  </span>
+                </p>
+                {selected.status === "draft" ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-10"
+                      disabled={pending}
+                      onClick={() =>
+                        run(() =>
+                          saveWeeklyPayrollEntries(
+                            company.id,
+                            selected.id,
+                            payloadFromState(),
+                          ),
+                        )
+                      }
+                    >
+                      <Save className="size-4" />
+                      Guardar borrador
+                    </Button>
+                    <Button
+                      className="h-10"
+                      disabled={pending}
+                      onClick={() =>
+                        run(async () => {
+                          const saved = await saveWeeklyPayrollEntries(
+                            company.id,
+                            selected.id,
+                            payloadFromState(),
+                          );
+                          return saved.error
+                            ? saved
+                            : submitWeeklyPayroll(company.id, selected.id);
+                        })
+                      }
+                    >
+                      Enviar nómina
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="employees">
+          <div className="space-y-5">
+            <div className="flex justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">
+                  Directorio de empleados
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Los cambios aplican a borradores actuales y nóminas futuras;
+                  las enviadas no cambian.
+                </p>
+              </div>
+              <Button onClick={() => setEmployeeForm("new")}>
+                <Plus className="size-4" />
+                Agregar empleado
+              </Button>
+            </div>
+            {employees.map((employee) => (
+              <SurfaceCard key={employee.id} padding="sm">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-medium">
+                      {employee.first_name} {employee.last_name}
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
+                      {employee.section} ·{" "}
+                      {employee.compensation_type ?? "Sin configurar"}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      Regular{" "}
+                      {employee.regular_hourly_rate == null
+                        ? "—"
+                        : money.format(employee.regular_hourly_rate)}{" "}
+                      · Entrenamiento{" "}
+                      {employee.training_hourly_rate == null
+                        ? "—"
+                        : money.format(employee.training_hourly_rate)}{" "}
+                      · Semanal{" "}
+                      {employee.fixed_weekly_salary == null
+                        ? "—"
+                        : money.format(employee.fixed_weekly_salary)}
+                    </p>
+                    {employee.requires_compensation_review ? (
+                      <p className="mt-1 text-xs font-medium text-amber-700">
+                        Requiere revisión
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEmployeeForm(employee)}
+                    >
+                      Editar tarifas
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={pending}
+                      onClick={() =>
+                        run(() =>
+                          setPayrollEmployeeActive(
+                            company.id,
+                            employee.id,
+                            !employee.active,
+                          ),
+                        )
+                      }
+                    >
+                      {employee.active ? "Desactivar" : "Reactivar"}
+                    </Button>
+                  </div>
+                </div>
+              </SurfaceCard>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <SurfaceCard padding="sm" className="p-0">
+            {payrolls.length ? (
+              <>
+                <ul className="divide-border/70 divide-y">
+                  {history.items.map((payroll) => (
+                    <li key={payroll.id}>
+                      <Link
+                        href={`/dashboard/payroll?company=${company.id}&payroll=${payroll.id}`}
+                        aria-current={
+                          payroll.id === selected?.id ? "true" : undefined
+                        }
+                        className="hover:bg-muted/50 focus-visible:ring-ring flex min-h-12 items-center justify-between gap-3 px-4 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+                      >
+                        <span
+                          className={`tabular-nums ${payroll.id === selected?.id ? "font-semibold" : ""}`}
+                        >
+                          {payroll.week_start} — {payroll.week_end}
+                        </span>
+                        <StatusBadge tone={statusTone[payroll.status]}>
+                          {statusLabel[payroll.status]}
+                        </StatusBadge>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <PaginationBar view={history} onPageChange={setHistoryPage} />
+              </>
+            ) : (
+              <EmptyState
+                icon={History}
+                title="Sin historial todavía"
+                description="Las nóminas semanales aparecerán aquí a medida que se creen."
+              />
+            )}
+          </SurfaceCard>
+        </TabsContent>
+
+        {leaveSlot ? (
+          <TabsContent value="leave" className="space-y-4">
+            {leaveSlot}
+          </TabsContent>
+        ) : null}
+      </Tabs>
+
       {employeeForm ? (
         <EmployeeDialog
           companyId={company.id}

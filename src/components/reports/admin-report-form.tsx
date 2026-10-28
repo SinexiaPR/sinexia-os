@@ -25,6 +25,8 @@ const selectClassName =
 type AdminReportFormProps = {
   companies: Company[];
   initialCompanyId?: string;
+  /** Se llama una vez cuando el reporte se publica con éxito. */
+  onPublished?: () => void;
 };
 
 function assignFileToInput(input: HTMLInputElement | null, file: File) {
@@ -37,6 +39,7 @@ function assignFileToInput(input: HTMLInputElement | null, file: File) {
 export function AdminReportForm({
   companies,
   initialCompanyId,
+  onPublished,
 }: AdminReportFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const submissionInputRef = useRef<HTMLInputElement>(null);
@@ -59,12 +62,14 @@ export function AdminReportForm({
     setLocalError(null);
     if (submissionInputRef.current) submissionInputRef.current.value = "";
     if (pickerInputRef.current) pickerInputRef.current.value = "";
+    onPublished?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando cambia el estado de la acción
   }, [state]);
 
   function handleFileSelect(file: File | undefined) {
     if (!file) return;
     if (!isAllowedUploadFile(file)) {
-      setLocalError("Unsupported file type.");
+      setLocalError("Tipo de archivo no admitido.");
       return;
     }
     setLocalError(null);
@@ -75,7 +80,7 @@ export function AdminReportForm({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     if (!selectedFile) {
       event.preventDefault();
-      setLocalError("Select a report file.");
+      setLocalError("Selecciona el archivo del reporte.");
       return;
     }
     setLocalError(null);
@@ -103,7 +108,7 @@ export function AdminReportForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="company_id">Company</Label>
+          <Label htmlFor="company_id">Empresa</Label>
           <select
             id="company_id"
             name="company_id"
@@ -112,7 +117,7 @@ export function AdminReportForm({
             className={selectClassName}
             defaultValue={initialCompanyId ?? ""}
           >
-            <option value="">Select company</option>
+            <option value="">Selecciona una empresa</option>
             {companies.map((company) => (
               <option key={company.id} value={company.id}>
                 {company.name}
@@ -122,7 +127,7 @@ export function AdminReportForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="category">Category</Label>
+          <Label htmlFor="category">Categoría</Label>
           <select
             id="category"
             name="category"
@@ -130,7 +135,7 @@ export function AdminReportForm({
             disabled={isPending}
             className={selectClassName}
           >
-            <option value="">Select category</option>
+            <option value="">Selecciona una categoría</option>
             {REPORT_CATEGORIES.map((category) => (
               <option key={category} value={category}>
                 {REPORT_CATEGORY_META[category].adminOptionLabel}
@@ -140,11 +145,11 @@ export function AdminReportForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="period">Period</Label>
+          <Label htmlFor="period">Período</Label>
           <Input
             id="period"
             name="period"
-            placeholder="e.g. January 2026"
+            placeholder="Ej.: enero 2026"
             required
             disabled={isPending}
             className="h-12 rounded-md sm:h-11"
@@ -152,7 +157,7 @@ export function AdminReportForm({
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="title">Report title</Label>
+          <Label htmlFor="title">Título del reporte</Label>
           <Input
             id="title"
             name="title"
@@ -163,19 +168,19 @@ export function AdminReportForm({
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="notes">Notes for client</Label>
+          <Label htmlFor="notes">Notas para el cliente</Label>
           <textarea
             id="notes"
             name="notes"
             rows={3}
             disabled={isPending}
             className="border-input focus-visible:border-ring focus-visible:ring-ring/50 flex w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50 sm:text-sm"
-            placeholder="Optional message visible to the client"
+            placeholder="Mensaje opcional visible para el cliente"
           />
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label>Report file</Label>
+          <Label>Archivo del reporte</Label>
           <Button
             type="button"
             variant="outline"
@@ -183,7 +188,7 @@ export function AdminReportForm({
             onClick={() => pickerInputRef.current?.click()}
             className="h-12 w-full rounded-md sm:h-11"
           >
-            {selectedFile ? selectedFile.name : "Choose file"}
+            {selectedFile ? selectedFile.name : "Elegir archivo"}
           </Button>
           <input
             ref={pickerInputRef}
@@ -219,7 +224,7 @@ export function AdminReportForm({
         disabled={isPending || !selectedFile}
         className={cn("h-12 rounded-md sm:h-11")}
       >
-        {isPending ? "Saving…" : "Save report"}
+        {isPending ? "Publicando…" : "Publicar reporte"}
       </Button>
     </form>
   );

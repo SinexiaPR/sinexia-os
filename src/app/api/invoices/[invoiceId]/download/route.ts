@@ -30,7 +30,7 @@ export async function GET(
     .createSignedUrl(invoice.pdf_storage_path, 120);
   if (error || !data?.signedUrl)
     return NextResponse.json(
-      { error: "Unable to create download link" },
+      { error: "No se pudo crear el enlace de descarga" },
       { status: 500 },
     );
   return NextResponse.redirect(data.signedUrl);

@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { Folder } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { DocumentRow } from "@/components/dashboard/document-row";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import type { DocumentWithCompany } from "@/types";
 
@@ -8,6 +11,8 @@ type DocumentListProps = {
   documents: DocumentWithCompany[];
   title?: string;
   emptyMessage?: string;
+  emptyDescription?: string;
+  emptyAction?: ReactNode;
   showCompany?: boolean;
   viewAllHref?: string;
   viewAllLabel?: string;
@@ -18,11 +23,13 @@ type DocumentListProps = {
 
 export function DocumentList({
   documents,
-  title = "Inbox",
-  emptyMessage = "No items yet.",
+  title = "Documentos",
+  emptyMessage = "Aún no hay documentos.",
+  emptyDescription,
+  emptyAction,
   showCompany = false,
   viewAllHref,
-  viewAllLabel = "View all",
+  viewAllLabel = "Ver todos",
   viewedDocumentIds,
   profileId,
   isAdmin = false,
@@ -42,9 +49,12 @@ export function DocumentList({
       </div>
 
       {documents.length === 0 ? (
-        <p className="text-muted-foreground py-12 text-center text-sm">
-          {emptyMessage}
-        </p>
+        <EmptyState
+          icon={Folder}
+          title={emptyMessage}
+          description={emptyDescription}
+          action={emptyAction}
+        />
       ) : (
         <div className="px-2">
           {documents.map((document) => (
