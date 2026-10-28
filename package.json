@@ -28,6 +28,7 @@
     "test:leave-accrual": "tsx scripts/test-leave-accrual.ts",
     "test:invoices": "tsx scripts/test-invoices.ts",
     "test:invoice-visibility": "tsx scripts/test-invoice-client-visibility.ts",
+    "test:invoice-list": "tsx scripts/test-invoice-list.ts",
     "test:billing-batch": "tsx scripts/test-billing-batch.ts",
     "test:tresbe-budget": "tsx scripts/test-tresbe-budget.ts",
     "test:cutmeat-daily": "tsx scripts/test-cutmeat-daily-reports.ts",
