@@ -20,24 +20,25 @@ Los tokens viven en `src/app/globals.css`; los componentes en `src/components/ui
 
 ## Componentes
 
-| Componente         | Archivo                                          | Notas                                                                                                     |
-| ------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| Button             | `button.tsx`                                     | Variantes `default`, `outline`, `ghost`, `destructive`; en pantallas táctiles los controles miden ≥ 44 px |
-| Card               | `surface-card.tsx` (`SurfaceCard`, `MetricCard`) |                                                                                                           |
-| Badge de estado    | `status-badge.tsx`                               | `tone`: success / warning / danger / info / neutral                                                       |
-| Table              | `table.tsx`                                      | Encabezado fijo, densidad `comfortable` / `compact`, `numeric` para importes                              |
-| Tabs               | `tabs.tsx` (Radix)                               | Pestañas de pantalla. La ficha de empresa usa enlaces reales (`company-tabs.tsx`)                         |
-| Accordion          | `accordion.tsx` (Radix)                          | Secciones colapsables                                                                                     |
-| Drawer             | `sheet.tsx` (Radix Dialog)                       | Panel lateral o inferior                                                                                  |
-| Modal              | `dialog.tsx` (Radix Dialog)                      |                                                                                                           |
-| Dropdown           | `dropdown-menu.tsx`                              |                                                                                                           |
-| Combobox           | `combobox.tsx`                                   | Selector con búsqueda; sirve en formularios GET (`name`)                                                  |
-| Popover de filtros | `popover.tsx`, `filter-panel.tsx`                | `FilterPanel`: popover en escritorio, hoja inferior en móvil                                              |
-| Toast              | `toast.tsx`                                      | `useToast()`; región `aria-live` en `<body>`                                                              |
-| EmptyState         | `empty-state.tsx`                                | Ícono, mensaje útil y acción opcional                                                                     |
-| Skeleton           | `skeleton.tsx`                                   | `dashboard/loading.tsx` lo usa                                                                            |
-| PageHeader         | `layout/page-header.tsx`                         | Con migas de pan (`layout/breadcrumbs.tsx`)                                                               |
-| Paginación         | `pagination-bar.tsx` + `lib/pagination.ts`       |                                                                                                           |
+| Componente         | Archivo                                            | Notas                                                                                                     |
+| ------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Button             | `button.tsx`                                       | Variantes `default`, `outline`, `ghost`, `destructive`; en pantallas táctiles los controles miden ≥ 44 px |
+| Card               | `surface-card.tsx` (`SurfaceCard`, `MetricCard`)   |                                                                                                           |
+| Badge de estado    | `status-badge.tsx`                                 | `tone`: success / warning / danger / info / neutral                                                       |
+| Table              | `table.tsx`                                        | Encabezado fijo, densidad `comfortable` / `compact`, `numeric` para importes                              |
+| Tabs               | `tabs.tsx` (Radix)                                 | Pestañas de pantalla. La ficha de empresa usa enlaces reales (`company-tabs.tsx`)                         |
+| Accordion          | `accordion.tsx` (Radix)                            | Secciones colapsables                                                                                     |
+| Drawer             | `sheet.tsx` (Radix Dialog)                         | Panel lateral o inferior                                                                                  |
+| Modal              | `dialog.tsx` (Radix Dialog)                        |                                                                                                           |
+| Dropdown           | `dropdown-menu.tsx`                                |                                                                                                           |
+| Combobox           | `combobox.tsx`                                     | Selector con búsqueda; sirve en formularios GET (`name`)                                                  |
+| Popover de filtros | `popover.tsx`, `filter-panel.tsx`                  | `FilterPanel`: popover en escritorio, hoja inferior en móvil                                              |
+| Toast              | `toast.tsx`                                        | `useToast()`; región `aria-live` en `<body>`                                                              |
+| EmptyState         | `empty-state.tsx`                                  | Ícono, mensaje útil y acción opcional                                                                     |
+| Skeleton           | `skeleton.tsx`                                     | `dashboard/loading.tsx` lo usa                                                                            |
+| PageHeader         | `layout/page-header.tsx`                           | Con migas de pan (`layout/breadcrumbs.tsx`)                                                               |
+| Logo               | `layout/brand-mark.tsx`, `public/logo-sinexia.svg` | Usar siempre `BrandMark` junto al nombre de la firma                                                      |
+| Paginación         | `pagination-bar.tsx` + `lib/pagination.ts`         |                                                                                                           |
 
 ## Reglas de uso
 
