@@ -8,7 +8,13 @@
 // otro banner que Hernan no tenga -- cada builder dibuja el encabezado
 // real de SU documento, no un encabezado genérico compartido.
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from "pdf-lib";
 
 import {
   buildRecurringDetailTable,
@@ -54,7 +60,10 @@ const printable = (value: string) =>
 export const money = (value: number | null | undefined) =>
   value == null
     ? "-"
-    : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    : new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(
         // Object.is(value, -0) -- evita "-$0.00" cuando un bucket vacío
         // (p.ej. recurrentes de la semana después, hoy siempre 0) se
         // niega para mostrarse (-step.recurrentes): -0 === 0 es true,
@@ -68,9 +77,10 @@ export const money = (value: number | null | undefined) =>
 const plainMoney = (value: number | null | undefined) =>
   value == null
     ? "-"
-    : new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-        Object.is(value, -0) ? 0 : value,
-      );
+    : new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Object.is(value, -0) ? 0 : value);
 
 function right(
   page: PDFPage,
@@ -95,7 +105,10 @@ function fit(value: string, font: PDFFont, size: number, width: number) {
   const clean = printable(value);
   if (font.widthOfTextAtSize(clean, size) <= width) return clean;
   let short = clean;
-  while (short.length > 1 && font.widthOfTextAtSize(`${short}...`, size) > width)
+  while (
+    short.length > 1 &&
+    font.widthOfTextAtSize(`${short}...`, size) > width
+  )
     short = short.slice(0, -1);
   return `${short.trim()}...`;
 }
@@ -104,7 +117,12 @@ function fit(value: string, font: PDFFont, size: number, width: number) {
  * (nunca recorta ni agrega "..."). Si una sola palabra no entra, la deja
  * igual en su propia línea -- desborda un poco en vez de partir la
  * palabra a la mitad. */
-function wrapText(value: string, font: PDFFont, size: number, width: number): string[] {
+function wrapText(
+  value: string,
+  font: PDFFont,
+  size: number,
+  width: number,
+): string[] {
   const clean = printable(value);
   const words = clean.split(" ").filter(Boolean);
   if (words.length === 0) return [""];
@@ -141,19 +159,41 @@ async function newDoc(): Promise<{ pdf: PDFDocument; doc: Doc }> {
 function stampFooters(
   pdf: PDFDocument,
   font: PDFFont,
-  options: { dateStamp?: string | null; pageLabel?: (index: number, total: number) => string } = {},
+  options: {
+    dateStamp?: string | null;
+    pageLabel?: (index: number, total: number) => string;
+  } = {},
 ) {
   const pages = pdf.getPages();
   const dateStamp =
     options.dateStamp !== undefined
       ? options.dateStamp
-      : new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeStyle: "short" }).format(new Date());
-  const pageLabel = options.pageLabel ?? ((index: number, total: number) => `${index}/${total}`);
+      : new Intl.DateTimeFormat("en-US", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }).format(new Date());
+  const pageLabel =
+    options.pageLabel ??
+    ((index: number, total: number) => `${index}/${total}`);
   for (const [index, page] of pages.entries()) {
     if (dateStamp) {
-      page.drawText(printable(dateStamp), { x: MARGIN, y: 16, size: 7, font, color: GRAY_TEXT });
+      page.drawText(printable(dateStamp), {
+        x: MARGIN,
+        y: 16,
+        size: 7,
+        font,
+        color: GRAY_TEXT,
+      });
     }
-    right(page, pageLabel(index + 1, pages.length), font, 7, WIDTH - MARGIN, 16, GRAY_TEXT);
+    right(
+      page,
+      pageLabel(index + 1, pages.length),
+      font,
+      7,
+      WIDTH - MARGIN,
+      16,
+      GRAY_TEXT,
+    );
   }
 }
 
@@ -176,7 +216,13 @@ function keyValueRow(
   y: number,
   valueOffset = 220,
 ) {
-  doc.page.drawText(printable(label), { x, y, size: 8.5, font: doc.regular, color: MUTED });
+  doc.page.drawText(printable(label), {
+    x,
+    y,
+    size: 8.5,
+    font: doc.regular,
+    color: MUTED,
+  });
   right(doc.page, value, doc.bold, 9, x + valueOffset, y);
 }
 
@@ -237,7 +283,8 @@ function addPage(pdf: PDFDocument, doc: Doc): number {
  * "spanner" que ocupa todo el ancho de la tabla con un solo texto -- para
  * el nombre de un grupo (aging agrupado por proveedor/cliente) sin
  * repetir el encabezado de columnas por cada uno. */
-type TableRow = string[] | { bold: string[] } | { gray: string[] } | { spanner: string };
+type TableRow =
+  string[] | { bold: string[] } | { gray: string[] } | { spanner: string };
 
 const SPANNER_HEIGHT = 14;
 
@@ -252,7 +299,16 @@ function drawTable(
   doc: Doc,
   x: number,
   y: number,
-  columns: Array<{ label: string; width: number; align?: "left" | "right" }>,
+  /** `wrap: true` hace que esa columna salte de línea dentro de su ancho
+   * en vez de recortarse con "..." (p.ej. Description del Export banco,
+   * que en el archivo real del banco nunca se trunca). Las columnas sin
+   * `wrap` se comportan exactamente igual que antes. */
+  columns: Array<{
+    label: string;
+    width: number;
+    align?: "left" | "right";
+    wrap?: boolean;
+  }>,
   rows: TableRow[],
   totalRow?: string[],
   /** Si la tabla pagina, se llama justo después de la página nueva --
@@ -263,13 +319,28 @@ function drawTable(
 ) {
   const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
   const rowHeight = 12;
+  const wrapLineHeight = 9;
 
   const drawHeader = (yy: number) => {
-    doc.page.drawRectangle({ x, y: yy - 16, width: tableWidth, height: 16, color: NAVY });
+    doc.page.drawRectangle({
+      x,
+      y: yy - 16,
+      width: tableWidth,
+      height: 16,
+      color: NAVY,
+    });
     let cx = x;
     for (const col of columns) {
       if (col.align === "right") {
-        right(doc.page, col.label, doc.bold, 7.5, cx + col.width - 4, yy - 11, rgb(1, 1, 1));
+        right(
+          doc.page,
+          col.label,
+          doc.bold,
+          7.5,
+          cx + col.width - 4,
+          yy - 11,
+          rgb(1, 1, 1),
+        );
       } else {
         doc.page.drawText(printable(col.label), {
           x: cx + 4,
@@ -284,11 +355,47 @@ function drawTable(
     return yy - 16;
   };
 
-  const rowHeightOf = (row: TableRow) => (!Array.isArray(row) && "spanner" in row ? SPANNER_HEIGHT : rowHeight);
+  const rowCells = (row: TableRow) => {
+    const bold = !Array.isArray(row) && "bold" in row;
+    const gray = !Array.isArray(row) && "gray" in row;
+    return bold
+      ? (row as { bold: string[] }).bold
+      : gray
+        ? (row as { gray: string[] }).gray
+        : (row as string[]);
+  };
+
+  /** Líneas envueltas por columna para una fila (null = columna sin
+   * `wrap`, se dibuja en una sola línea como siempre). Las filas "bold"
+   * nunca envuelven -- son totales, siempre cortas. */
+  const wrapRow = (row: TableRow, cells: string[], bold: boolean) =>
+    columns.map((col, i) =>
+      col.wrap && !bold && cells[i]
+        ? wrapText(cells[i]!, doc.regular, 7.5, col.width - 8)
+        : null,
+    );
+
+  const rowHeightOf = (row: TableRow) => {
+    if (!Array.isArray(row) && "spanner" in row) return SPANNER_HEIGHT;
+    const bold = !Array.isArray(row) && "bold" in row;
+    const cells = rowCells(row);
+    const wrapped = wrapRow(row, cells, bold);
+    const lineCount = Math.max(
+      1,
+      ...wrapped.map((lines) => lines?.length ?? 1),
+    );
+    return lineCount > 1 ? lineCount * wrapLineHeight + 4 : rowHeight;
+  };
 
   const drawRow = (yy: number, row: TableRow, index: number) => {
     if (!Array.isArray(row) && "spanner" in row) {
-      doc.page.drawRectangle({ x, y: yy - SPANNER_HEIGHT, width: tableWidth, height: SPANNER_HEIGHT, color: rgb(0.88, 0.9, 0.93) });
+      doc.page.drawRectangle({
+        x,
+        y: yy - SPANNER_HEIGHT,
+        width: tableWidth,
+        height: SPANNER_HEIGHT,
+        color: rgb(0.88, 0.9, 0.93),
+      });
       doc.page.drawText(printable(row.spanner), {
         x: x + 4,
         y: yy - SPANNER_HEIGHT + 4,
@@ -300,27 +407,76 @@ function drawTable(
     }
     const bold = !Array.isArray(row) && "bold" in row;
     const gray = !Array.isArray(row) && "gray" in row;
-    const cells = bold ? (row as { bold: string[] }).bold : gray ? (row as { gray: string[] }).gray : (row as string[]);
+    const cells = rowCells(row);
+    const wrapped = wrapRow(row, cells, bold);
+    const lineCount = Math.max(
+      1,
+      ...wrapped.map((lines) => lines?.length ?? 1),
+    );
+    const thisRowHeight =
+      lineCount > 1 ? lineCount * wrapLineHeight + 4 : rowHeight;
     if (bold) {
-      doc.page.drawRectangle({ x, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: rgb(0.9, 0.92, 0.94) });
+      doc.page.drawRectangle({
+        x,
+        y: yy - thisRowHeight,
+        width: tableWidth,
+        height: thisRowHeight,
+        color: rgb(0.9, 0.92, 0.94),
+      });
     } else if (index % 2 === 1) {
-      doc.page.drawRectangle({ x, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: ALT });
+      doc.page.drawRectangle({
+        x,
+        y: yy - thisRowHeight,
+        width: tableWidth,
+        height: thisRowHeight,
+        color: ALT,
+      });
     }
+    const font = bold ? doc.bold : doc.regular;
+    const size = bold ? 7.8 : 7.5;
+    const color = gray ? GRAY_TEXT : NAVY;
     let colX = x;
     cells.forEach((cell, colIndex) => {
       const col = columns[colIndex];
-      const text = bold ? printable(cell) : fit(cell, doc.regular, 7.5, col.width - 8);
-      const font = bold ? doc.bold : doc.regular;
-      const size = bold ? 7.8 : 7.5;
-      const color = gray ? GRAY_TEXT : NAVY;
-      if (col.align === "right") {
-        right(doc.page, text, font, size, colX + col.width - 4, yy - rowHeight + 4, color);
+      const lines = wrapped[colIndex];
+      if (lines) {
+        lines.forEach((line, lineIndex) => {
+          const lineY = yy - wrapLineHeight * (lineIndex + 1) + 2;
+          if (col.align === "right") {
+            right(
+              doc.page,
+              line,
+              font,
+              size,
+              colX + col.width - 4,
+              lineY,
+              color,
+            );
+          } else {
+            doc.page.drawText(line, {
+              x: colX + 4,
+              y: lineY,
+              size,
+              font,
+              color,
+            });
+          }
+        });
       } else {
-        doc.page.drawText(text, { x: colX + 4, y: yy - rowHeight + 4, size, font, color });
+        const text = bold
+          ? printable(cell)
+          : fit(cell, font, size, col.width - 8);
+        const lineY =
+          lineCount > 1 ? yy - wrapLineHeight + 2 : yy - rowHeight + 4;
+        if (col.align === "right") {
+          right(doc.page, text, font, size, colX + col.width - 4, lineY, color);
+        } else {
+          doc.page.drawText(text, { x: colX + 4, y: lineY, size, font, color });
+        }
       }
       colX += col.width;
     });
-    return yy - rowHeight;
+    return yy - thisRowHeight;
   };
 
   let pageTop = y;
@@ -328,7 +484,14 @@ function drawTable(
 
   const breakPageIfNeeded = (needed: number) => {
     if (yy - needed < BOTTOM_MARGIN) {
-      doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+      doc.page.drawRectangle({
+        x,
+        y: yy,
+        width: tableWidth,
+        height: pageTop - yy,
+        borderColor: BORDER,
+        borderWidth: 0.75,
+      });
       let newTop = addPage(pdf, doc);
       if (onNewPage) newTop = onNewPage(newTop);
       pageTop = newTop;
@@ -344,7 +507,14 @@ function drawTable(
     breakPageIfNeeded(rowHeight);
     yy = drawRow(yy, { bold: totalRow }, 0);
   }
-  doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+  doc.page.drawRectangle({
+    x,
+    y: yy,
+    width: tableWidth,
+    height: pageTop - yy,
+    borderColor: BORDER,
+    borderWidth: 0.75,
+  });
   return yy - 6;
 }
 
@@ -370,7 +540,9 @@ const RECONCILIATION_DETAIL_COLUMNS = [
   { label: "AMOUNT (USD)", width: 100, align: "right" as const },
 ];
 
-function reconciliationDetailRows(lines: ReconciliationDetailLine[]): string[][] {
+function reconciliationDetailRows(
+  lines: ReconciliationDetailLine[],
+): string[][] {
   return lines.map((line) => [
     line.txnDate ? formatSlashDate(line.txnDate) : "",
     line.txnType,
@@ -380,12 +552,18 @@ function reconciliationDetailRows(lines: ReconciliationDetailLine[]): string[][]
   ]);
 }
 
-const RECONCILIATION_MIN_TABLE_HEIGHT = 16 /* header */ + 12 * 2 /* 1 fila + Total */ + 20 /* título */;
+const RECONCILIATION_MIN_TABLE_HEIGHT =
+  16 /* header */ + 12 * 2 /* 1 fila + Total */ + 20; /* título */
 
 /** Evita dejar un título + encabezado de tabla solos al final de una
  * página (huérfano): si no entra el mínimo (título + encabezado + 1 fila
  * + Total), salta de página antes de dibujar nada de esta sección. */
-function ensureRoomFor(pdf: PDFDocument, doc: Doc, y: number, minHeight: number): number {
+function ensureRoomFor(
+  pdf: PDFDocument,
+  doc: Doc,
+  y: number,
+  minHeight: number,
+): number {
   if (y - minHeight < BOTTOM_MARGIN) return addPage(pdf, doc);
   return y;
 }
@@ -412,14 +590,28 @@ export async function buildReconciliationPdf(params: {
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
   let y = HEIGHT - 50;
-  doc.page.drawText("Wagyu Food Service LLC", { x: MARGIN, y, size: 13, font: doc.bold, color: NAVY });
+  doc.page.drawText("Wagyu Food Service LLC", {
+    x: MARGIN,
+    y,
+    size: 13,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 16;
   doc.page.drawText(
-    printable(`FIRST BANK, Period Ending ${formatSlashDate(params.periodEnding)}`),
+    printable(
+      `FIRST BANK, Period Ending ${formatSlashDate(params.periodEnding)}`,
+    ),
     { x: MARGIN, y, size: 9, font: doc.regular, color: MUTED },
   );
   y -= 20;
-  doc.page.drawText("RECONCILIATION REPORT", { x: MARGIN, y, size: 12, font: doc.bold, color: NAVY });
+  doc.page.drawText("RECONCILIATION REPORT", {
+    x: MARGIN,
+    y,
+    size: 12,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 16;
   if (params.reconciledOn) {
     doc.page.drawText(
@@ -428,7 +620,13 @@ export async function buildReconciliationPdf(params: {
     );
     y -= 12;
   }
-  doc.page.drawText("Reconciled by: Sinexia PR", { x: MARGIN, y, size: 8.5, font: doc.regular, color: MUTED });
+  doc.page.drawText("Reconciled by: Sinexia PR", {
+    x: MARGIN,
+    y,
+    size: 8.5,
+    font: doc.regular,
+    color: MUTED,
+  });
   y -= 12;
   doc.page.drawText(
     "Any changes made to transactions after this date aren't included in this report.",
@@ -444,77 +642,195 @@ export async function buildReconciliationPdf(params: {
   // transactions after periodEnding -> Uncleared transactions after
   // periodEnding (también combinados) -> Register balance as of
   // reportDate (hoy) -- igual que el Summary real de QuickBooks.
-  const clearedChecksTotal = round(params.clearedChecks.reduce((total, item) => total + item.amount, 0));
-  const clearedDepositsTotal = round(params.clearedDeposits.reduce((total, item) => total + item.amount, 0));
-  const uncleardAsOfTotal = round(params.control.asOfChecksTotal + params.control.asOfDepositsTotal);
-  const uncleardAfterTotal = round(params.control.afterChecksTotal + params.control.afterDepositsTotal);
+  const clearedChecksTotal = round(
+    params.clearedChecks.reduce((total, item) => total + item.amount, 0),
+  );
+  const clearedDepositsTotal = round(
+    params.clearedDeposits.reduce((total, item) => total + item.amount, 0),
+  );
+  const uncleardAsOfTotal = round(
+    params.control.asOfChecksTotal + params.control.asOfDepositsTotal,
+  );
+  const uncleardAfterTotal = round(
+    params.control.afterChecksTotal + params.control.afterDepositsTotal,
+  );
   // No basta con reportDate !== periodEnding -- un día sin ninguna
   // transacción nueva desde la última conciliación (p.ej. el 10/14
   // reconciliando contra el período al 10/13, pero QuickBooks sin nada
   // posterior) no debe mostrar "Cleared/Uncleared transactions after"
   // en el Summary ni las tablas "after" en Details, aunque las fechas
   // difieran -- eso solo corresponde cuando SÍ hay algo en ese tramo.
-  const hasAfterTranche = params.afterChecks.length > 0 || params.afterDeposits.length > 0;
+  const hasAfterTranche =
+    params.afterChecks.length > 0 || params.afterDeposits.length > 0;
   // La última fila "Register balance as of [Reconciled on]" repite el
   // mismo Register que la fila "as of [periodEnding]" cuando el tramo
   // "after" neteó a cero (caso raro, pero posible) -- se muestra solo
   // si de verdad es un número distinto, no solo porque hasAfterTranche
   // sea true.
-  const showFinalRegisterLine = round(params.control.register) !== round(params.control.registerAsOf);
+  const showFinalRegisterLine =
+    round(params.control.register) !== round(params.control.registerAsOf);
 
-  doc.page.drawText("Summary (USD)", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
+  doc.page.drawText("Summary (USD)", {
+    x: MARGIN,
+    y,
+    size: 10,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 18;
-  keyValueRow(doc, "Statement beginning balance", money(params.beginningBalance), MARGIN, y);
+  keyValueRow(
+    doc,
+    "Statement beginning balance",
+    money(params.beginningBalance),
+    MARGIN,
+    y,
+  );
   y -= 14;
-  keyValueRow(doc, `Checks and payments cleared (${params.clearedChecks.length})`, money(clearedChecksTotal), MARGIN, y);
+  keyValueRow(
+    doc,
+    `Checks and payments cleared (${params.clearedChecks.length})`,
+    money(clearedChecksTotal),
+    MARGIN,
+    y,
+  );
   y -= 14;
-  keyValueRow(doc, `Deposits and other credits cleared (${params.clearedDeposits.length})`, money(clearedDepositsTotal), MARGIN, y);
+  keyValueRow(
+    doc,
+    `Deposits and other credits cleared (${params.clearedDeposits.length})`,
+    money(clearedDepositsTotal),
+    MARGIN,
+    y,
+  );
   y -= 14;
-  keyValueRow(doc, "Statement ending balance", money(params.control.statementEnding), MARGIN, y);
+  keyValueRow(
+    doc,
+    "Statement ending balance",
+    money(params.control.statementEnding),
+    MARGIN,
+    y,
+  );
   y -= 18;
-  keyValueRow(doc, `Uncleared transactions as of ${formatSlashDate(params.periodEnding)}`, money(uncleardAsOfTotal), MARGIN, y);
+  keyValueRow(
+    doc,
+    `Uncleared transactions as of ${formatSlashDate(params.periodEnding)}`,
+    money(uncleardAsOfTotal),
+    MARGIN,
+    y,
+  );
   y -= 14;
-  keyValueRow(doc, `Register balance as of ${formatSlashDate(params.periodEnding)}`, money(params.control.registerAsOf), MARGIN, y);
+  keyValueRow(
+    doc,
+    `Register balance as of ${formatSlashDate(params.periodEnding)}`,
+    money(params.control.registerAsOf),
+    MARGIN,
+    y,
+  );
   y -= 18;
   if (hasAfterTranche) {
-    keyValueRow(doc, `Cleared transactions after ${formatSlashDate(params.periodEnding)}`, money(0), MARGIN, y);
+    keyValueRow(
+      doc,
+      `Cleared transactions after ${formatSlashDate(params.periodEnding)}`,
+      money(0),
+      MARGIN,
+      y,
+    );
     y -= 14;
-    keyValueRow(doc, `Uncleared transactions after ${formatSlashDate(params.periodEnding)}`, money(uncleardAfterTotal), MARGIN, y);
+    keyValueRow(
+      doc,
+      `Uncleared transactions after ${formatSlashDate(params.periodEnding)}`,
+      money(uncleardAfterTotal),
+      MARGIN,
+      y,
+    );
     y -= 14;
   }
   if (showFinalRegisterLine) {
     // "Register balance as of" (la última fila del Summary) lleva la
     // fecha de "Reconciled on" -- cuándo se hizo ESTA conciliación --
     // no reportDate.
-    keyValueRow(doc, `Register balance as of ${formatSlashDate(params.reconciledOn ?? params.reportDate)}`, money(params.control.register), MARGIN, y);
+    keyValueRow(
+      doc,
+      `Register balance as of ${formatSlashDate(params.reconciledOn ?? params.reportDate)}`,
+      money(params.control.register),
+      MARGIN,
+      y,
+    );
     y -= 18;
   }
   y -= 8;
 
-  const drawDetailTable = (title: string, lines: ReconciliationDetailLine[], total: number) => {
+  const drawDetailTable = (
+    title: string,
+    lines: ReconciliationDetailLine[],
+    total: number,
+  ) => {
     y = ensureRoomFor(pdf, doc, y, RECONCILIATION_MIN_TABLE_HEIGHT);
     y = sectionTitle(doc, title, y, 9.5);
-    y = drawTable(pdf, doc, MARGIN, y, RECONCILIATION_DETAIL_COLUMNS, reconciliationDetailRows(lines), ["", "", "", "Total", money(total)]);
+    y = drawTable(
+      pdf,
+      doc,
+      MARGIN,
+      y,
+      RECONCILIATION_DETAIL_COLUMNS,
+      reconciliationDetailRows(lines),
+      ["", "", "", "Total", money(total)],
+    );
     y -= 10;
   };
 
   y = ensureRoomFor(pdf, doc, y, 16);
-  doc.page.drawText("Details", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
+  doc.page.drawText("Details", {
+    x: MARGIN,
+    y,
+    size: 10,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 18;
-  drawDetailTable(`Checks and payments cleared (${params.clearedChecks.length})`, params.clearedChecks, clearedChecksTotal);
+  drawDetailTable(
+    `Checks and payments cleared (${params.clearedChecks.length})`,
+    params.clearedChecks,
+    clearedChecksTotal,
+  );
   if (params.clearedDeposits.length > 0) {
-    drawDetailTable(`Deposits and other credits cleared (${params.clearedDeposits.length})`, params.clearedDeposits, clearedDepositsTotal);
+    drawDetailTable(
+      `Deposits and other credits cleared (${params.clearedDeposits.length})`,
+      params.clearedDeposits,
+      clearedDepositsTotal,
+    );
   }
 
   y = ensureRoomFor(pdf, doc, y, 16);
-  doc.page.drawText("Additional Information", { x: MARGIN, y, size: 10, font: doc.bold, color: NAVY });
+  doc.page.drawText("Additional Information", {
+    x: MARGIN,
+    y,
+    size: 10,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 18;
 
-  drawDetailTable(`Uncleared checks and payments as of ${formatSlashDate(params.periodEnding)}`, params.asOfChecks, params.control.asOfChecksTotal);
-  drawDetailTable(`Uncleared deposits and other credits as of ${formatSlashDate(params.periodEnding)}`, params.asOfDeposits, params.control.asOfDepositsTotal);
+  drawDetailTable(
+    `Uncleared checks and payments as of ${formatSlashDate(params.periodEnding)}`,
+    params.asOfChecks,
+    params.control.asOfChecksTotal,
+  );
+  drawDetailTable(
+    `Uncleared deposits and other credits as of ${formatSlashDate(params.periodEnding)}`,
+    params.asOfDeposits,
+    params.control.asOfDepositsTotal,
+  );
   if (hasAfterTranche) {
-    drawDetailTable(`Uncleared checks and payments after ${formatSlashDate(params.periodEnding)}`, params.afterChecks, params.control.afterChecksTotal);
-    drawDetailTable(`Uncleared deposits and other credits after ${formatSlashDate(params.periodEnding)}`, params.afterDeposits, params.control.afterDepositsTotal);
+    drawDetailTable(
+      `Uncleared checks and payments after ${formatSlashDate(params.periodEnding)}`,
+      params.afterChecks,
+      params.control.afterChecksTotal,
+    );
+    drawDetailTable(
+      `Uncleared deposits and other credits after ${formatSlashDate(params.periodEnding)}`,
+      params.afterDeposits,
+      params.control.afterDepositsTotal,
+    );
   }
   return pdf.save();
 }
@@ -557,26 +873,50 @@ export async function buildBankExportPdf(params: {
   const { pdf, doc } = await newDoc();
   let y = HEIGHT - 50;
   const headerLine = (text: string, size = 9, color = MUTED) => {
-    doc.page.drawText(printable(text), { x: MARGIN, y, size, font: doc.regular, color });
+    doc.page.drawText(printable(text), {
+      x: MARGIN,
+      y,
+      size,
+      font: doc.regular,
+      color,
+    });
     y -= 13;
   };
-  doc.page.drawText("Deposit Accounts Activity Summary", { x: MARGIN, y, size: 12, font: doc.bold, color: NAVY });
+  doc.page.drawText("Deposit Accounts Activity Summary", {
+    x: MARGIN,
+    y,
+    size: 12,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 18;
-  headerLine(`Report Created: ${formatReportCreatedStamp(params.generatedAt ?? new Date())}`);
-  headerLine(`Account: ${params.accountLabel} - Available ${money(params.availableBalance)}`);
+  headerLine(
+    `Report Created: ${formatReportCreatedStamp(params.generatedAt ?? new Date())}`,
+  );
+  headerLine(
+    `Account: ${params.accountLabel} - Available ${money(params.availableBalance)}`,
+  );
   headerLine(`Date range: ${formatSlashDate(params.dateRange)}`);
   headerLine("Transaction types: All transactions");
   headerLine("Detail option: Includes transaction detail");
   y -= 8;
   // El export real repite la línea de cuenta antes de la tabla.
-  headerLine(`Account: ${params.accountLabel} - Available ${money(params.availableBalance)}`, 9.5, NAVY);
+  headerLine(
+    `Account: ${params.accountLabel} - Available ${money(params.availableBalance)}`,
+    9.5,
+    NAVY,
+  );
   y -= 4;
 
   const debitTotal = round(
-    params.movements.filter((m) => m.direction === "egreso").reduce((total, m) => total + m.amount, 0),
+    params.movements
+      .filter((m) => m.direction === "egreso")
+      .reduce((total, m) => total + m.amount, 0),
   );
   const creditTotal = round(
-    params.movements.filter((m) => m.direction === "ingreso").reduce((total, m) => total + m.amount, 0),
+    params.movements
+      .filter((m) => m.direction === "ingreso")
+      .reduce((total, m) => total + m.amount, 0),
   );
   const rows: TableRow[] = params.movements.map((m) => [
     m.postDate ? formatSlashDate(m.postDate) : "",
@@ -596,15 +936,26 @@ export async function buildBankExportPdf(params: {
       { label: "Post Date", width: 70 },
       { label: "Reference", width: 90 },
       { label: "Additional Reference", width: 110 },
-      { label: "Description", width: 220 },
+      { label: "Description", width: 220, wrap: true },
       { label: "Debit", width: 85, align: "right" },
       { label: "Credit", width: 85, align: "right" },
       { label: "Calculated Balance", width: 110, align: "right" },
     ],
     rows,
-    [formatSlashDate(params.dateRange), "", "", "Totals", money(debitTotal), money(creditTotal), ""],
+    [
+      formatSlashDate(params.dateRange),
+      "",
+      "",
+      "Totals",
+      money(debitTotal),
+      money(creditTotal),
+      "",
+    ],
   );
-  stampFooters(pdf, doc.regular, { dateStamp: null, pageLabel: (i, n) => `Page ${i} of ${n}` });
+  stampFooters(pdf, doc.regular, {
+    dateStamp: null,
+    pageLabel: (i, n) => `Page ${i} of ${n}`,
+  });
   return pdf.save();
 }
 
@@ -680,18 +1031,60 @@ function drawAgingDetailTable(
     }
     // "Total for X" lleva el subtotal tanto en Amount como en Open
     // balance (las 2 columnas de importe), igual que el original.
-    rows.push({ bold: [`Total for ${group.name}`, "", "", "", money(group.subtotal), money(group.subtotal), ""] });
+    rows.push({
+      bold: [
+        `Total for ${group.name}`,
+        "",
+        "",
+        "",
+        money(group.subtotal),
+        money(group.subtotal),
+        "",
+      ],
+    });
   }
-  return drawTable(pdf, doc, MARGIN, y, columns, rows, ["TOTAL", "", "", "", money(grandTotal), money(grandTotal), ""], onNewPage);
+  return drawTable(
+    pdf,
+    doc,
+    MARGIN,
+    y,
+    columns,
+    rows,
+    ["TOTAL", "", "", "", money(grandTotal), money(grandTotal), ""],
+    onNewPage,
+  );
 }
 
-function drawAgingHeader(doc: Doc, reportType: string, subtitle: string, startY = HEIGHT - 50) {
+function drawAgingHeader(
+  doc: Doc,
+  reportType: string,
+  subtitle: string,
+  startY = HEIGHT - 50,
+) {
   let y = startY;
-  doc.page.drawText("Wagyu Food Service LLC", { x: MARGIN, y, size: 13, font: doc.bold, color: NAVY });
+  doc.page.drawText("Wagyu Food Service LLC", {
+    x: MARGIN,
+    y,
+    size: 13,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 16;
-  doc.page.drawText(printable(reportType), { x: MARGIN, y, size: 11, font: doc.bold, color: NAVY });
+  doc.page.drawText(printable(reportType), {
+    x: MARGIN,
+    y,
+    size: 11,
+    font: doc.bold,
+    color: NAVY,
+  });
   y -= 14;
-  doc.page.drawText(printable(subtitle), { x: MARGIN, y, size: 8.5, font: doc.regular, color: MUTED });
+  doc.page.drawText(printable(subtitle), {
+    x: MARGIN,
+    y,
+    size: 8.5,
+    font: doc.regular,
+    color: MUTED,
+  });
   return y - 20;
 }
 
@@ -723,15 +1116,34 @@ export async function buildAgingVendorsPdf(params: {
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
   const subtitle = `As of ${formatEnglishShortDate(params.reportDate)}`;
-  const y = drawAgingHeader(doc, "Vendor Balance Detail Report - New", subtitle);
-  const onNewPage = (startY: number) => drawAgingHeader(doc, "Vendor Balance Detail Report - New", subtitle, startY);
+  const y = drawAgingHeader(
+    doc,
+    "Vendor Balance Detail Report - New",
+    subtitle,
+  );
+  const onNewPage = (startY: number) =>
+    drawAgingHeader(
+      doc,
+      "Vendor Balance Detail Report - New",
+      subtitle,
+      startY,
+    );
   const hasDetail = params.groups?.some((group) => group.hasDetail);
   if (hasDetail && params.groups) {
-    drawAgingDetailTable(pdf, doc, y, params.groups, params.rawTotal, onNewPage);
+    drawAgingDetailTable(
+      pdf,
+      doc,
+      y,
+      params.groups,
+      params.rawTotal,
+      onNewPage,
+    );
   } else {
     drawAgingTable(pdf, doc, y, params.items, params.rawTotal, onNewPage);
   }
-  stampFooters(pdf, doc.regular, { dateStamp: formatAgingFooterStamp(params.generatedAt ?? new Date()) });
+  stampFooters(pdf, doc.regular, {
+    dateStamp: formatAgingFooterStamp(params.generatedAt ?? new Date()),
+  });
   return pdf.save();
 }
 
@@ -744,17 +1156,36 @@ export async function buildAgingCustomersPdf(params: {
 }): Promise<Uint8Array> {
   const { pdf, doc } = await newDoc();
   const subtitle = `As of ${formatEnglishShortDate(params.reportDate)}`;
-  const y = drawAgingHeader(doc, "Customer Balance Detail Report - New", subtitle);
+  const y = drawAgingHeader(
+    doc,
+    "Customer Balance Detail Report - New",
+    subtitle,
+  );
   // Si pagina, la página 2 (y siguientes) repite el bloque de título --
   // no solo el encabezado de columnas de la tabla.
-  const onNewPage = (startY: number) => drawAgingHeader(doc, "Customer Balance Detail Report - New", subtitle, startY);
+  const onNewPage = (startY: number) =>
+    drawAgingHeader(
+      doc,
+      "Customer Balance Detail Report - New",
+      subtitle,
+      startY,
+    );
   const hasDetail = params.groups?.some((group) => group.hasDetail);
   if (hasDetail && params.groups) {
-    drawAgingDetailTable(pdf, doc, y, params.groups, params.rawTotal, onNewPage);
+    drawAgingDetailTable(
+      pdf,
+      doc,
+      y,
+      params.groups,
+      params.rawTotal,
+      onNewPage,
+    );
   } else {
     drawAgingTable(pdf, doc, y, params.items, params.rawTotal, onNewPage);
   }
-  stampFooters(pdf, doc.regular, { dateStamp: formatAgingFooterStamp(params.generatedAt ?? new Date()) });
+  stampFooters(pdf, doc.regular, {
+    dateStamp: formatAgingFooterStamp(params.generatedAt ?? new Date()),
+  });
   return pdf.save();
 }
 
@@ -773,14 +1204,35 @@ function financialHorizonRow(
   recurrentesLabel: string | null,
 ) {
   const range = `${formatSpanishLongDate(rangeStart)} al ${formatSpanishLongDate(rangeEnd)}`;
-  y = labelValueRow(doc, `Weekly income projection - Proyección del ${range}`, money(step.income), MARGIN, y) - 2;
+  y =
+    labelValueRow(
+      doc,
+      `Weekly income projection - Proyección del ${range}`,
+      money(step.income),
+      MARGIN,
+      y,
+    ) - 2;
   // Solo day7 (sin recurrentesLabel) usa "Aging at" a secas; day14/day21
   // lo escriben "Total Aging at", tal como Hernan.
   const agingLabel = recurrentesLabel ? "Total Aging at" : "Aging at";
   if (recurrentesLabel) {
-    y = labelValueRow(doc, `${recurrentesLabel} - Recurrentes del ${range}`, money(-step.recurrentes), MARGIN, y) - 2;
+    y =
+      labelValueRow(
+        doc,
+        `${recurrentesLabel} - Recurrentes del ${range}`,
+        money(-step.recurrentes),
+        MARGIN,
+        y,
+      ) - 2;
   }
-  y = labelValueRow(doc, `${agingLabel} - Aging del ${range}`, money(step.agingAdjustment), MARGIN, y) - 2;
+  y =
+    labelValueRow(
+      doc,
+      `${agingLabel} - Aging del ${range}`,
+      money(step.agingAdjustment),
+      MARGIN,
+      y,
+    ) - 2;
   if (!recurrentesLabel) {
     // "Total" solo en el primer bloque (7-day) -- Balance Today +
     // Weekly income projection (+ Aging) de ESE bloque: es el mismo
@@ -788,7 +1240,14 @@ function financialHorizonRow(
     // así que SIEMPRE coinciden (nunca un valor fijo aparte).
     y = labelValueRow(doc, "Total", money(step.balance), MARGIN, y) - 2;
   }
-  y = labelValueRow(doc, `${step.label} balance ${formatSlashDate(step.date)}`, money(step.balance), MARGIN, y) - 2;
+  y =
+    labelValueRow(
+      doc,
+      `${step.label} balance ${formatSlashDate(step.date)}`,
+      money(step.balance),
+      MARGIN,
+      y,
+    ) - 2;
   return y - 14;
 }
 
@@ -804,9 +1263,17 @@ function recurringRowCells(row: RecurringDetailRow): string[] {
   ];
 }
 
-type RecurringTableRowSpec = { cells: string[]; kind: "data" | "paid" | "bold" };
+type RecurringTableRowSpec = {
+  cells: string[];
+  kind: "data" | "paid" | "bold";
+};
 
-const RECURRING_TABLE_COLUMNS: Array<{ label: string; width: number; align?: "right"; wrap?: boolean }> = [
+const RECURRING_TABLE_COLUMNS: Array<{
+  label: string;
+  width: number;
+  align?: "right";
+  wrap?: boolean;
+}> = [
   { label: "Date", width: 42 },
   { label: "Tr Type", width: 30 },
   { label: "Num", width: 78, wrap: true },
@@ -841,13 +1308,33 @@ function drawRecurringDetailTable(
   const boldSize = 7.3;
 
   const drawHeader = (yy: number) => {
-    doc.page.drawRectangle({ x, y: yy - 16, width: tableWidth, height: 16, color: NAVY });
+    doc.page.drawRectangle({
+      x,
+      y: yy - 16,
+      width: tableWidth,
+      height: 16,
+      color: NAVY,
+    });
     let cx = x;
     for (const col of columns) {
       if (col.align === "right") {
-        right(doc.page, col.label, doc.bold, 7, cx + col.width - 4, yy - 11, rgb(1, 1, 1));
+        right(
+          doc.page,
+          col.label,
+          doc.bold,
+          7,
+          cx + col.width - 4,
+          yy - 11,
+          rgb(1, 1, 1),
+        );
       } else {
-        doc.page.drawText(printable(col.label), { x: cx + 4, y: yy - 11, size: 7, font: doc.bold, color: rgb(1, 1, 1) });
+        doc.page.drawText(printable(col.label), {
+          x: cx + 4,
+          y: yy - 11,
+          size: 7,
+          font: doc.bold,
+          color: rgb(1, 1, 1),
+        });
       }
       cx += col.width;
     }
@@ -870,23 +1357,40 @@ function drawRecurringDetailTable(
     // a solo 110pt, que no le alcanza a "TOTAL RECURRENTES A PAGAR".
     const vendorIndex = 3;
     const dueDateIndex = 4;
-    const vendorWidth = bold ? columns[vendorIndex]!.width + columns[dueDateIndex]!.width : columns[vendorIndex]!.width;
+    const vendorWidth = bold
+      ? columns[vendorIndex]!.width + columns[dueDateIndex]!.width
+      : columns[vendorIndex]!.width;
     const wrapped = columns.map((col, i) => {
       if (bold && i === dueDateIndex) return [""];
       const width = i === vendorIndex ? vendorWidth : col.width;
-      return col.wrap && row.cells[i] ? wrapText(row.cells[i]!, font, size, width - 8) : [printable(row.cells[i] ?? "")];
+      return col.wrap && row.cells[i]
+        ? wrapText(row.cells[i]!, font, size, width - 8)
+        : [printable(row.cells[i] ?? "")];
     });
     const lineCount = Math.max(1, ...wrapped.map((lines) => lines.length));
     const rowHeight = lineCount * lineHeight + vPad * 2;
 
     if (yy - rowHeight < BOTTOM_MARGIN) {
-      doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+      doc.page.drawRectangle({
+        x,
+        y: yy,
+        width: tableWidth,
+        height: pageTop - yy,
+        borderColor: BORDER,
+        borderWidth: 0.75,
+      });
       pageTop = addPage(pdf, doc);
       yy = drawHeader(pageTop);
     }
 
     if (bold) {
-      doc.page.drawRectangle({ x, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: rgb(0.9, 0.92, 0.94) });
+      doc.page.drawRectangle({
+        x,
+        y: yy - rowHeight,
+        width: tableWidth,
+        height: rowHeight,
+        color: rgb(0.9, 0.92, 0.94),
+      });
     }
     let colX = x;
     columns.forEach((col, i) => {
@@ -904,7 +1408,14 @@ function drawRecurringDetailTable(
     yy -= rowHeight;
   }
 
-  doc.page.drawRectangle({ x, y: yy, width: tableWidth, height: pageTop - yy, borderColor: BORDER, borderWidth: 0.75 });
+  doc.page.drawRectangle({
+    x,
+    y: yy,
+    width: tableWidth,
+    height: pageTop - yy,
+    borderColor: BORDER,
+    borderWidth: 0.75,
+  });
   return yy - 6;
 }
 
@@ -936,10 +1447,29 @@ export async function buildConsolidatedPdf(params: {
   // A/P Aging Detail Recurrentes (derecha)
   // -------------------------------------------------------------------
   let y = HEIGHT - 50;
-  doc.page.drawText("RECONCILIATION INFORMATION", { x: MARGIN, y, size: 11, font: doc.bold, color: NAVY });
-  right(doc.page, formatSlashDate(params.reportDate), doc.bold, 9, MARGIN + 380, y);
+  doc.page.drawText("RECONCILIATION INFORMATION", {
+    x: MARGIN,
+    y,
+    size: 11,
+    font: doc.bold,
+    color: NAVY,
+  });
+  right(
+    doc.page,
+    formatSlashDate(params.reportDate),
+    doc.bold,
+    9,
+    MARGIN + 380,
+    y,
+  );
   y -= 16;
-  doc.page.drawText("Date", { x: MARGIN, y, size: 7.5, font: doc.bold, color: MUTED });
+  doc.page.drawText("Date", {
+    x: MARGIN,
+    y,
+    size: 7.5,
+    font: doc.bold,
+    color: MUTED,
+  });
   right(doc.page, "Amount", doc.bold, 7.5, MARGIN + 335, y);
   y -= 14;
   if (params.control) {
@@ -949,40 +1479,156 @@ export async function buildConsolidatedPdf(params: {
     // Hernan del 10/15: sus etiquetas "as of / after" llevan 10/14/2026
     // (el período que se conciliadó), no 10/15.
     const asOfDate = params.periodEnding ?? params.reportDate;
-    y = labelValueRow(doc, "Statement ending balance S/RECONCILIATION REPORT", money(params.control.statementEnding), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared checks and payments as of ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.asOfChecksTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared checks and payments after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.afterChecksTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared deposits and other credits as of ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.asOfDepositsTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, `Uncleared deposits and other credits after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`, money(params.control.afterDepositsTotal), MARGIN, y) - 2;
-    y = labelValueRow(doc, "Register balance S/RECONCILIATION REPORT", money(params.control.register), MARGIN, y) - 2;
+    y =
+      labelValueRow(
+        doc,
+        "Statement ending balance S/RECONCILIATION REPORT",
+        money(params.control.statementEnding),
+        MARGIN,
+        y,
+      ) - 2;
+    y =
+      labelValueRow(
+        doc,
+        `Uncleared checks and payments as of ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`,
+        money(params.control.asOfChecksTotal),
+        MARGIN,
+        y,
+      ) - 2;
+    y =
+      labelValueRow(
+        doc,
+        `Uncleared checks and payments after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`,
+        money(params.control.afterChecksTotal),
+        MARGIN,
+        y,
+      ) - 2;
+    y =
+      labelValueRow(
+        doc,
+        `Uncleared deposits and other credits as of ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`,
+        money(params.control.asOfDepositsTotal),
+        MARGIN,
+        y,
+      ) - 2;
+    y =
+      labelValueRow(
+        doc,
+        `Uncleared deposits and other credits after ${formatSlashDate(asOfDate)} S/RECONCILIATION REPORT`,
+        money(params.control.afterDepositsTotal),
+        MARGIN,
+        y,
+      ) - 2;
+    y =
+      labelValueRow(
+        doc,
+        "Register balance S/RECONCILIATION REPORT",
+        money(params.control.register),
+        MARGIN,
+        y,
+      ) - 2;
   }
-  const recurring = buildRecurringDetailTable(params.recurring, params.reportDate, params.periodEnding);
-  y = labelValueRow(doc, "Recurrentes prior to this week", money(-recurring.prior.total), MARGIN, y) - 2;
-  y = labelValueRow(doc, "Recurrentes for this week", money(-recurring.thisWeek.total), MARGIN, y) - 2;
-  y = labelValueRow(doc, "Balance after Weekly Payments", money(params.financial?.balanceToday ?? null), MARGIN, y) - 2;
+  const recurring = buildRecurringDetailTable(
+    params.recurring,
+    params.reportDate,
+    params.periodEnding,
+  );
+  y =
+    labelValueRow(
+      doc,
+      "Recurrentes prior to this week",
+      money(-recurring.prior.total),
+      MARGIN,
+      y,
+    ) - 2;
+  y =
+    labelValueRow(
+      doc,
+      "Recurrentes for this week",
+      money(-recurring.thisWeek.total),
+      MARGIN,
+      y,
+    ) - 2;
+  y =
+    labelValueRow(
+      doc,
+      "Balance after Weekly Payments",
+      money(params.financial?.balanceToday ?? null),
+      MARGIN,
+      y,
+    ) - 2;
   y = labelValueRow(doc, "A/P Aging", money(0), MARGIN, y) - 2;
   y -= 10;
 
   if (params.financial) {
-    doc.page.drawText("FINANCIAL REPORT", { x: MARGIN, y, size: 11, font: doc.bold, color: NAVY });
-    right(doc.page, formatSlashDate(params.reportDate), doc.bold, 9, MARGIN + 380, y);
+    doc.page.drawText("FINANCIAL REPORT", {
+      x: MARGIN,
+      y,
+      size: 11,
+      font: doc.bold,
+      color: NAVY,
+    });
+    right(
+      doc.page,
+      formatSlashDate(params.reportDate),
+      doc.bold,
+      9,
+      MARGIN + 380,
+      y,
+    );
     y -= 16;
-    doc.page.drawText("Date", { x: MARGIN, y, size: 7.5, font: doc.bold, color: MUTED });
+    doc.page.drawText("Date", {
+      x: MARGIN,
+      y,
+      size: 7.5,
+      font: doc.bold,
+      color: MUTED,
+    });
     right(doc.page, "Amount", doc.bold, 7.5, MARGIN + 335, y);
     y -= 14;
-    y = labelValueRow(doc, "Balance - Today", money(params.financial.balanceToday), MARGIN, y) - 2;
+    y =
+      labelValueRow(
+        doc,
+        "Balance - Today",
+        money(params.financial.balanceToday),
+        MARGIN,
+        y,
+      ) - 2;
     y -= 4;
     const weekStart = sundayWeekStartOf(params.reportDate);
-    y = financialHorizonRow(doc, y, params.financial.day7, addDays(weekStart, 0), addDays(weekStart, 6), null);
-    y = financialHorizonRow(doc, y, params.financial.day14, addDays(weekStart, 7), addDays(weekStart, 13), "Recurrentes for next 14 days");
-    y = financialHorizonRow(doc, y, params.financial.day21, addDays(weekStart, 14), addDays(weekStart, 20), "Recurrentes for next 21 days");
+    y = financialHorizonRow(
+      doc,
+      y,
+      params.financial.day7,
+      addDays(weekStart, 0),
+      addDays(weekStart, 6),
+      null,
+    );
+    y = financialHorizonRow(
+      doc,
+      y,
+      params.financial.day14,
+      addDays(weekStart, 7),
+      addDays(weekStart, 13),
+      "Recurrentes for next 14 days",
+    );
+    y = financialHorizonRow(
+      doc,
+      y,
+      params.financial.day21,
+      addDays(weekStart, 14),
+      addDays(weekStart, 20),
+      "Recurrentes for next 21 days",
+    );
   }
 
   // A/P Aging Detail Recurrentes -- columna derecha de la misma página 1.
   const rightX = 430;
   let ry = HEIGHT - 50;
   doc.page.drawText(
-    printable(`A/P Aging Detail Recurrentes - As of ${formatEnglishLongDate(lastDayOfMonth(params.reportDate))}`),
+    printable(
+      `A/P Aging Detail Recurrentes - As of ${formatEnglishLongDate(lastDayOfMonth(params.reportDate))}`,
+    ),
     { x: rightX, y: ry, size: 10, font: doc.bold, color: NAVY },
   );
   ry -= 18;
@@ -994,12 +1640,25 @@ export async function buildConsolidatedPdf(params: {
     [recurring.weekAfter, "Total-Week"],
   ] as const) {
     for (const row of bucket.rows) {
-      recurringRows.push({ cells: recurringRowCells(row), kind: row.isPaid ? "paid" : "data" });
+      recurringRows.push({
+        cells: recurringRowCells(row),
+        kind: row.isPaid ? "paid" : "data",
+      });
     }
-    recurringRows.push({ cells: ["", "", "", label, "", money(bucket.total)], kind: "bold" });
+    recurringRows.push({
+      cells: ["", "", "", label, "", money(bucket.total)],
+      kind: "bold",
+    });
   }
   recurringRows.push({
-    cells: ["", "", "", "TOTAL RECURRENTES A PAGAR", "", money(recurring.grandTotal)],
+    cells: [
+      "",
+      "",
+      "",
+      "TOTAL RECURRENTES A PAGAR",
+      "",
+      money(recurring.grandTotal),
+    ],
     kind: "bold",
   });
   drawRecurringDetailTable(pdf, doc, rightX, ry, recurringRows);
@@ -1011,9 +1670,22 @@ export async function buildConsolidatedPdf(params: {
   const page2 = pdf.addPage([WIDTH, HEIGHT]);
   const doc2: Doc = { page: page2, bold: doc.bold, regular: doc.regular };
   let y2 = HEIGHT - 50;
-  doc2.page.drawText(formatSlashDate(params.reportDate), { x: MARGIN, y: y2, size: 10, font: doc.bold, color: NAVY });
+  doc2.page.drawText(formatSlashDate(params.reportDate), {
+    x: MARGIN,
+    y: y2,
+    size: 10,
+    font: doc.bold,
+    color: NAVY,
+  });
   y2 -= 20;
-  keyValueRow(doc2, "Balance - GABRIEL", money(params.balanceGabriel), MARGIN, y2, 300);
+  keyValueRow(
+    doc2,
+    "Balance - GABRIEL",
+    money(params.balanceGabriel),
+    MARGIN,
+    y2,
+    300,
+  );
   y2 -= 24;
 
   // Cada línea de Variación Diaria se muestra en SU bloque -- "variance"
@@ -1024,8 +1696,10 @@ export async function buildConsolidatedPdf(params: {
   // sin cobrar) va en el bloque de depósitos, separado del subtotal de
   // cheques. El total de control (Gabriel + variación) no cambia: sigue
   // siendo Gabriel + la suma de TODAS las líneas de ambos bloques.
-  const { variance: checksVarianceLines, uncollectedDeposits: depositVarianceLines } =
-    splitVarianceLinesBySection(params.varianceLines);
+  const {
+    variance: checksVarianceLines,
+    uncollectedDeposits: depositVarianceLines,
+  } = splitVarianceLinesBySection(params.varianceLines);
   const checksVarianceTotal = totalVarianceOf(checksVarianceLines);
   const depositVarianceTotal = totalVarianceOf(depositVarianceLines);
   const allVarianceTotal = totalVarianceOf(params.varianceLines);
@@ -1033,7 +1707,12 @@ export async function buildConsolidatedPdf(params: {
     { label: "", width: 350 },
     { label: "", width: 120, align: "right" as const },
   ];
-  y2 = sectionTitle(doc2, "Variación Diaria - Uncleared checks and payments", y2, 10);
+  y2 = sectionTitle(
+    doc2,
+    "Variación Diaria - Uncleared checks and payments",
+    y2,
+    10,
+  );
   y2 = drawTable(
     pdf,
     doc2,
@@ -1044,7 +1723,12 @@ export async function buildConsolidatedPdf(params: {
     ["", money(checksVarianceTotal)],
   );
   y2 -= 14;
-  y2 = sectionTitle(doc2, "Variación Diaria- Uncleared deposits and other credits", y2, 10);
+  y2 = sectionTitle(
+    doc2,
+    "Variación Diaria- Uncleared deposits and other credits",
+    y2,
+    10,
+  );
   y2 = drawTable(
     pdf,
     doc2,
@@ -1057,8 +1741,17 @@ export async function buildConsolidatedPdf(params: {
   y2 -= 20;
 
   const balanceAfterVariance =
-    params.balanceGabriel == null ? null : params.balanceGabriel + allVarianceTotal;
-  keyValueRow(doc2, "Balance after Weekly Payments", money(balanceAfterVariance), MARGIN, y2, 300);
+    params.balanceGabriel == null
+      ? null
+      : params.balanceGabriel + allVarianceTotal;
+  keyValueRow(
+    doc2,
+    "Balance after Weekly Payments",
+    money(balanceAfterVariance),
+    MARGIN,
+    y2,
+    300,
+  );
   y2 -= 14;
   // "Depósitos del día" (lo nuevo de HOY todavía no ingresado en
   // QuickBooks) es un término propio de la ecuación de control -- no se
@@ -1066,10 +1759,27 @@ export async function buildConsolidatedPdf(params: {
   // puede ser, p.ej., la reversa de un Not entered Sales de un día
   // anterior: otro día, otro depósito, no se netean entre sí).
   const depositsOfTheDay = params.notEnteredDepositsTotal;
-  keyValueRow(doc2, `Depósitos ${formatSlashDate(params.reportDate)}`, money(depositsOfTheDay), MARGIN, y2, 300);
+  keyValueRow(
+    doc2,
+    `Depósitos ${formatSlashDate(params.reportDate)}`,
+    money(depositsOfTheDay),
+    MARGIN,
+    y2,
+    300,
+  );
   y2 -= 14;
-  const balanceWithNotEntered = balanceAfterVariance == null ? null : balanceAfterVariance + depositsOfTheDay;
-  keyValueRow(doc2, "Balance after Weekly Payments + Not entered Sales", money(balanceWithNotEntered), MARGIN, y2, 300);
+  const balanceWithNotEntered =
+    balanceAfterVariance == null
+      ? null
+      : balanceAfterVariance + depositsOfTheDay;
+  keyValueRow(
+    doc2,
+    "Balance after Weekly Payments + Not entered Sales",
+    money(balanceWithNotEntered),
+    MARGIN,
+    y2,
+    300,
+  );
 
   // -------------------------------------------------------------------
   // Página 3 (portada, se mueve al frente del Paquete para el dueño):
@@ -1078,43 +1788,133 @@ export async function buildConsolidatedPdf(params: {
   const page3 = pdf.addPage([WIDTH, HEIGHT]);
   const doc3: Doc = { page: page3, bold: doc.bold, regular: doc.regular };
   let y3 = HEIGHT - 50;
-  doc3.page.drawText("CONSOLIDATED REPORT", { x: MARGIN, y: y3, size: 14, font: doc.bold, color: NAVY });
-  right(doc3.page, formatSlashDate(params.reportDate), doc.bold, 10, WIDTH - MARGIN, y3);
+  doc3.page.drawText("CONSOLIDATED REPORT", {
+    x: MARGIN,
+    y: y3,
+    size: 14,
+    font: doc.bold,
+    color: NAVY,
+  });
+  right(
+    doc3.page,
+    formatSlashDate(params.reportDate),
+    doc.bold,
+    10,
+    WIDTH - MARGIN,
+    y3,
+  );
   y3 -= 36;
 
   const primeMeatsBankBalance = 0;
-  const totalFirstBank = (params.financial?.balanceToday ?? 0) + primeMeatsBankBalance;
+  const totalFirstBank =
+    (params.financial?.balanceToday ?? 0) + primeMeatsBankBalance;
   y3 = sectionTitle(doc3, "FIRST BANK ACCOUNTS", y3, 10);
-  keyValueRow(doc3, "Wagyu Food Service Balance First Bank Acc", money(params.financial?.balanceToday ?? null), MARGIN, y3, 260);
+  keyValueRow(
+    doc3,
+    "Wagyu Food Service Balance First Bank Acc",
+    money(params.financial?.balanceToday ?? null),
+    MARGIN,
+    y3,
+    260,
+  );
   y3 -= 14;
-  keyValueRow(doc3, "Prime Meats Balance First Bank Acc", money(primeMeatsBankBalance), MARGIN, y3, 260);
+  keyValueRow(
+    doc3,
+    "Prime Meats Balance First Bank Acc",
+    money(primeMeatsBankBalance),
+    MARGIN,
+    y3,
+    260,
+  );
   y3 -= 14;
   // Esta fila lleva 2 valores (0.00 y 0.00), no 1 como las demás --
   // réplica exacta de la planilla de Hernan.
-  doc3.page.drawText(printable("Recurrentes Prime Meats"), { x: MARGIN, y: y3, size: 8.5, font: doc.regular, color: MUTED });
-  right(doc3.page, money(params.primeMeatsRecurring), doc.bold, 9, MARGIN + 200, y3);
-  right(doc3.page, money(params.primeMeatsRecurring), doc.bold, 9, MARGIN + 260, y3);
+  doc3.page.drawText(printable("Recurrentes Prime Meats"), {
+    x: MARGIN,
+    y: y3,
+    size: 8.5,
+    font: doc.regular,
+    color: MUTED,
+  });
+  right(
+    doc3.page,
+    money(params.primeMeatsRecurring),
+    doc.bold,
+    9,
+    MARGIN + 200,
+    y3,
+  );
+  right(
+    doc3.page,
+    money(params.primeMeatsRecurring),
+    doc.bold,
+    9,
+    MARGIN + 260,
+    y3,
+  );
   y3 -= 14;
-  keyValueRow(doc3, "Total First Bank Accounts", money(totalFirstBank), MARGIN, y3, 260);
+  keyValueRow(
+    doc3,
+    "Total First Bank Accounts",
+    money(totalFirstBank),
+    MARGIN,
+    y3,
+    260,
+  );
   y3 -= 30;
 
   if (params.vendorAging) {
     y3 = sectionTitle(doc3, "AGING - VENDORS", y3, 10);
-    keyValueRow(doc3, "Wagyu Food Service - Total", money(params.vendorAging.rawTotal), MARGIN, y3, 260);
+    keyValueRow(
+      doc3,
+      "Wagyu Food Service - Total",
+      money(params.vendorAging.rawTotal),
+      MARGIN,
+      y3,
+      260,
+    );
     y3 -= 14;
-    keyValueRow(doc3, "Prime Meats - Total", money(params.vendorAging.primeMeatsBalance), MARGIN, y3, 260);
+    keyValueRow(
+      doc3,
+      "Prime Meats - Total",
+      money(params.vendorAging.primeMeatsBalance),
+      MARGIN,
+      y3,
+      260,
+    );
     y3 -= 14;
-    keyValueRow(doc3, "Aging Vendors - Consolidated Total", money(params.vendorAging.consolidated), MARGIN, y3, 260);
+    keyValueRow(
+      doc3,
+      "Aging Vendors - Consolidated Total",
+      money(params.vendorAging.consolidated),
+      MARGIN,
+      y3,
+      260,
+    );
     y3 -= 30;
   }
 
   if (params.customerAgingRawTotal != null) {
     y3 = sectionTitle(doc3, "AGING - CUSTOMERS", y3, 10);
-    keyValueRow(doc3, "Wagyu Food Service - Total", money(params.customerAgingRawTotal), MARGIN, y3, 260);
+    keyValueRow(
+      doc3,
+      "Wagyu Food Service - Total",
+      money(params.customerAgingRawTotal),
+      MARGIN,
+      y3,
+      260,
+    );
     y3 -= 14;
     keyValueRow(doc3, "Prime Meats - Total", money(0), MARGIN, y3, 260);
     y3 -= 14;
-    keyValueRow(doc3, "Aging Customers - Consolidated Total", money(params.customerAgingConsolidated), MARGIN, y3, 260);
+    keyValueRow(
+      doc3,
+      "Aging Customers - Consolidated Total",
+      money(params.customerAgingConsolidated),
+      MARGIN,
+      y3,
+      260,
+    );
   }
 
   return pdf.save();
