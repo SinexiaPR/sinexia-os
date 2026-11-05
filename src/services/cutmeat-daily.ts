@@ -257,8 +257,15 @@ function monthStartOf(date: IsoDate): IsoDate {
 /**
  * Recurrentes de la empresa relevantes para este informe: el mes del
  * informe y el mes 20 días después (la cubeta "semana después" puede
- * caer en el mes siguiente). El volumen es bajo (se cargan a principio
- * de mes), así que no hace falta paginar por ventana de fechas.
+ * caer en el mes siguiente), MÁS cualquier fila sin pagar sin
+ * importar su period -- un recurrente vencido que sigue sin pagarse
+ * tiene que seguir contando como "Anteriores" aunque el informe ya
+ * haya cruzado de mes (confirmado 11/05: NOMINA/Caparra/Juan Diaz/CCC
+ * Logistic de period 2026-10-01, todavía pagado=false, desaparecían
+ * del bucket "Anteriores" de un informe de noviembre -- el filtro por
+ * period solo tiene sentido para no traer años de historial YA
+ * PAGADO). El volumen es bajo (se cargan a principio de mes), así que
+ * no hace falta paginar por ventana de fechas.
  */
 export async function getRecurringPayments(
   companyId: string,
@@ -273,7 +280,7 @@ export async function getRecurringPayments(
     .from("cutmeat_recurrentes")
     .select("*")
     .eq("company_id", companyId)
-    .in("period", periods)
+    .or(`period.in.(${periods.join(",")}),pagado.eq.false`)
     // display_order fija el orden exacto de la planilla de Hernan
     // (varias filas comparten due_date en un orden específico que no se
     // puede derivar de la fecha sola, p.ej. "Juan Diaz" antes de
